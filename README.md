@@ -86,7 +86,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-Refer to the [CHANGELOG](CHANGELOG) file for changes.
+Refer to the [CHANGELOG](CHANGELOG.md) file for changes.
 
 ---
 
