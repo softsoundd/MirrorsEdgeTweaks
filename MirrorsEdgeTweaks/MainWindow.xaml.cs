@@ -3967,15 +3967,25 @@ namespace MirrorsEdgeTweaks
             try
             {
                 string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string publishedPath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Published");
+                string tdGamePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame");
+                string publishedPath = Path.Combine(tdGamePath, "Published");
 
                 if (!Directory.Exists(publishedPath))
                 {
-                    DialogHelper.ShowMessage("Error", 
-                        $"Published folder not found at: {publishedPath}\n\n" +
-                        "Please ensure you have launched Mirror's Edge at least once.",
-                        DialogHelper.MessageType.Error);
-                    return;
+                    if (Directory.Exists(tdGamePath))
+                    {
+                        // If there's no Published folder but TdGame exists,
+                        // just create the missing published folder
+                        Directory.CreateDirectory(publishedPath);
+                    }
+                    else
+                    {
+                        DialogHelper.ShowMessage("Error",
+                            $"Published folder not found at: {publishedPath}\n\n" +
+                            "Please ensure you have launched Mirror's Edge at least once.",
+                            DialogHelper.MessageType.Error);
+                        return;
+                    }
                 }
 
                 ShowProgress("Downloading Tweaks Scripts UI...", false);
