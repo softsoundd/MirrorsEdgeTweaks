@@ -156,8 +156,7 @@
                                 <ComboBox Grid.Column="1" x:Name="TdGameVersionComboBox"
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="TdGameVersionComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+                                          SelectionChanged="TdGameVersionComboBox_SelectionChanged">
                                     <ComboBoxItem Content="Original"/>
                                     <ComboBoxItem Content="TdGame Fix (by Keku)"/>
                                     <ComboBoxItem Content="Time Trials Timer Fix (by Nulaft)"/>
@@ -375,8 +374,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="GameLanguageComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+                                          SelectionChanged="GameLanguageComboBox_SelectionChanged">
                                     <ComboBoxItem Content="Čeština (CZE)" Foreground="Black"/>
                                     <ComboBoxItem Content="Deutsch (DEU)" Foreground="Black"/>
                                     <ComboBoxItem Content="English (INT)" Foreground="Black"/>
@@ -413,8 +411,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="AudioBackendComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+                                          SelectionChanged="AudioBackendComboBox_SelectionChanged">
                                     <ComboBoxItem Content="OpenAL (default)" Foreground="Black"/>
                                     <ComboBoxItem Content="OpenAL Soft (modern)" Foreground="Black"/>
                                 </ComboBox>
@@ -539,7 +536,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}" Margin="0,0,0,0"
                                           SelectionChanged="ResolutionComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown"/>
+/>
                                 <Border Grid.Column="2" Background="{DynamicResource MaterialDesignCardBackground}"
                                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                                         BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="10,0,0,0"
@@ -595,7 +592,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="VSyncComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -662,7 +659,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="AntiAliasingComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
                                     <ComboBoxItem Content="4x"/>
@@ -691,7 +688,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="PhysXComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -752,7 +749,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="TextureDetailComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="Collapsed"/>
                                     <ComboBoxItem Content="Lowest"/>
                                     <ComboBoxItem Content="Low"/>
@@ -780,8 +777,7 @@
                                 <ComboBox x:Name="GraphicsQualityComboBox" Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="GraphicsQualityComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+                                          SelectionChanged="GraphicsQualityComboBox_SelectionChanged">
                                     <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="Collapsed"/>
                                     <ComboBoxItem Content="Lowest"/>
                                     <ComboBoxItem Content="Low"/>
@@ -821,7 +817,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="AnisotropicFilteringComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
                                     <ComboBoxItem Content="4x"/>
@@ -849,7 +845,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="StaticDecalsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -874,7 +870,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="DynamicDecalsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -899,7 +895,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="RadialBlurComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -924,7 +920,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="StreakEffectComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -949,7 +945,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="BloomDoFComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -974,7 +970,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="LensFlareComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -999,7 +995,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="DynamicLightsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1024,7 +1020,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="DynamicShadowsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1049,7 +1045,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="HQDynamicShadowsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1074,7 +1070,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="LightmapsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1099,7 +1095,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="SunHazeComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1124,7 +1120,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="ToneMappingComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
@@ -1149,7 +1145,7 @@
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           SelectionChanged="TextureManagementComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Modern"/>
                                     <ComboBoxItem Content="Default"/>
                                 </ComboBox>
@@ -1292,7 +1288,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="MouseSmoothingComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
@@ -1317,7 +1313,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="UniformSensitivityComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
@@ -1384,7 +1380,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="GamepadButtonsComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Xbox" Foreground="Black"/>
                                     <ComboBoxItem Content="PS3" Foreground="Black"/>
                                 </ComboBox>
@@ -2000,7 +1996,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="IntroVideoComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
@@ -2026,7 +2022,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="MainMenuDelayComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
@@ -2052,7 +2048,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="TimeTrialCountdownComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="4 seconds (default)" Foreground="Black"/>
                                     <ComboBoxItem Content="3 seconds ('Ready' message starts sooner)" Foreground="Black"/>
                                     <ComboBoxItem Content="2 seconds (starts on 'Set' message)" Foreground="Black"/>
@@ -2089,7 +2085,7 @@
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
                                           SelectionChanged="CinematicFaithComboBox_SelectionChanged"
-                                          PreviewMouseLeftButtonDown="ComboBox_PreviewMouseLeftButtonDown">
+>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                 </ComboBox>

@@ -5,6 +5,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using MirrorsEdgeTweaks.Models;
+using UELib;
+using UELib.Core;
+using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
@@ -146,25 +149,43 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                byte[] data = System.IO.File.ReadAllBytes(packagePath);
+                using var package = UELib.UnrealLoader.LoadPackage(packagePath, System.IO.FileAccess.Read);
+                package?.InitializePackage();
 
-                var patterns = new Dictionary<byte[], string>
+                if (package == null)
                 {
-                    { ByteArrayHelper.StringToByteArray("4E6F6E65000900A80070"), "Original_1010" },
-                    { ByteArrayHelper.StringToByteArray("4E6F6E65000900A800FB"), "Original_1100" },
-                    { ByteArrayHelper.StringToByteArray("4E6F6E650001002800AC"), "TdGameFix_1010" },
-                    { ByteArrayHelper.StringToByteArray("9D6F2900050000004E6F6E65000100280014"), "TdGameFix_1100" },
-                    { ByteArrayHelper.StringToByteArray("4E6F6E650001002800D6"), "TdGameFixTimerFix_1010" },
-                    { ByteArrayHelper.StringToByteArray("706F2900050000004E6F6E65000100280014"), "TdGameFixTimerFix_1100" }
-                };
+                    return "Unknown";
+                }
 
-                foreach (var pattern in patterns)
+                string packageGuid = package.Summary.Guid.ToString();
+                bool hasTimeAttackClock = CheckForTimeAttackClock(package);
+
+                // Game version 1.0.0.0 - 1.0.1.0
+                if (packageGuid.Equals("FF6DA87146E12E95C932FBA8D99244B0", StringComparison.OrdinalIgnoreCase))
                 {
-                    int offset = FindPattern(data, pattern.Key);
-                    if (offset != -1)
-                    {
-                        return DetermineVersionFromPattern(pattern.Value, data, offset);
-                    }
+                    return hasTimeAttackClock ? "Time Trials Timer Fix (by Nulaft)" : "Original";
+                }
+                if (packageGuid.Equals("9C05ED954D0470138B83FB859AFBD97E", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "TdGame Fix (by Keku)";
+                }
+                if (packageGuid.Equals("0F92289646781F18A15FDBAF61817238", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "TdGame Fix + Time Trials Timer Fix";
+                }
+
+                // Game version 1.1.0.0
+                if (packageGuid.Equals("2090A0F24C332BA658BC549AB764BCFF", StringComparison.OrdinalIgnoreCase))
+                {
+                    return hasTimeAttackClock ? "Time Trials Timer Fix (by Nulaft)" : "Original";
+                }
+                if (packageGuid.Equals("5B0067B8477495CD827B74B01FCE3862", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "TdGame Fix (by Keku)";
+                }
+                if (packageGuid.Equals("18F2F3064301C448B3192E8E0D51E987", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "TdGame Fix + Time Trials Timer Fix";
                 }
 
                 return "Unknown";
@@ -175,28 +196,62 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        private static string DetermineVersionFromPattern(string patternType, byte[] data, int offset)
+        // Original and Time Trials Timer Fix TdGame versions have the same GUID but different usage of the TimeAttackClock variable
+        private static bool CheckForTimeAttackClock(UnrealPackage package)
         {
-            return patternType switch
+            try
             {
-                "Original_1010" => data.Length > 2114997 ? (data[2114997] == 0x74 ? "Original" : "Time Trials Timer Fix (by Nulaft)") : "Original",
-                "Original_1100" => data.Length > 2125557 ? (data[2125557] == 0x74 ? "Original" : "Time Trials Timer Fix (by Nulaft)") : "Original",
-                "TdGameFix_1010" or "TdGameFix_1100" => "TdGame Fix (by Keku)",
-                "TdGameFixTimerFix_1010" or "TdGameFixTimerFix_1100" => "TdGame Fix + Time Trials Timer Fix",
-                _ => "Unknown"
-            };
+                var tdSPTimeTrialGameClass = package.FindObject<UClass>("TdSPTimeTrialGame");
+                if (tdSPTimeTrialGameClass != null)
+                {
+                    var functions = package.Objects
+                        .Where(o => IsOwnedBy(o, tdSPTimeTrialGameClass) && (o is UFunction || o is UState))
+                        .Cast<UStruct>()
+                        .ToList();
+
+                    foreach (var func in functions)
+                    {
+                        try
+                        {
+                            if (func.ByteCodeManager != null)
+                            {
+                                func.ByteCodeManager.Deserialize();
+                                if (func.ByteCodeManager.DeserializedTokens != null)
+                                {
+                                    foreach (var token in func.ByteCodeManager.DeserializedTokens)
+                                    {
+                                        if (token is InstanceVariableToken instToken)
+                                        {
+                                            if (instToken.Object != null && string.Equals(instToken.Object.Name, "TimeAttackClock", StringComparison.OrdinalIgnoreCase))
+                                                return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+                    }
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
-        private static int FindPattern(byte[] source, byte[] pattern)
+        private static bool IsOwnedBy(UObject obj, UObject owner)
         {
-            for (int i = 0; i < source.Length - pattern.Length + 1; i++)
+            var current = obj.Outer;
+            while (current != null)
             {
-                if (source.Skip(i).Take(pattern.Length).SequenceEqual(pattern))
-                {
-                    return i;
-                }
+                if (current == owner) return true;
+                current = current.Outer;
             }
-            return -1;
+            return false;
         }
     }
 

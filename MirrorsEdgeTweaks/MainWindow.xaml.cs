@@ -85,40 +85,6 @@ namespace MirrorsEdgeTweaks
             };
         }
 
-        #region ComboBox Reselect Handler
-        
-        private Dictionary<System.Windows.Controls.ComboBox, int> _comboBoxPreviousSelections = new Dictionary<System.Windows.Controls.ComboBox, int>();
-        
-        private void ComboBox_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (sender is System.Windows.Controls.ComboBox comboBox)
-            {
-                _comboBoxPreviousSelections[comboBox] = comboBox.SelectedIndex;
-                
-                comboBox.DropDownClosed -= ComboBox_DropDownClosed;
-                comboBox.DropDownClosed += ComboBox_DropDownClosed;
-            }
-        }
-        
-        private void ComboBox_DropDownClosed(object? sender, EventArgs e)
-        {
-            if (sender is System.Windows.Controls.ComboBox comboBox)
-            {
-                if (_comboBoxPreviousSelections.TryGetValue(comboBox, out int previousIndex) && 
-                    previousIndex >= 0 && 
-                    previousIndex == comboBox.SelectedIndex)
-                {
-                    int currentIndex = comboBox.SelectedIndex;
-                    comboBox.SelectedIndex = -1;
-                    comboBox.SelectedIndex = currentIndex;
-                }
-                
-                comboBox.DropDownClosed -= ComboBox_DropDownClosed;
-                _comboBoxPreviousSelections.Remove(comboBox);
-            }
-        }
-        
-        #endregion
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -271,9 +237,7 @@ namespace MirrorsEdgeTweaks
                 });
 
                 UpdateStatus("Loading packages...");
-                LoadPackages();
-                
-                UpdateStatus("Loading settings...");
+                await Task.Run(() => LoadPackages());
 
                 CheckForConfigFiles();
                 InitializeResolutionComboBox();
@@ -299,8 +263,6 @@ namespace MirrorsEdgeTweaks
                 
                 LoadGameLanguageSetting();
                 LoadAudioBackendSetting();
-
-                UpdateStatus("Ready.");
             }
             finally
             {
@@ -483,8 +445,11 @@ namespace MirrorsEdgeTweaks
             {
                 _packageService.DisposePackage(_package);
                 _packageService.DisposePackage(_tdGamePackage);
-                _gameStatusViewModel.IsGameTweaksEnabled = false;
-                UpdateStatus("Loading packages...");
+                
+                Dispatcher.Invoke(() => {
+                    _gameStatusViewModel.IsGameTweaksEnabled = false;
+                    UpdateStatus("Loading packages...");
+                });
 
                 _config.EnginePackagePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "Engine.u");
                 _config.TdGamePackagePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
@@ -494,19 +459,24 @@ namespace MirrorsEdgeTweaks
 
                 if (_package == null || _tdGamePackage == null)
                 {
-                    DialogHelper.ShowMessage("Error", "Failed to load one or more packages (Engine.u, TdGame.u).", DialogHelper.MessageType.Error);
-                    UpdateStatus("Failed to load packages.");
+                    Dispatcher.Invoke(() => {
+                        DialogHelper.ShowMessage("Error", "Failed to load one or more packages (Engine.u, TdGame.u).", DialogHelper.MessageType.Error);
+                        UpdateStatus("Failed to load packages.");
+                    });
                     return;
                 }
 
-                UpdateStatus("Ready.");
-                DetectTdGameVersion();
+                Dispatcher.Invoke(() => {
+                    DetectTdGameVersion();
+                });
                 SetupEditors();
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowMessage("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
-                _gameStatusViewModel.Status = "Error loading packages.";
+                Dispatcher.Invoke(() => {
+                    DialogHelper.ShowMessage("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
+                    _gameStatusViewModel.Status = "Error loading packages.";
+                });
                 _package = null;
                 _tdGamePackage = null;
             }
@@ -520,18 +490,22 @@ namespace MirrorsEdgeTweaks
             bool arSuccess = SetupAspectRatioEditor();
             bool consoleSuccess = SetupConsoleEditor();
             bool unlockedConfigsSuccess = SetupUnlockedConfigsEditor();
-            UpdateTweaksScriptsStatus();
+            Dispatcher.Invoke(() => UpdateTweaksScriptsStatus());
 
-            if (fovSuccess || arSuccess || consoleSuccess)
-            {
-                GameTweaksGrid.IsEnabled = true;
-                UpdateStatusDisplays();
-            }
-            else
-            {
-                GameTweaksGrid.IsEnabled = false;
-                DialogHelper.ShowMessage("Warning", "Could not locate any editable properties in the game files.", DialogHelper.MessageType.Warning);
-            }
+            Dispatcher.Invoke(() => {
+                if (fovSuccess || arSuccess || consoleSuccess)
+                {
+                    GameTweaksGrid.IsEnabled = true;
+                    UpdateStatusDisplays();
+                    UpdateStatus("Ready.");
+                }
+                else
+                {
+                    GameTweaksGrid.IsEnabled = false;
+                    DialogHelper.ShowMessage("Warning", "Could not locate any editable properties in the game files.", DialogHelper.MessageType.Warning);
+                    UpdateStatus("Ready.");
+                }
+            });
         }
 
         private void UpdateStatus(string status)
@@ -561,7 +535,7 @@ namespace MirrorsEdgeTweaks
                 DownloadProgressBar.Visibility = System.Windows.Visibility.Collapsed;
                 DownloadProgressBar.IsIndeterminate = false;
                 DownloadProgressBar.Value = 0;
-                StatusTextBlock.Text = string.Empty;
+                StatusTextBlock.Text = "Ready.";
             });
         }
 
@@ -639,8 +613,11 @@ namespace MirrorsEdgeTweaks
             _offsets.TdMoveVertigoZoomFovFlagsOffset = -1;
             _offsets.NearClippingPlaneOffset = -1;
             _offsets.FovScaleMultiplierOffset = -1;
-            _fovViewModel.CurrentFovValue = "N/A";
-            CurrentFovValue.Text = "N/A";
+            
+            Dispatcher.Invoke(() => {
+                _fovViewModel.CurrentFovValue = "N/A";
+                CurrentFovValue.Text = "N/A";
+            });
 
             var playerControllerClass = _package.FindObject<UClass>("PlayerController");
             if (playerControllerClass?.Default is UObject playerControllerCDO)
@@ -666,14 +643,16 @@ namespace MirrorsEdgeTweaks
                 var fovProperty = cameraCDO.Properties.FirstOrDefault(p => p.Name == "DefaultFOV");
                 if (fovProperty != null && float.TryParse(fovProperty.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentFov))
                 {
-                    string fovValue = Math.Round(currentFov).ToString(CultureInfo.InvariantCulture) + "° (horizontal)";
-                    _fovViewModel.CurrentFovValue = fovValue;
-                    CurrentFovValue.Text = fovValue;
-                    
-                    if (string.IsNullOrEmpty(NewFovValue.Text) || NewFovValue.Text == "90" || NewFovValue.Text == "N/A")
-                    {
-                        NewFovValue.Text = Math.Round(currentFov).ToString(CultureInfo.InvariantCulture);
-                    }
+                    Dispatcher.Invoke(() => {
+                        string fovValue = Math.Round(currentFov).ToString(CultureInfo.InvariantCulture) + "° (horizontal)";
+                        _fovViewModel.CurrentFovValue = fovValue;
+                        CurrentFovValue.Text = fovValue;
+                        
+                        if (string.IsNullOrEmpty(NewFovValue.Text) || NewFovValue.Text == "90" || NewFovValue.Text == "N/A")
+                        {
+                            NewFovValue.Text = Math.Round(currentFov).ToString(CultureInfo.InvariantCulture);
+                        }
+                    });
                     
                     _offsets.CameraFovOffset = _offsetFinderService.FindPropertyOffsetByName(cameraCDO, "DefaultFOV", currentFov, _package, _config.EnginePackagePath);
                 }
@@ -772,10 +751,13 @@ namespace MirrorsEdgeTweaks
             if (_package == null) return false;
 
             _offsets.AspectRatioOffset = -1;
-            _fovViewModel.CurrentAspectRatioValue = "N/A";
-            _fovViewModel.CommonAspectRatioValue = "";
-            CurrentAspectRatioValue.Text = "N/A";
-            CommonAspectRatioValue.Text = "";
+            
+            Dispatcher.Invoke(() => {
+                _fovViewModel.CurrentAspectRatioValue = "N/A";
+                _fovViewModel.CommonAspectRatioValue = "";
+                CurrentAspectRatioValue.Text = "N/A";
+                CommonAspectRatioValue.Text = "";
+            });
 
             var cameraClass = _package.FindObject<UClass>("Camera");
             if (cameraClass != null)
@@ -792,19 +774,22 @@ namespace MirrorsEdgeTweaks
                     {
                         float currentAR = _offsetFinderService.ReadFloatFromPackage(_package, _offsets.AspectRatioOffset);
                         var (decimalFormat, commonFormat) = FormatAspectRatio(currentAR);
-                        _fovViewModel.CurrentAspectRatioValue = decimalFormat;
-                        _fovViewModel.CommonAspectRatioValue = commonFormat;
-                        CurrentAspectRatioValue.Text = decimalFormat;
-                        CommonAspectRatioValue.Text = commonFormat;
                         
-                        if (string.IsNullOrEmpty(AspectRatioWidth.Text) || AspectRatioWidth.Text == "16" || AspectRatioWidth.Text == "N/A")
-                        {
-                            AspectRatioWidth.Text = Math.Round(currentAR * 9).ToString(CultureInfo.InvariantCulture);
-                        }
-                        if (string.IsNullOrEmpty(AspectRatioHeight.Text) || AspectRatioHeight.Text == "9" || AspectRatioHeight.Text == "N/A")
-                        {
-                            AspectRatioHeight.Text = "9";
-                        }
+                        Dispatcher.Invoke(() => {
+                            _fovViewModel.CurrentAspectRatioValue = decimalFormat;
+                            _fovViewModel.CommonAspectRatioValue = commonFormat;
+                            CurrentAspectRatioValue.Text = decimalFormat;
+                            CommonAspectRatioValue.Text = commonFormat;
+                            
+                            if (string.IsNullOrEmpty(AspectRatioWidth.Text) || AspectRatioWidth.Text == "16" || AspectRatioWidth.Text == "N/A")
+                            {
+                                AspectRatioWidth.Text = Math.Round(currentAR * 9).ToString(CultureInfo.InvariantCulture);
+                            }
+                            if (string.IsNullOrEmpty(AspectRatioHeight.Text) || AspectRatioHeight.Text == "9" || AspectRatioHeight.Text == "N/A")
+                            {
+                                AspectRatioHeight.Text = "9";
+                            }
+                        });
                         
                         return true;
                     }
@@ -818,8 +803,10 @@ namespace MirrorsEdgeTweaks
             if (_package == null) return false;
 
             _offsets.ConsoleHeightOffset = -1;
-            _consoleViewModel.IsInstallConsoleEnabled = false;
-            _consoleViewModel.IsUninstallConsoleEnabled = false;
+            Dispatcher.Invoke(() => {
+                _consoleViewModel.IsInstallConsoleEnabled = false;
+                _consoleViewModel.IsUninstallConsoleEnabled = false;
+            });
 
             var consoleClass = _package.FindObject<UClass>("Console");
             var openState = consoleClass?.EnumerateFields<UState>().FirstOrDefault(s => s.Name == "Open");
@@ -864,24 +851,30 @@ namespace MirrorsEdgeTweaks
 
             if (fileExists && heightModified)
             {
-                _consoleViewModel.ConsoleStatus = "Installed";
-                _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Green;
-                ConsoleStatus.Text = "Installed";
-                ConsoleStatus.Foreground = System.Windows.Media.Brushes.Green;
+                Dispatcher.Invoke(() => {
+                    _consoleViewModel.ConsoleStatus = "Installed";
+                    _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Green;
+                    ConsoleStatus.Text = "Installed";
+                    ConsoleStatus.Foreground = System.Windows.Media.Brushes.Green;
+                });
             }
             else if (fileExists || heightModified)
             {
-                _consoleViewModel.ConsoleStatus = "Partially Installed";
-                _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Orange;
-                ConsoleStatus.Text = "Partially Installed";
-                ConsoleStatus.Foreground = System.Windows.Media.Brushes.Orange;
+                Dispatcher.Invoke(() => {
+                    _consoleViewModel.ConsoleStatus = "Partially Installed";
+                    _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Orange;
+                    ConsoleStatus.Text = "Partially Installed";
+                    ConsoleStatus.Foreground = System.Windows.Media.Brushes.Orange;
+                });
             }
             else
             {
-                _consoleViewModel.ConsoleStatus = "Not Installed";
-                _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Gray;
-                ConsoleStatus.Text = "Not Installed";
-                ConsoleStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                Dispatcher.Invoke(() => {
+                    _consoleViewModel.ConsoleStatus = "Not Installed";
+                    _consoleViewModel.ConsoleStatusForeground = System.Windows.Media.Brushes.Gray;
+                    ConsoleStatus.Text = "Not Installed";
+                    ConsoleStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                });
             }
         }
 
@@ -889,27 +882,33 @@ namespace MirrorsEdgeTweaks
         {
             if (string.IsNullOrEmpty(_config.GameDirectoryPath))
             {
-                _tweaksScriptsViewModel.TweaksScriptsStatus = "N/A";
-                _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Gray;
-                TweaksScriptsStatus.Text = "N/A";
-                TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                Dispatcher.Invoke(() => {
+                    _tweaksScriptsViewModel.TweaksScriptsStatus = "N/A";
+                    _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Gray;
+                    TweaksScriptsStatus.Text = "N/A";
+                    TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                });
                 return;
             }
 
             string scriptFilePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "MirrorsEdgeTweaksScripts.u");
             if (_fileService.FileExists(scriptFilePath))
             {
-                _tweaksScriptsViewModel.TweaksScriptsStatus = "Installed";
-                _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Green;
-                TweaksScriptsStatus.Text = "Installed";
-                TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Green;
+                Dispatcher.Invoke(() => {
+                    _tweaksScriptsViewModel.TweaksScriptsStatus = "Installed";
+                    _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Green;
+                    TweaksScriptsStatus.Text = "Installed";
+                    TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Green;
+                });
             }
             else
             {
-                _tweaksScriptsViewModel.TweaksScriptsStatus = "Not Installed";
-                _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Gray;
-                TweaksScriptsStatus.Text = "Not Installed";
-                TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                Dispatcher.Invoke(() => {
+                    _tweaksScriptsViewModel.TweaksScriptsStatus = "Not Installed";
+                    _tweaksScriptsViewModel.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Gray;
+                    TweaksScriptsStatus.Text = "Not Installed";
+                    TweaksScriptsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                });
             }
         }
 
@@ -1013,111 +1012,128 @@ namespace MirrorsEdgeTweaks
                 newFovScaleMultiplier = (90.0f * 0.01111f) / finalFovToWrite;
             }
 
+            this.IsEnabled = false;
+            DownloadProgressBar.Visibility = Visibility.Visible;
+            DownloadProgressBar.IsIndeterminate = true;
+            UpdateStatus("Applying FOV settings...");
+
             try
             {
-                _package?.Dispose();
-                _tdGamePackage?.Dispose();
-                _package = null;
-                _tdGamePackage = null;
-
-                using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                await Task.Run(() => 
                 {
-                    byte[] fovValueBytes = BitConverter.GetBytes(finalFovToWrite);
-                    if (_offsets.PlayerControllerDefaultFovOffset != -1)
-                    {
-                        stream.Position = _offsets.PlayerControllerDefaultFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (_offsets.PlayerControllerDesiredFovOffset != -1)
-                    {
-                        stream.Position = _offsets.PlayerControllerDesiredFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (_offsets.PlayerControllerFovAngleOffset != -1)
-                    {
-                        stream.Position = _offsets.PlayerControllerFovAngleOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (_offsets.CameraFovOffset != -1)
-                    {
-                        stream.Position = _offsets.CameraFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (_offsets.CameraActorFovAngleOffset != -1)
-                    {
-                        byte[] cameraActorFovBytes = BitConverter.GetBytes(cameraActorFovToWrite);
-                        stream.Position = _offsets.CameraActorFovAngleOffset;
-                        stream.Write(cameraActorFovBytes, 0, cameraActorFovBytes.Length);
-                    }
-                    if (_offsets.AspectRatioOffset != -1)
-                    {
-                        byte[] arValueBytes = BitConverter.GetBytes(newAspectRatio);
-                        stream.Position = _offsets.AspectRatioOffset;
-                        stream.Write(arValueBytes, 0, arValueBytes.Length);
-                    }
-                }
+                    _package?.Dispose();
+                    _tdGamePackage?.Dispose();
+                    _package = null;
+                    _tdGamePackage = null;
 
-                using (var stream = new FileStream(_config.TdGamePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
-                {
-                    if (_offsets.SeqActCameraFovOffset != -1)
+                    using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
                     {
-                        float cutsceneFov = cameraActorFovToWrite - 20f;
-                        byte[] cutsceneFovBytes = BitConverter.GetBytes(cutsceneFov);
-                        stream.Position = _offsets.SeqActCameraFovOffset;
-                        stream.Write(cutsceneFovBytes, 0, cutsceneFovBytes.Length);
+                        byte[] fovValueBytes = BitConverter.GetBytes(finalFovToWrite);
+                        if (_offsets.PlayerControllerDefaultFovOffset != -1)
+                        {
+                            stream.Position = _offsets.PlayerControllerDefaultFovOffset;
+                            stream.Write(fovValueBytes, 0, fovValueBytes.Length);
+                        }
+                        if (_offsets.PlayerControllerDesiredFovOffset != -1)
+                        {
+                            stream.Position = _offsets.PlayerControllerDesiredFovOffset;
+                            stream.Write(fovValueBytes, 0, fovValueBytes.Length);
+                        }
+                        if (_offsets.PlayerControllerFovAngleOffset != -1)
+                        {
+                            stream.Position = _offsets.PlayerControllerFovAngleOffset;
+                            stream.Write(fovValueBytes, 0, fovValueBytes.Length);
+                        }
+                        if (_offsets.CameraFovOffset != -1)
+                        {
+                            stream.Position = _offsets.CameraFovOffset;
+                            stream.Write(fovValueBytes, 0, fovValueBytes.Length);
+                        }
+                        if (_offsets.CameraActorFovAngleOffset != -1)
+                        {
+                            byte[] cameraActorFovBytes = BitConverter.GetBytes(cameraActorFovToWrite);
+                            stream.Position = _offsets.CameraActorFovAngleOffset;
+                            stream.Write(cameraActorFovBytes, 0, cameraActorFovBytes.Length);
+                        }
+                        if (_offsets.AspectRatioOffset != -1)
+                        {
+                            byte[] arValueBytes = BitConverter.GetBytes(newAspectRatio);
+                            stream.Position = _offsets.AspectRatioOffset;
+                            stream.Write(arValueBytes, 0, arValueBytes.Length);
+                        }
                     }
 
-                    if (_offsets.TdMoveVertigoZoomFovOffset != -1)
+                    using (var stream = new FileStream(_config.TdGamePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
                     {
-                        float vertigoFov = finalFovToWrite - 6f;
-                        byte[] vertigoFovBytes = BitConverter.GetBytes(vertigoFov);
-                        stream.Position = _offsets.TdMoveVertigoZoomFovOffset;
-                        stream.Write(vertigoFovBytes, 0, vertigoFovBytes.Length);
+                        if (_offsets.SeqActCameraFovOffset != -1)
+                        {
+                            float cutsceneFov = cameraActorFovToWrite - 20f;
+                            byte[] cutsceneFovBytes = BitConverter.GetBytes(cutsceneFov);
+                            stream.Position = _offsets.SeqActCameraFovOffset;
+                            stream.Write(cutsceneFovBytes, 0, cutsceneFovBytes.Length);
+                        }
+
+                        if (_offsets.TdMoveVertigoZoomFovOffset != -1)
+                        {
+                            float vertigoFov = finalFovToWrite - 6f;
+                            byte[] vertigoFovBytes = BitConverter.GetBytes(vertigoFov);
+                            stream.Position = _offsets.TdMoveVertigoZoomFovOffset;
+                            stream.Write(vertigoFovBytes, 0, vertigoFovBytes.Length);
+                        }
+
+                        if (_offsets.UnzoomFovRateOffset != -1)
+                        {
+                            byte[] zoomRateBytes = BitConverter.GetBytes(newFovZoomRate);
+                            stream.Position = _offsets.UnzoomFovRateOffset;
+                            stream.Write(zoomRateBytes, 0, zoomRateBytes.Length);
+                        }
+
+                        if (_offsets.TdMoveVertigoZoomFovFlagsOffset != -1)
+                        {
+                            ulong originalFlagsValue = _originalZoomFovFlags;
+                            ulong configFlagBitmask = _originalZoomFovFlags.GetFlag(PropertyFlag.Config);
+                            ulong newFlagsValue = originalFlagsValue & ~configFlagBitmask;
+                            byte[] newFlagsBytes = BitConverter.GetBytes(newFlagsValue);
+
+                            stream.Position = _offsets.TdMoveVertigoZoomFovFlagsOffset;
+                            stream.Write(newFlagsBytes, 0, newFlagsBytes.Length);
+                        }
+
+                        if (_offsets.NearClippingPlaneOffset != -1)
+                        {
+                            byte[] clippingBytes = BitConverter.GetBytes(newClippingPlaneValue);
+                            stream.Position = _offsets.NearClippingPlaneOffset;
+                            stream.Write(clippingBytes, 0, clippingBytes.Length);
+                        }
+
+                        if (_offsets.FovScaleMultiplierOffset != -1)
+                        {
+                            byte[] fovScaleBytes = BitConverter.GetBytes(newFovScaleMultiplier);
+                            stream.Position = _offsets.FovScaleMultiplierOffset;
+                            stream.Write(fovScaleBytes, 0, fovScaleBytes.Length);
+                        }
                     }
 
-                    if (_offsets.UnzoomFovRateOffset != -1)
-                    {
-                        byte[] zoomRateBytes = BitConverter.GetBytes(newFovZoomRate);
-                        stream.Position = _offsets.UnzoomFovRateOffset;
-                        stream.Write(zoomRateBytes, 0, zoomRateBytes.Length);
-                    }
+                    Dispatcher.Invoke(() => SaveSettingsToIni());
+                });
 
-                    if (_offsets.TdMoveVertigoZoomFovFlagsOffset != -1)
-                    {
-                        ulong originalFlagsValue = _originalZoomFovFlags;
-                        ulong configFlagBitmask = _originalZoomFovFlags.GetFlag(PropertyFlag.Config);
-                        ulong newFlagsValue = originalFlagsValue & ~configFlagBitmask;
-                        byte[] newFlagsBytes = BitConverter.GetBytes(newFlagsValue);
-
-                        stream.Position = _offsets.TdMoveVertigoZoomFovFlagsOffset;
-                        stream.Write(newFlagsBytes, 0, newFlagsBytes.Length);
-                    }
-
-                    if (_offsets.NearClippingPlaneOffset != -1)
-                    {
-                        byte[] clippingBytes = BitConverter.GetBytes(newClippingPlaneValue);
-                        stream.Position = _offsets.NearClippingPlaneOffset;
-                        stream.Write(clippingBytes, 0, clippingBytes.Length);
-                    }
-
-                    if (_offsets.FovScaleMultiplierOffset != -1)
-                    {
-                        byte[] fovScaleBytes = BitConverter.GetBytes(newFovScaleMultiplier);
-                        stream.Position = _offsets.FovScaleMultiplierOffset;
-                        stream.Write(fovScaleBytes, 0, fovScaleBytes.Length);
-                    }
-                }
-
-                SaveSettingsToIni();
-                
-                LoadPackages();
-                
-                DialogHelper.ShowMessage("Success", "Successfully applied changes.", DialogHelper.MessageType.Success);
+                UpdateStatus("Ready.");
+                await DialogHelper.ShowMessageAsync("Success", "Successfully applied changes.", DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowMessage("Save Error", $"Failed to apply changes: {ex.Message}", DialogHelper.MessageType.Error);
-                StatusTextBlock.Text = "Error applying changes. Files may be in an unstable state.";
+                await DialogHelper.ShowMessageAsync("Save Error", $"Failed to apply changes: {ex.Message}", DialogHelper.MessageType.Error);
+                UpdateStatus("Error applying changes. Files may be in an unstable state.");
+            }
+            finally
+            {
+                DownloadProgressBar.Visibility = Visibility.Collapsed;
+                DownloadProgressBar.IsIndeterminate = false;
+                
+                await Task.Delay(500);
+                await Task.Run(() => LoadPackages());
+                
+                this.IsEnabled = true;
             }
         }
 
@@ -1236,7 +1252,7 @@ namespace MirrorsEdgeTweaks
 
                 _gameStatusViewModel.Status = $"Successfully installed.";
                 UpdateStatus($"Successfully installed.");
-                DialogHelper.ShowMessage("Success", $"Successfully downloaded and installed '{selectedVersionName}' TdGame version.\n\n" +
+                await DialogHelper.ShowMessageAsync("Success", $"Successfully downloaded and installed '{selectedVersionName}' TdGame version.\n\n" +
                 "Note: If any of the following settings were previously changed, they have been reset to their default values and will need to be reapplied:\n\n" +
                 "• FOV (near clip plane, FOV-agnostic sensitivity, and various other FOV fixes)\n\n" +
                 "• Crosshair and cursor scaling via the high resolution fix\n\n" + 
@@ -1248,20 +1264,19 @@ namespace MirrorsEdgeTweaks
             catch (Exception ex)
             {
                 _gameStatusViewModel.Status = "An error occurred during the download/extraction.";
-                DialogHelper.ShowMessage("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
+                await DialogHelper.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
             }
             finally
             {
-                _gameStatusViewModel.IsGameTweaksEnabled = true;
                 _downloadProgressViewModel.IsDownloadProgressVisible = false;
                 _downloadProgressViewModel.DownloadProgressValue = 0;
                 
-                GameTweaksGrid.IsEnabled = true;
                 DownloadProgressBar.Visibility = System.Windows.Visibility.Collapsed;
                 DownloadProgressBar.Value = 0;
                 DownloadProgressBar.IsIndeterminate = false;
                 
-                LoadPackages();
+                await Task.Delay(500);
+                await Task.Run(() => LoadPackages());
             }
         }
 
@@ -1342,16 +1357,16 @@ namespace MirrorsEdgeTweaks
 
             try
             {
-                _gameStatusViewModel.Status = "Modifying config files...";
-                ModifyIniFile(_config.TdEngineIniPath, "Engine.Engine", "ConsoleClassName", "MirrorsEdgeConsole.MirrorsEdgeConsole");
-                ModifyIniFile(_config.TdInputIniPath, "Engine.Console", "TypeKey", "Tab");
-                await Task.Delay(250); // small delay for the status update to show, fix later
-
-                const string consoleUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeConsole.zip";
-                using (var client = new HttpClient())
+                await Task.Run(async () => 
                 {
+                    Dispatcher.Invoke(() => UpdateStatus("Installing console..."));
+                    ModifyIniFile(_config.TdEngineIniPath, "Engine.Engine", "ConsoleClassName", "MirrorsEdgeConsole.MirrorsEdgeConsole");
+                    ModifyIniFile(_config.TdInputIniPath, "Engine.Console", "TypeKey", "Tab");
+                    
+                    const string consoleUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeConsole.zip";
                     string tempZipPath = Path.Combine(Path.GetTempPath(), "MirrorsEdgeConsole.zip");
 
+                    using (var client = new HttpClient())
                     using (var response = await client.GetAsync(consoleUrl, HttpCompletionOption.ResponseHeadersRead))
                     {
                         response.EnsureSuccessStatusCode();
@@ -1362,12 +1377,18 @@ namespace MirrorsEdgeTweaks
                         {
                             if (!totalBytes.HasValue)
                             {
-                                _downloadProgressViewModel.IsDownloadProgressIndeterminate = true;
+                                Dispatcher.Invoke(() => {
+                                    _downloadProgressViewModel.IsDownloadProgressIndeterminate = true;
+                                    DownloadProgressBar.IsIndeterminate = true;
+                                });
                                 await stream.CopyToAsync(fileStream);
                             }
                             else
                             {
-                                _downloadProgressViewModel.IsDownloadProgressIndeterminate = false;
+                                Dispatcher.Invoke(() => {
+                                    _downloadProgressViewModel.IsDownloadProgressIndeterminate = false;
+                                    DownloadProgressBar.IsIndeterminate = false;
+                                });
                                 var totalBytesRead = 0L;
                                 var buffer = new byte[8192];
                                 int bytesRead;
@@ -1376,30 +1397,40 @@ namespace MirrorsEdgeTweaks
                                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                                     totalBytesRead += bytesRead;
                                     var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
-                                    _downloadProgressViewModel.DownloadProgressValue = progress;
-                                    _gameStatusViewModel.Status = $"Downloading console... {progress}%";
-                                    DownloadProgressBar.Value = progress;
-                                    UpdateStatus($"Downloading console... {progress}%");
+                                    
+                                    Dispatcher.Invoke(() => {
+                                        _downloadProgressViewModel.DownloadProgressValue = progress;
+                                        DownloadProgressBar.Value = progress;
+                                        UpdateStatus($"Downloading console... {progress}%");
+                                    });
                                 }
                             }
                         }
                     }
-                    _gameStatusViewModel.Status = "Extracting console files...";
+                    
+                    Dispatcher.Invoke(() => {
+                        UpdateStatus("Extracting console files...");
+                        _downloadProgressViewModel.IsDownloadProgressIndeterminate = true;
+                        DownloadProgressBar.IsIndeterminate = true;
+                    });
+                    
                     ZipFile.ExtractToDirectory(tempZipPath, _config.GameDirectoryPath, true);
                     File.Delete(tempZipPath);
-                }
 
-                _gameStatusViewModel.Status = "Patching Engine.u...";
-                _packageService.DisposePackage(_package);
-                _package = null;
-                using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
-                {
-                    stream.Position = _offsets.ConsoleHeightOffset;
-                    byte[] newValue = BitConverter.GetBytes(0.4f);
-                    stream.Write(newValue, 0, newValue.Length);
-                }
+                    Dispatcher.Invoke(() => UpdateStatus("Patching Engine.u..."));
+                    
+                    _packageService.DisposePackage(_package);
+                    _package = null;
+                    using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
+                    {
+                        stream.Position = _offsets.ConsoleHeightOffset;
+                        byte[] newValue = BitConverter.GetBytes(0.4f);
+                        stream.Write(newValue, 0, newValue.Length);
+                    }
+                });
 
-                DialogHelper.ShowMessage("Success",
+                UpdateStatus("Ready.");
+                await DialogHelper.ShowMessageAsync("Success",
                     "Developer console successfully installed. Use the Tilde (~) key to open the console.\n\n" +
                     "Please note that Unreal Engine 3 supports only the US keyboard layout. If you do not wish to use the US layout, the following layouts will interpret these keys as Tilde:\n\n" +
                     "• UK: @ (At sign)\n\n" +
@@ -1411,20 +1442,19 @@ namespace MirrorsEdgeTweaks
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowMessage("Installation Failed", $"An error occurred during installation: {ex.Message}", DialogHelper.MessageType.Error);
-                _gameStatusViewModel.Status = "Console installation failed.";
+                await DialogHelper.ShowMessageAsync("Installation Failed", $"An error occurred during installation: {ex.Message}", DialogHelper.MessageType.Error);
+                UpdateStatus("Console installation failed.");
             }
             finally
             {
-                _gameStatusViewModel.IsGameTweaksEnabled = true;
                 _downloadProgressViewModel.IsDownloadProgressVisible = false;
                 
                 DownloadProgressBar.Visibility = System.Windows.Visibility.Collapsed;
                 DownloadProgressBar.Value = 0;
                 DownloadProgressBar.IsIndeterminate = false;
                 
-                GameTweaksGrid.IsEnabled = true;
-                LoadPackages();
+                await Task.Delay(500);
+                await Task.Run(() => LoadPackages());
             }
         }
 
@@ -1449,45 +1479,46 @@ namespace MirrorsEdgeTweaks
             }
 
             _gameStatusViewModel.IsGameTweaksEnabled = false;
-            _gameStatusViewModel.Status = "Uninstalling console...";
+            UpdateStatus("Uninstalling console...");
 
             try
             {
-                _gameStatusViewModel.Status = "Reverting config files...";
-                ModifyIniFile(_config.TdEngineIniPath, "Engine.Engine", "ConsoleClassName", "TdGame.TdConsole");
-                ModifyIniFile(_config.TdInputIniPath, "Engine.Console", "TypeKey", "None");
-                await Task.Delay(250);
-
-                _gameStatusViewModel.Status = "Deleting console package...";
-                string consolePackagePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "MirrorsEdgeConsole.u");
-                if (_fileService.FileExists(consolePackagePath))
+                await Task.Run(() => 
                 {
-                    _fileService.DeleteFile(consolePackagePath);
-                }
-                await Task.Delay(250);
+                    Dispatcher.Invoke(() => UpdateStatus("Reverting config files..."));
+                    ModifyIniFile(_config.TdEngineIniPath, "Engine.Engine", "ConsoleClassName", "TdGame.TdConsole");
+                    ModifyIniFile(_config.TdInputIniPath, "Engine.Console", "TypeKey", "None");
 
-                _gameStatusViewModel.Status = "Patching Engine.u...";
-                _packageService.DisposePackage(_package);
-                _package = null;
-                using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
-                {
-                    stream.Position = _offsets.ConsoleHeightOffset;
-                    byte[] originalValue = BitConverter.GetBytes(0.75f);
-                    stream.Write(originalValue, 0, originalValue.Length);
-                }
+                    Dispatcher.Invoke(() => UpdateStatus("Deleting console package..."));
+                    string consolePackagePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "MirrorsEdgeConsole.u");
+                    if (_fileService.FileExists(consolePackagePath))
+                    {
+                        _fileService.DeleteFile(consolePackagePath);
+                    }
 
-                DialogHelper.ShowMessage("Success", "Developer console uninstalled.", DialogHelper.MessageType.Success);
+                    Dispatcher.Invoke(() => UpdateStatus("Patching Engine.u..."));
+                    _packageService.DisposePackage(_package);
+                    _package = null;
+                    using (var stream = new FileStream(_config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
+                    {
+                        stream.Position = _offsets.ConsoleHeightOffset;
+                        byte[] originalValue = BitConverter.GetBytes(0.75f);
+                        stream.Write(originalValue, 0, originalValue.Length);
+                    }
+                });
+
+                UpdateStatus("Ready.");
+                await DialogHelper.ShowMessageAsync("Success", "Developer console uninstalled.", DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowMessage("Uninstallation Failed", $"An error occurred during uninstallation: {ex.Message}", DialogHelper.MessageType.Error);
-                _gameStatusViewModel.Status = "Console uninstallation failed.";
+                await DialogHelper.ShowMessageAsync("Uninstallation Failed", $"An error occurred during uninstallation: {ex.Message}", DialogHelper.MessageType.Error);
+                UpdateStatus("Console uninstallation failed.");
             }
             finally
             {
-                _gameStatusViewModel.IsGameTweaksEnabled = true;
-                _gameStatusViewModel.Status = "Ready.";
-                LoadPackages();
+                await Task.Delay(500);
+                await Task.Run(() => LoadPackages());
             }
         }
 
@@ -1506,67 +1537,137 @@ namespace MirrorsEdgeTweaks
             _downloadProgressViewModel.IsDownloadProgressVisible = true;
             _downloadProgressViewModel.DownloadProgressValue = 0;
             _downloadProgressViewModel.IsDownloadProgressIndeterminate = true;
-            _gameStatusViewModel.Status = "Downloading Tweaks Scripts...";
+            UpdateStatus("Downloading Tweaks Scripts...");
             
             GameTweaksGrid.IsEnabled = false;
             DownloadProgressBar.Visibility = System.Windows.Visibility.Visible;
             DownloadProgressBar.Value = 0;
             DownloadProgressBar.IsIndeterminate = true;
-            UpdateStatus("Downloading Tweaks Scripts...");
 
             try
             {
-                using (var client = new HttpClient())
+                await Task.Run(async () => 
                 {
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    using (var client = new HttpClient())
                     {
-                        response.EnsureSuccessStatusCode();
-                        var totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
                         {
-                            if (totalBytes.HasValue)
+                            response.EnsureSuccessStatusCode();
+                            var totalBytes = response.Content.Headers.ContentLength;
+
+                            using (var stream = await response.Content.ReadAsStreamAsync())
+                            using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
                             {
-                                _downloadProgressViewModel.IsDownloadProgressIndeterminate = false;
-                                var totalBytesRead = 0L;
-                                var buffer = new byte[8192];
-                                int bytesRead;
-                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                if (totalBytes.HasValue)
                                 {
-                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
-                                    var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
-                                    _downloadProgressViewModel.DownloadProgressValue = progress;
-                                    _gameStatusViewModel.Status = $"Downloading Tweaks Scripts... {progress}%";
-                                    DownloadProgressBar.Value = progress;
-                                    DownloadProgressBar.IsIndeterminate = false;
-                                    UpdateStatus($"Downloading Tweaks Scripts... {progress}%");
+                                    Dispatcher.Invoke(() => {
+                                        _downloadProgressViewModel.IsDownloadProgressIndeterminate = false;
+                                        DownloadProgressBar.IsIndeterminate = false;
+                                    });
+                                    
+                                    var totalBytesRead = 0L;
+                                    var buffer = new byte[8192];
+                                    int bytesRead;
+                                    while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                    {
+                                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                        totalBytesRead += bytesRead;
+                                        var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
+                                        
+                                        Dispatcher.Invoke(() => {
+                                            _downloadProgressViewModel.DownloadProgressValue = progress;
+                                            DownloadProgressBar.Value = progress;
+                                            UpdateStatus($"Downloading Tweaks Scripts... {progress}%");
+                                        });
+                                    }
+                                }
+                                else
+                                {
+                                    await stream.CopyToAsync(fileStream);
+                                }
+                            }
+                        }
+                    }
+
+                    Dispatcher.Invoke(() => {
+                        UpdateStatus("Extracting files...");
+                        _downloadProgressViewModel.DownloadProgressValue = 100;
+                        DownloadProgressBar.Value = 100;
+                    });
+                    
+                    // Backup existing TweaksScriptsSettings if present
+                    string binariesPath = Path.Combine(_config.GameDirectoryPath, "Binaries");
+                    string settingsPath = Path.Combine(binariesPath, "TweaksScriptsSettings");
+                    Dictionary<string, string> existingSettings = new Dictionary<string, string>();
+
+                    if (File.Exists(settingsPath))
+                    {
+                        var lines = File.ReadAllLines(settingsPath);
+                        foreach (var line in lines)
+                        {
+                            var trimmedLine = line.Trim();
+                            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//")) continue;
+
+                            var parts = trimmedLine.Split(new[] { ' ' }, 2);
+                            if (parts.Length > 0)
+                            {
+                                string key = parts[0];
+                                string value = parts.Length > 1 ? parts[1] : string.Empty;
+                                existingSettings[key] = value;
+                            }
+                        }
+                    }
+
+                    ZipFile.ExtractToDirectory(tempZipPath, _config.GameDirectoryPath, true);
+                    File.Delete(tempZipPath);
+
+                    if (existingSettings.Count > 0 && File.Exists(settingsPath))
+                    {
+                        var newLines = File.ReadAllLines(settingsPath).ToList();
+                        var updatedLines = new List<string>();
+
+                        foreach (var line in newLines)
+                        {
+                            var trimmedLine = line.Trim();
+                            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//"))
+                            {
+                                updatedLines.Add(line);
+                                continue;
+                            }
+
+                            var parts = trimmedLine.Split(new[] { ' ' }, 2);
+                            if (parts.Length > 0)
+                            {
+                                string key = parts[0];
+                                if (existingSettings.ContainsKey(key))
+                                {
+                                    string oldValue = existingSettings[key];
+                                    string newLine = string.IsNullOrEmpty(oldValue) ? key : $"{key} {oldValue}";
+                                    updatedLines.Add(newLine);
+                                }
+                                else
+                                {
+                                    updatedLines.Add(line);
                                 }
                             }
                             else
                             {
-                                await stream.CopyToAsync(fileStream);
+                                updatedLines.Add(line);
                             }
                         }
+
+                        File.WriteAllLines(settingsPath, updatedLines);
                     }
-                }
-
-                _gameStatusViewModel.Status = "Extracting files...";
-                _downloadProgressViewModel.DownloadProgressValue = 100;
-                DownloadProgressBar.Value = 100;
-                UpdateStatus("Extracting files...");
-                ZipFile.ExtractToDirectory(tempZipPath, _config.GameDirectoryPath, true);
-
-                File.Delete(tempZipPath);
+                });
 
                 UpdateStatus("Ready.");
-                DialogHelper.ShowMessage("Success", "Tweaks Scripts successfully downloaded and installed.", DialogHelper.MessageType.Success);
+                UpdateTweaksScriptsStatus();
+                await DialogHelper.ShowMessageAsync("Success", "Tweaks Scripts successfully downloaded and installed.", DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {
-                _gameStatusViewModel.Status = "An error occurred during installation.";
-                DialogHelper.ShowMessage("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
+                UpdateStatus("An error occurred during installation.");
+                await DialogHelper.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogHelper.MessageType.Error);
             }
             finally
             {
@@ -1600,55 +1701,61 @@ namespace MirrorsEdgeTweaks
 
             try
             {
-                string cookedPcPath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC");
-                string binariesPath = Path.Combine(_config.GameDirectoryPath, "Binaries");
-
-                string scriptFile = Path.Combine(cookedPcPath, "MirrorsEdgeTweaksScripts.u");
-
-                var binaryFiles = new List<string>
+                int filesDeleted = await Task.Run(() => 
                 {
-                    "Cheats",
-                    "CheatsOff",
-                    "Speedrun",
-                    "SpeenrunOff",
-                    "TimeTrialOrder",
-                    "TrainerHUD",
-                    "TrainerHUDOff",
-                    "TweaksScriptsSettings"
-                };
+                    string cookedPcPath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC");
+                    string binariesPath = Path.Combine(_config.GameDirectoryPath, "Binaries");
 
-                int filesDeleted = 0;
+                    string scriptFile = Path.Combine(cookedPcPath, "MirrorsEdgeTweaksScripts.u");
 
-                if (_fileService.FileExists(scriptFile))
-                {
-                    _fileService.DeleteFile(scriptFile);
-                    filesDeleted++;
-                }
-
-                foreach (var fileName in binaryFiles)
-                {
-                    string filePath = Path.Combine(binariesPath, fileName);
-                    if (_fileService.FileExists(filePath))
+                    var binaryFiles = new List<string>
                     {
-                        _fileService.DeleteFile(filePath);
-                        filesDeleted++;
+                        "Cheats",
+                        "CheatsOff",
+                        "Speedrun",
+                        "SpeenrunOff",
+                        "TimeTrialOrder",
+                        "TrainerHUD",
+                        "TrainerHUDOff",
+                        "TweaksScriptsSettings"
+                    };
+
+                    int deletedCount = 0;
+
+                    if (_fileService.FileExists(scriptFile))
+                    {
+                        _fileService.DeleteFile(scriptFile);
+                        deletedCount++;
                     }
-                }
+
+                    foreach (var fileName in binaryFiles)
+                    {
+                        string filePath = Path.Combine(binariesPath, fileName);
+                        if (_fileService.FileExists(filePath))
+                        {
+                            _fileService.DeleteFile(filePath);
+                            deletedCount++;
+                        }
+                    }
+                    
+                    return deletedCount;
+                });
+
+                UpdateStatus("Ready.");
+                UpdateTweaksScriptsStatus();
 
                 if (filesDeleted > 0)
                 {
-                    DialogHelper.ShowMessage("Success", $"Successfully uninstalled Tweaks Scripts ({filesDeleted} files removed).", DialogHelper.MessageType.Success);
-                    _gameStatusViewModel.Status = "Tweaks Scripts uninstalled.";
+                    await DialogHelper.ShowMessageAsync("Success", $"Successfully uninstalled Tweaks Scripts ({filesDeleted} files removed).", DialogHelper.MessageType.Success);
                 }
                 else
                 {
-                    DialogHelper.ShowMessage("Not Found", "No Tweaks Scripts files were found to uninstall.", DialogHelper.MessageType.Information);
-                    _gameStatusViewModel.Status = "Ready.";
+                    await DialogHelper.ShowMessageAsync("Not Found", "No Tweaks Scripts files were found to uninstall.", DialogHelper.MessageType.Information);
                 }
             }
             catch (Exception ex)
             {
-                DialogHelper.ShowMessage("Error", $"An error occurred during uninstallation: {ex.Message}", DialogHelper.MessageType.Error);
+                await DialogHelper.ShowMessageAsync("Error", $"An error occurred during uninstallation: {ex.Message}", DialogHelper.MessageType.Error);
                 _gameStatusViewModel.Status = "Error during uninstallation.";
             }
             finally
@@ -1666,14 +1773,16 @@ namespace MirrorsEdgeTweaks
             string exePath = Path.Combine(_config.GameDirectoryPath, "Binaries", "MirrorsEdge.exe");
             if (!_fileService.FileExists(exePath))
             {
-                _unlockedConfigsViewModel.UnlockedConfigsStatus = "N/A (EXE not found)";
-                _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                UnlockedConfigsStatus.Text = "N/A (EXE not found)";
-                UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                PatchConfigsButton.IsEnabled = false;
-                UnpatchConfigsButton.IsEnabled = false;
+                Dispatcher.Invoke(() => {
+                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "N/A (EXE not found)";
+                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
+                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
+                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
+                    UnlockedConfigsStatus.Text = "N/A (EXE not found)";
+                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                    PatchConfigsButton.IsEnabled = false;
+                    UnpatchConfigsButton.IsEnabled = false;
+                });
                 return false;
             }
 
@@ -1685,14 +1794,16 @@ namespace MirrorsEdgeTweaks
                 int steamPatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.SteamConfigPatternPatched);
                 if (retailPatchedOffset != -1 || steamPatchedOffset != -1)
                 {
-                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Patched";
-                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Green;
-                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
-                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
-                    UnlockedConfigsStatus.Text = "Patched";
-                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Green;
-                    PatchConfigsButton.IsEnabled = true;
-                    UnpatchConfigsButton.IsEnabled = true;
+                    Dispatcher.Invoke(() => {
+                        _unlockedConfigsViewModel.UnlockedConfigsStatus = "Patched";
+                        _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Green;
+                        _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
+                        _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
+                        UnlockedConfigsStatus.Text = "Patched";
+                        UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Green;
+                        PatchConfigsButton.IsEnabled = true;
+                        UnpatchConfigsButton.IsEnabled = true;
+                    });
                     return true;
                 }
 
@@ -1700,38 +1811,44 @@ namespace MirrorsEdgeTweaks
                 int steamUnpatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.SteamConfigPatternUnpatched);
                 if (retailUnpatchedOffset != -1 || steamUnpatchedOffset != -1)
                 {
-                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Unpatched";
-                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
-                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
-                    UnlockedConfigsStatus.Text = "Unpatched";
-                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                    PatchConfigsButton.IsEnabled = true;
-                    UnpatchConfigsButton.IsEnabled = true;
+                    Dispatcher.Invoke(() => {
+                        _unlockedConfigsViewModel.UnlockedConfigsStatus = "Unpatched";
+                        _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
+                        _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
+                        _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
+                        UnlockedConfigsStatus.Text = "Unpatched";
+                        UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                        PatchConfigsButton.IsEnabled = true;
+                        UnpatchConfigsButton.IsEnabled = true;
+                    });
                     return true;
                 }
 
-                _unlockedConfigsViewModel.UnlockedConfigsStatus = "Not Applicable";
-                _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                UnlockedConfigsStatus.Text = "Not Applicable";
-                UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                PatchConfigsButton.IsEnabled = false;
-                UnpatchConfigsButton.IsEnabled = false;
+                Dispatcher.Invoke(() => {
+                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Not Applicable";
+                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
+                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
+                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
+                    UnlockedConfigsStatus.Text = "Not Applicable";
+                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
+                    PatchConfigsButton.IsEnabled = false;
+                    UnpatchConfigsButton.IsEnabled = false;
+                });
                 return false;
             }
             catch (Exception ex)
             {
-                _unlockedConfigsViewModel.UnlockedConfigsStatus = "Error reading EXE";
-                _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Red;
-                _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                UnlockedConfigsStatus.Text = "Error reading EXE";
-                UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Red;
-                PatchConfigsButton.IsEnabled = false;
-                UnpatchConfigsButton.IsEnabled = false;
-                _gameStatusViewModel.Status = $"Error checking config patch status: {ex.Message}";
+                Dispatcher.Invoke(() => {
+                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Error reading EXE";
+                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Red;
+                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
+                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
+                    UnlockedConfigsStatus.Text = "Error reading EXE";
+                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Red;
+                    PatchConfigsButton.IsEnabled = false;
+                    UnpatchConfigsButton.IsEnabled = false;
+                    _gameStatusViewModel.Status = $"Error checking config patch status: {ex.Message}";
+                });
                 return false;
             }
         }
@@ -1789,74 +1906,76 @@ namespace MirrorsEdgeTweaks
 
             try
             {
-                await System.Threading.Tasks.Task.Run(() =>
-            {
-                _package?.Dispose();
-                _tdGamePackage?.Dispose();
-                _package = null;
-                _tdGamePackage = null;
-
-                byte[] exeBytes = _fileService.ReadAllBytes(exePath);
-                int patchesApplied = 0;
-
-                byte[] patternToFindRetail, patternToFindSteam;
-
-                if (newValue == 0x00)
+                int patchesApplied = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    patternToFindRetail = _configPatterns.RetailConfigPatternUnpatched;
-                    patternToFindSteam = _configPatterns.SteamConfigPatternUnpatched;
-                }
-                else
-                {
-                    patternToFindRetail = _configPatterns.RetailConfigPatternPatched;
-                    patternToFindSteam = _configPatterns.SteamConfigPatternPatched;
-                }
+                    _package?.Dispose();
+                    _tdGamePackage?.Dispose();
+                    _package = null;
+                    _tdGamePackage = null;
 
-                int retailOffset = PatternHelper.FindPattern(exeBytes, patternToFindRetail);
-                if (retailOffset != -1)
-                {
-                    exeBytes[retailOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
-                    patchesApplied++;
-                }
+                    byte[] exeBytes = _fileService.ReadAllBytes(exePath);
+                    int count = 0;
 
-                int steamOffset = PatternHelper.FindPattern(exeBytes, patternToFindSteam);
-                if (steamOffset != -1)
-                {
-                    exeBytes[steamOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
-                    patchesApplied++;
-                }
+                    byte[] patternToFindRetail, patternToFindSteam;
+
+                    if (newValue == 0x00)
+                    {
+                        patternToFindRetail = _configPatterns.RetailConfigPatternUnpatched;
+                        patternToFindSteam = _configPatterns.SteamConfigPatternUnpatched;
+                    }
+                    else
+                    {
+                        patternToFindRetail = _configPatterns.RetailConfigPatternPatched;
+                        patternToFindSteam = _configPatterns.SteamConfigPatternPatched;
+                    }
+
+                    int retailOffset = PatternHelper.FindPattern(exeBytes, patternToFindRetail);
+                    if (retailOffset != -1)
+                    {
+                        exeBytes[retailOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
+                        count++;
+                    }
+
+                    int steamOffset = PatternHelper.FindPattern(exeBytes, patternToFindSteam);
+                    if (steamOffset != -1)
+                    {
+                        exeBytes[steamOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
+                        count++;
+                    }
+
+                    if (count > 0)
+                    {
+                        _fileService.WriteAllBytes(exePath, exeBytes);
+                    }
+                    
+                    return count;
+                });
+
+                HideProgress();
 
                 if (patchesApplied > 0)
                 {
-                    _fileService.WriteAllBytes(exePath, exeBytes);
-                    
-                    HideProgress();
-                    
+                    SetupUnlockedConfigsEditor();
                     string status = newValue == 0x00 ? "patched" : "unpatched";
-                    DialogHelper.ShowMessage("Success", $"Successfully {status} unlocked configs.", DialogHelper.MessageType.Success);
+                    await DialogHelper.ShowMessageAsync("Success", $"Successfully {status} unlocked configs.", DialogHelper.MessageType.Success);
                 }
                 else
                 {
-                    HideProgress();
-                    
                     string action = newValue == 0x00 ? "patch" : "unpatch";
                     string state = newValue == 0x00 ? "unpatched" : "patched";
-                    DialogHelper.ShowMessage("Patch Failed", $"Could not find the {state} byte sequence to {action}. The executable might already be in the desired state.", DialogHelper.MessageType.Warning);
+                    await DialogHelper.ShowMessageAsync("Patch Failed", $"Could not find the {state} byte sequence to {action}. The executable might already be in the desired state.", DialogHelper.MessageType.Warning);
                 }
-                });
             }
             catch (Exception ex)
             {
                 HideProgress();
-                DialogHelper.ShowMessage("Error", $"An error occurred while patching the executable: {ex.Message}", DialogHelper.MessageType.Error);
+                await DialogHelper.ShowMessageAsync("Error", $"An error occurred while patching the executable: {ex.Message}", DialogHelper.MessageType.Error);
             }
             finally
             {
                 HideProgress();
                 
                 this.IsEnabled = true;
-                
-                LoadPackages();
             }
         }
 
@@ -1902,13 +2021,13 @@ namespace MirrorsEdgeTweaks
             try
             {
                 await Task.Run(() => ApplyPhysXFPS(physxFps));
-                UpdateStatus("PhysX FPS applied successfully.");
-                DialogHelper.ShowMessage("Success", $"PhysX FPS set to {physxFps} successfully.", DialogHelper.MessageType.Success);
+                UpdateStatus("Ready.");
+                await DialogHelper.ShowMessageAsync("Success", $"PhysX FPS set to {physxFps} successfully.", DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {
                 UpdateStatus("Failed to apply PhysX FPS.");
-                DialogHelper.ShowMessage("Error", $"Failed to apply PhysX FPS:\n\n{ex.Message}", DialogHelper.MessageType.Error);
+                await DialogHelper.ShowMessageAsync("Error", $"Failed to apply PhysX FPS:\n\n{ex.Message}", DialogHelper.MessageType.Error);
             }
             finally
             {
@@ -4543,7 +4662,7 @@ namespace MirrorsEdgeTweaks
         {
             DialogHelper.ShowMessage("PhysX Information", 
                 "PhysX provides additional physics effects such as detailed debris and cloth simulations, and spawns in extra physics props.\n\n" +
-                "Note: PhysX in Mirror's Edge is only hardware accelerated on CUDA-ready NVIDIA GPUs older than the RTX 50 series.", 
+                "Note: PhysX in Mirror's Edge is only hardware accelerated on CUDA-ready NVIDIA GPUs.", 
                 DialogHelper.MessageType.Information);
         }
 

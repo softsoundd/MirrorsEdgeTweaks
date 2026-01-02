@@ -191,6 +191,11 @@ namespace MirrorsEdgeTweaks.Behaviors
         {
             if (sender is ScrollViewer scrollViewer)
             {
+                if (ShouldIgnoreMouseWheel(e.OriginalSource as DependencyObject, scrollViewer))
+                {
+                    return;
+                }
+
                 if (!_targetOffsets.ContainsKey(scrollViewer))
                 {
                     _targetOffsets[scrollViewer] = scrollViewer.VerticalOffset;
@@ -247,6 +252,43 @@ namespace MirrorsEdgeTweaks.Behaviors
                 CompositionTarget.Rendering -= _renderingHandlers[scrollViewer];
             }
             _isAnimating[scrollViewer] = false;
+        }
+
+        private static bool ShouldIgnoreMouseWheel(DependencyObject? originalSource, ScrollViewer mainScrollViewer)
+        {
+            DependencyObject? current = originalSource;
+
+            while (current != null)
+            {
+                if (current == mainScrollViewer)
+                {
+                    return false;
+                }
+
+                if (current is ScrollViewer || 
+                    current is System.Windows.Controls.ComboBox || 
+                    current is System.Windows.Controls.Primitives.Selector)
+                {
+                    return true;
+                }
+
+                current = GetParent(current);
+            }
+
+            return true;
+        }
+
+        private static DependencyObject? GetParent(DependencyObject child)
+        {
+            if (child == null) return null;
+
+            if (child is Visual || child is System.Windows.Media.Media3D.Visual3D)
+            {
+                var visualParent = VisualTreeHelper.GetParent(child);
+                if (visualParent != null) return visualParent;
+            }
+
+            return LogicalTreeHelper.GetParent(child);
         }
     }
 }
