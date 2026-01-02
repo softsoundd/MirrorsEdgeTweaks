@@ -83,6 +83,23 @@ namespace MirrorsEdgeTweaks
                 DownloadProgress = _downloadProgressViewModel,
                 TdGameVersion = _tdGameVersionViewModel
             };
+
+            EventManager.RegisterClassHandler(typeof(ComboBoxItem), System.Windows.Input.Mouse.PreviewMouseUpEvent, new System.Windows.Input.MouseButtonEventHandler(OnComboBoxItemMouseUp), true);
+        }
+
+        private void OnComboBoxItemMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is ComboBoxItem item)
+            {
+                var comboBox = ItemsControl.ItemsControlFromItemContainer(item) as System.Windows.Controls.ComboBox;
+                if (comboBox != null)
+                {
+                    if (comboBox.ItemContainerGenerator.ItemFromContainer(item) == comboBox.SelectedItem)
+                    {
+                        comboBox.RaiseEvent(new SelectionChangedEventArgs(System.Windows.Controls.ComboBox.SelectionChangedEvent, new List<object>(), new List<object>()));
+                    }
+                }
+            }
         }
 
 
@@ -833,7 +850,7 @@ namespace MirrorsEdgeTweaks
 
         private void UpdateConsoleStatus()
         {
-            if (_package == null || string.IsNullOrEmpty(_config.GameDirectoryPath)) return;
+            if (_package == null || string.IsNullOrEmpty(_config.GameDirectoryPath) || string.IsNullOrEmpty(_config.TdEngineIniPath)) return;
 
             string consoleFilePath = Path.Combine(_config.GameDirectoryPath, "TdGame", "CookedPC", "MirrorsEdgeConsole.u");
             bool fileExists = _fileService.FileExists(consoleFilePath);
@@ -849,7 +866,26 @@ namespace MirrorsEdgeTweaks
                 }
             }
 
-            if (fileExists && heightModified)
+            bool configModified = false;
+            try
+            {
+                if (_config.TdEngineIniPath != null && _config.TdInputIniPath != null)
+                {
+                    string? consoleClassName = ConfigFileHelper.ReadIniValue(_config.TdEngineIniPath, "Engine.Engine", "ConsoleClassName");
+                    string? typeKey = ConfigFileHelper.ReadIniValue(_config.TdInputIniPath, "Engine.Console", "TypeKey");
+
+                    if (!string.IsNullOrEmpty(consoleClassName) && consoleClassName.Equals("MirrorsEdgeConsole.MirrorsEdgeConsole", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(typeKey) && typeKey.Equals("Tab", StringComparison.OrdinalIgnoreCase))
+                    {
+                        configModified = true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            if (fileExists && heightModified && configModified)
             {
                 Dispatcher.Invoke(() => {
                     _consoleViewModel.ConsoleStatus = "Installed";
@@ -858,7 +894,7 @@ namespace MirrorsEdgeTweaks
                     ConsoleStatus.Foreground = System.Windows.Media.Brushes.Green;
                 });
             }
-            else if (fileExists || heightModified)
+            else if (fileExists || heightModified || configModified)
             {
                 Dispatcher.Invoke(() => {
                     _consoleViewModel.ConsoleStatus = "Partially Installed";
@@ -3262,8 +3298,6 @@ namespace MirrorsEdgeTweaks
             try
             {
                 _graphicsSettingsService.ApplyTextureDetailPreset(_config.TdEngineIniPath, preset);
-                await DialogHelper.ShowMessageAsync("Success", $"Texture detail preset '{preset}' applied successfully.", DialogHelper.MessageType.Success);
-                
                 LoadGraphicsSettingsFromIni();
             }
             catch (Exception ex)
@@ -3321,8 +3355,6 @@ namespace MirrorsEdgeTweaks
             try
             {
                 _graphicsSettingsService.ApplyGraphicsQualityPreset(_config.TdEngineIniPath, preset);
-                await DialogHelper.ShowMessageAsync("Success", $"Graphics quality preset '{preset}' applied successfully.", DialogHelper.MessageType.Success);
-                
                 LoadGraphicsSettingsFromIni();
             }
             catch (Exception ex)
@@ -4573,10 +4605,18 @@ namespace MirrorsEdgeTweaks
                 if (string.IsNullOrEmpty(currentArgs))
                 {
                     LaunchArgumentsStatus.Text = "None (Patched but no arguments set)";
+                    if (string.IsNullOrEmpty(LaunchArgumentsTextBox.Text))
+                    {
+                        LaunchArgumentsTextBox.Text = string.Empty;
+                    }
                 }
                 else
                 {
                     LaunchArgumentsStatus.Text = currentArgs;
+                    if (string.IsNullOrEmpty(LaunchArgumentsTextBox.Text))
+                    {
+                        LaunchArgumentsTextBox.Text = currentArgs;
+                    }
                 }
             }
             catch (Exception)
@@ -4662,7 +4702,7 @@ namespace MirrorsEdgeTweaks
         {
             DialogHelper.ShowMessage("PhysX Information", 
                 "PhysX provides additional physics effects such as detailed debris and cloth simulations, and spawns in extra physics props.\n\n" +
-                "Note: PhysX in Mirror's Edge is only hardware accelerated on CUDA-ready NVIDIA GPUs.", 
+                "Note: PhysX in Mirror's Edge is hardware accelerated only on CUDA-ready NVIDIA GPUs.", 
                 DialogHelper.MessageType.Information);
         }
 
@@ -7618,7 +7658,6 @@ namespace MirrorsEdgeTweaks
                 });
 
                 string status = enableIntroVideo ? "enabled" : "disabled";
-                DialogHelper.ShowMessage("Success", $"Intro video has been {status}.", DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {

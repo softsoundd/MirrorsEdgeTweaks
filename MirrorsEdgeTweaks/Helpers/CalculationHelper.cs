@@ -257,6 +257,46 @@ namespace MirrorsEdgeTweaks.Helpers
 
     public static class ConfigFileHelper
     {
+        public static string? ReadIniValue(string filePath, string section, string key)
+        {
+            if (!System.IO.File.Exists(filePath)) return null;
+
+            try
+            {
+                var lines = System.IO.File.ReadAllLines(filePath);
+                string sectionHeader = $"[{section}]";
+                bool inSection = false;
+
+                foreach (var line in lines)
+                {
+                    string trimmedLine = line.Trim();
+                    if (trimmedLine.Equals(sectionHeader, StringComparison.OrdinalIgnoreCase))
+                    {
+                        inSection = true;
+                        continue;
+                    }
+
+                    if (inSection)
+                    {
+                        if (trimmedLine.StartsWith("["))
+                        {
+                            break;
+                        }
+
+                        if (trimmedLine.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return trimmedLine.Substring(key.Length + 1).Trim();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
         public static void ModifyIniFile(string filePath, string section, string key, string value)
         {
             var fileInfo = new System.IO.FileInfo(filePath);
