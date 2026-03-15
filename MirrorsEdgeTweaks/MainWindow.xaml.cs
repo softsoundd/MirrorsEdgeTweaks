@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -113,9 +113,7 @@ namespace MirrorsEdgeTweaks
             LoadGraphicsSettingsFromIni();
             
             UpdateFPSLimitStatus();
-            
-            UpdateLaunchArgumentsStatus();
-            
+
             UpdateTweaksScriptsUIStatus();
             
             LoadMouseSmoothingFromIni();
@@ -180,10 +178,25 @@ namespace MirrorsEdgeTweaks
                     return;
                 }
 
+                string launchArguments = LaunchArgumentsTextBox.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(launchArguments))
+                {
+                    DialogHelper.ShowMessage("Error", "Please enter launch arguments first.", DialogHelper.MessageType.Error);
+                    return;
+                }
+
+                if (!CommandLineUnlockHelper.IsUnlocked(exePath))
+                {
+                    DialogHelper.ShowMessage("Error",
+                        "The executable has not been patched to unlock command line arguments yet.\n\nClick the 'Patch' button first.",
+                        DialogHelper.MessageType.Error);
+                    return;
+                }
+
                 System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = "-CmdLineArgs",
+                    Arguments = launchArguments,
                     WorkingDirectory = Path.Combine(_config.GameDirectoryPath, "Binaries"),
                     UseShellExecute = true
                 };
@@ -265,7 +278,6 @@ namespace MirrorsEdgeTweaks
                 LoadCinematicFaithSetting();
                 
                 UpdateFPSLimitStatus();
-                UpdateLaunchArgumentsStatus();
                 UpdateTweaksScriptsUIStatus();
                 
                 LoadMouseSmoothingFromIni();
@@ -438,10 +450,22 @@ namespace MirrorsEdgeTweaks
             {
                 Cm360TextBox.Text = cm360;
             }
+            if (settings.TryGetValue("LaunchArguments", out var launchArguments))
+            {
+                _config.LaunchArguments = launchArguments;
+                LaunchArgumentsTextBox.Text = launchArguments;
+            }
+            else
+            {
+                _config.LaunchArguments = string.Empty;
+            }
         }
 
         private void SaveSettingsToIni()
         {
+            string launchArguments = LaunchArgumentsTextBox.Text?.Trim() ?? string.Empty;
+            _config.LaunchArguments = launchArguments;
+
             var lines = new List<string>
             {
                 $"Path={_config.GameDirectoryPath}",
@@ -449,7 +473,8 @@ namespace MirrorsEdgeTweaks
                 $"AspectRatioWidth={AspectRatioWidth.Text}",
                 $"AspectRatioHeight={AspectRatioHeight.Text}",
                 $"DPI={DpiTextBox.Text}",
-                $"Cm360={Cm360TextBox.Text}"
+                $"Cm360={Cm360TextBox.Text}",
+                $"LaunchArguments={launchArguments}"
             };
             File.WriteAllLines(IniFileName, lines);
         }
@@ -4310,8 +4335,11 @@ namespace MirrorsEdgeTweaks
         private void ShowLaunchArgumentsInfo_Click(object sender, RoutedEventArgs e)
         {
             DialogHelper.ShowMessage("Launch Arguments Information", 
-                "Patches the executable to allow command line arguments to be passed to the game on launch.\n\n" +
-                "Refer to Unreal Engine 3 documentation for available command line arguments: https://docs.unrealengine.com/udk/Three/CommandLineArguments.html",
+                "Patches the executable to unlock Mirror's Edge's original UE3 command line handling so the game can forward the raw Windows command line arguments directly.\n\n" +
+                "Arguments can be entered here, or they can be added to your game library's launch options/other shortcuts.\n\n" +
+                "If entering arguments here, use the 'Launch Game w/ Args' button at the top of the window to start the game with the entered arguments.\n\n" +
+                "Multiple arguments should be separated by a space. The majority of arguments should be prefixed with a '-' character. Only URL-specific arguments do not require the '-' prefix, such as commands to load a specific map upon startup.\n\n" +
+                "Refer to Unreal Engine 3 documentation for available stock command line arguments: https://docs.unrealengine.com/udk/Three/CommandLineArguments.html",
                 DialogHelper.MessageType.Information);
         }
 
@@ -4332,85 +4360,18 @@ namespace MirrorsEdgeTweaks
                     return;
                 }
 
-                byte[] fileContent = File.ReadAllBytes(exePath);
+                bool patchWasRemoved = CommandLineUnlockHelper.RestoreStock(exePath);
 
-                byte[] originalMarker = new byte[] { // "FlybyFlight"
-                    0x46, 0x00, 0x6C, 0x00, 0x79, 0x00, 0x62, 0x00, 0x79, 0x00, 0x46, 0x00,
-                    0x6C, 0x00, 0x69, 0x00, 0x67, 0x00, 0x68, 0x00, 0x74, 0x00 };
-                
-                byte[] newMarker = new byte[] { // "CmdLineArgs"
-                    0x43, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x4C, 0x00, 0x69, 0x00, 0x6E, 0x00,
-                    0x65, 0x00, 0x41, 0x00, 0x72, 0x00, 0x67, 0x00, 0x73, 0x00 };
-                
-                byte[] defaultString2 = new byte[] { // "escape_p?Loadcheckpoint=ChaseFlyby?Causeevent=startflyby -nostartupimovies"
-                    0x65, 0x00, 0x73, 0x00, 0x63, 0x00, 0x61, 0x00, 0x70, 0x00, 0x65, 0x00, 0x5F, 0x00, 0x70, 0x00,
-                    0x3F, 0x00, 0x4C, 0x00, 0x6F, 0x00, 0x61, 0x00, 0x64, 0x00, 0x63, 0x00, 0x68, 0x00, 0x65, 0x00,
-                    0x63, 0x00, 0x6B, 0x00, 0x70, 0x00, 0x6F, 0x00, 0x69, 0x00, 0x6E, 0x00, 0x74, 0x00, 0x3D, 0x00,
-                    0x43, 0x00, 0x68, 0x00, 0x61, 0x00, 0x73, 0x00, 0x65, 0x00, 0x46, 0x00, 0x6C, 0x00, 0x79, 0x00,
-                    0x62, 0x00, 0x79, 0x00, 0x3F, 0x00, 0x43, 0x00, 0x61, 0x00, 0x75, 0x00, 0x73, 0x00, 0x65, 0x00,
-                    0x65, 0x00, 0x76, 0x00, 0x65, 0x00, 0x6E, 0x00, 0x74, 0x00, 0x3D, 0x00, 0x73, 0x00, 0x74, 0x00,
-                    0x61, 0x00, 0x72, 0x00, 0x74, 0x00, 0x66, 0x00, 0x6C, 0x00, 0x79, 0x00, 0x62, 0x00, 0x79, 0x00,
-                    0x20, 0x00, 0x2D, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x73, 0x00, 0x74, 0x00, 0x61, 0x00, 0x72, 0x00,
-                    0x74, 0x00, 0x75, 0x00, 0x70, 0x00, 0x6D, 0x00, 0x6F, 0x00, 0x76, 0x00, 0x69, 0x00, 0x65, 0x00,
-                    0x73, 0x00 };
+                LaunchArgumentsTextBox.Text = string.Empty;
+                _config.LaunchArguments = string.Empty;
+                SaveSettingsToIni();
 
-                int markerOffset = FindBytePattern(fileContent, newMarker);
-                
-                if (markerOffset == -1)
-                {
-                    markerOffset = FindBytePattern(fileContent, originalMarker);
-                    if (markerOffset == -1)
-                    {
-                        DialogHelper.ShowMessage("Error", "Pattern not found in executable. The file may be corrupted or from an unsupported version.", DialogHelper.MessageType.Error);
-                        return;
-                    }
-                    else
-                    {
-                        DialogHelper.ShowMessage("Information", "Executable is already in its original state.", DialogHelper.MessageType.Information);
-                        return;
-                    }
-                }
-
-                int markerSize = newMarker.Length;
-                int gapSize = 2;
-                int str2AreaStartOffset = markerOffset + markerSize + gapSize;
-
-                if (str2AreaStartOffset + defaultString2.Length > fileContent.Length)
-                {
-                    DialogHelper.ShowMessage("Error", "Executable appears corrupted - cannot proceed with reset.", DialogHelper.MessageType.Error);
-                    return;
-                }
-
-                Array.Copy(originalMarker, 0, fileContent, markerOffset, originalMarker.Length);
-
-                Array.Copy(defaultString2, 0, fileContent, str2AreaStartOffset, defaultString2.Length);
-
-                FileAttributes attributes = File.GetAttributes(exePath);
-                bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(exePath, attributes & ~FileAttributes.ReadOnly);
-                }
-
-                try
-                {
-                    File.WriteAllBytes(exePath, fileContent);
-
-                    DialogHelper.ShowMessage("Success", 
-                        "Launch arguments patch has been reset to original state.\n\n" +
-                        "The executable has been restored to its default configuration.", 
-                        DialogHelper.MessageType.Success);
-                    
-                    LaunchArgumentsTextBox.Text = "";
-                    UpdateLaunchArgumentsStatus();
-                }
-                finally
-                {
-                    if (wasReadOnly)
-                    {
-                        File.SetAttributes(exePath, attributes);
-                    }
-                }
+                DialogHelper.ShowMessage(
+                    patchWasRemoved ? "Success" : "Information",
+                    patchWasRemoved
+                        ? "The command line unlock patch has been removed and the saved launch arguments were cleared."
+                        : "The executable is already using the stock command line behavior. Saved launch arguments were cleared.",
+                    patchWasRemoved ? DialogHelper.MessageType.Success : DialogHelper.MessageType.Information);
             }
             catch (Exception ex)
             {
@@ -4435,239 +4396,30 @@ namespace MirrorsEdgeTweaks
                     return;
                 }
 
-                byte[] fileContent = File.ReadAllBytes(exePath);
+                string launchArguments = LaunchArgumentsTextBox.Text?.Trim() ?? string.Empty;
+                bool patchWasApplied = CommandLineUnlockHelper.Unlock(exePath);
 
-                byte[] originalMarker = new byte[] { // "FlybyFlight"
-                    0x46, 0x00, 0x6C, 0x00, 0x79, 0x00, 0x62, 0x00, 0x79, 0x00, 0x46, 0x00,
-                    0x6C, 0x00, 0x69, 0x00, 0x67, 0x00, 0x68, 0x00, 0x74, 0x00 };
-                
-                byte[] newMarker = new byte[] { // "CmdLineArgs"
-                    0x43, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x4C, 0x00, 0x69, 0x00, 0x6E, 0x00,
-                    0x65, 0x00, 0x41, 0x00, 0x72, 0x00, 0x67, 0x00, 0x73, 0x00 };
-                
-                byte[] replacePattern2Prefix = new byte[] { // "tdmainmenu?"
-                    0x74, 0x00, 0x64, 0x00, 0x6D, 0x00, 0x61, 0x00, 0x69, 0x00, 0x6E, 0x00,
-                    0x6D, 0x00, 0x65, 0x00, 0x6E, 0x00, 0x75, 0x00, 0x3F, 0x00 };
+                LaunchArgumentsTextBox.Text = launchArguments;
+                _config.LaunchArguments = launchArguments;
+                SaveSettingsToIni();
 
-                int markerSize = newMarker.Length;
-                int string2PrefixSize = replacePattern2Prefix.Length;
-                int gapSize = 2;
-                int userArgSpaceBytes = 135;
+                string argumentsMessage = string.IsNullOrEmpty(launchArguments)
+                    ? "No launch arguments were saved. You can add them later, or add them to your game library's launch options/other shortcuts."
+                    : $"Saved launch arguments: {launchArguments}\n\nUse 'Launch Game w/ Args' to start the game with them.";
 
-                int markerOffset = FindBytePattern(fileContent, newMarker);
-                bool needsInitialPatch = false;
-
-                if (markerOffset == -1)
-                {
-                    markerOffset = FindBytePattern(fileContent, originalMarker);
-                    if (markerOffset == -1)
-                    {
-                        DialogHelper.ShowMessage("Error", "Pattern not found in executable. The file may be corrupted or from an unsupported version.", DialogHelper.MessageType.Error);
-                        return;
-                    }
-                    needsInitialPatch = true;
-                }
-
-                string userArgsRaw = LaunchArgumentsTextBox.Text?.Trim() ?? "";
-                
-                if (string.IsNullOrEmpty(userArgsRaw))
-                {
-                    DialogHelper.ShowMessage("Error", "Please enter command line arguments.", DialogHelper.MessageType.Error);
-                    return;
-                }
-
-                // auto prepend hyphens
-                string[] words = userArgsRaw.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                List<string> processedWords = new List<string>();
-                
-                foreach (string word in words)
-                {
-                    if (string.IsNullOrEmpty(word)) continue;
-                    
-                    if (word.IndexOf('-', 1) != -1)
-                    {
-                        DialogHelper.ShowMessage("Error", 
-                            $"Invalid argument structure: '{word}'. Hyphen '-' should only be at the start of space-separated arguments.", 
-                            DialogHelper.MessageType.Error);
-                        return;
-                    }
-                    
-                    string processed = word[0] != '-' ? "-" + word : word;
-                    processedWords.Add(processed);
-                }
-
-                string userArgs = string.Join(" ", processedWords);
-
-                byte[] userArgsBytes = StringToUtf16LE(userArgs);
-
-                if (userArgsBytes.Length > userArgSpaceBytes)
-                {
-                    DialogHelper.ShowMessage("Error", 
-                        $"Arguments too long ({userArgsBytes.Length} bytes). Total must not exceed {userArgSpaceBytes} bytes.", 
-                        DialogHelper.MessageType.Error);
-                    return;
-                }
-
-                int str2AreaStartOffset = markerOffset + markerSize + gapSize;
-
-                if (needsInitialPatch)
-                {
-                    Array.Copy(newMarker, 0, fileContent, markerOffset, newMarker.Length);
-                }
-
-                Array.Copy(replacePattern2Prefix, 0, fileContent, str2AreaStartOffset, replacePattern2Prefix.Length);
-
-                int userArgsStartOffset = str2AreaStartOffset + string2PrefixSize;
-                for (int i = 0; i < userArgSpaceBytes && (userArgsStartOffset + i) < fileContent.Length; i++)
-                {
-                    fileContent[userArgsStartOffset + i] = 0x00;
-                }
-
-                Array.Copy(userArgsBytes, 0, fileContent, userArgsStartOffset, userArgsBytes.Length);
-
-                FileAttributes attributes = File.GetAttributes(exePath);
-                bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(exePath, attributes & ~FileAttributes.ReadOnly);
-                }
-
-                try
-                {
-                    File.WriteAllBytes(exePath, fileContent);
-
-                    DialogHelper.ShowMessage("Success", 
-                        "Launch arguments applied successfully!\n\n" +
-                        "Add '-CmdLineArgs' to your shortcut or launcher to use these arguments.\n\n" +
-                        "Alternatively, click on the 'Launch Game w/ Args' button at the top of the window.\n\n" +
-                        $"Applied arguments: {userArgs}", 
-                        DialogHelper.MessageType.Success);
-                    
-                    UpdateLaunchArgumentsStatus();
-                }
-                finally
-                {
-                    if (wasReadOnly)
-                    {
-                        File.SetAttributes(exePath, attributes);
-                    }
-                }
+                DialogHelper.ShowMessage(
+                    "Success",
+                    (patchWasApplied
+                        ? "Command line arguments are now unlocked in the executable."
+                        : "Command line arguments are already unlocked in the executable.") +
+                    "\n\n" +
+                    argumentsMessage,
+                    DialogHelper.MessageType.Success);
             }
             catch (Exception ex)
             {
                 DialogHelper.ShowMessage("Error", $"Failed to apply launch arguments: {ex.Message}", DialogHelper.MessageType.Error);
             }
-        }
-
-        private void UpdateLaunchArgumentsStatus()
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(_config.GameDirectoryPath))
-                {
-                    LaunchArgumentsStatus.Text = "N/A (No game directory selected)";
-                    return;
-                }
-
-                string exePath = Path.Combine(_config.GameDirectoryPath, "Binaries", "MirrorsEdge.exe");
-                if (!File.Exists(exePath))
-                {
-                    LaunchArgumentsStatus.Text = "N/A (Executable not found)";
-                    return;
-                }
-
-                byte[] fileContent = File.ReadAllBytes(exePath);
-
-                byte[] newMarker = new byte[] { // "CmdLineArgs"
-                    0x43, 0x00, 0x6D, 0x00, 0x64, 0x00, 0x4C, 0x00, 0x69, 0x00, 0x6E, 0x00,
-                    0x65, 0x00, 0x41, 0x00, 0x72, 0x00, 0x67, 0x00, 0x73, 0x00 };
-
-                byte[] replacePattern2Prefix = new byte[] { // "tdmainmenu?"
-                    0x74, 0x00, 0x64, 0x00, 0x6D, 0x00, 0x61, 0x00, 0x69, 0x00, 0x6E, 0x00,
-                    0x6D, 0x00, 0x65, 0x00, 0x6E, 0x00, 0x75, 0x00, 0x3F, 0x00 };
-
-                int markerOffset = FindBytePattern(fileContent, newMarker);
-
-                if (markerOffset == -1)
-                {
-                    LaunchArgumentsStatus.Text = "None (Executable not patched)";
-                    return;
-                }
-
-                int markerSize = newMarker.Length;
-                int string2PrefixSize = replacePattern2Prefix.Length;
-                int gapSize = 2;
-                int userArgSpaceBytes = 135;
-                int userArgsStartOffset = markerOffset + markerSize + gapSize + string2PrefixSize;
-
-                string currentArgs = Utf16leToString(fileContent, userArgsStartOffset, userArgSpaceBytes);
-
-                if (string.IsNullOrEmpty(currentArgs))
-                {
-                    LaunchArgumentsStatus.Text = "None (Patched but no arguments set)";
-                    if (string.IsNullOrEmpty(LaunchArgumentsTextBox.Text))
-                    {
-                        LaunchArgumentsTextBox.Text = string.Empty;
-                    }
-                }
-                else
-                {
-                    LaunchArgumentsStatus.Text = currentArgs;
-                    if (string.IsNullOrEmpty(LaunchArgumentsTextBox.Text))
-                    {
-                        LaunchArgumentsTextBox.Text = currentArgs;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                LaunchArgumentsStatus.Text = "N/A (Error reading status)";
-            }
-        }
-
-        private string Utf16leToString(byte[] data, int startOffset, int maxBytes)
-        {
-            List<char> chars = new List<char>();
-            for (int i = 0; i < maxBytes && (startOffset + i + 1) < data.Length; i += 2)
-            {
-                byte lowByte = data[startOffset + i];
-                byte highByte = data[startOffset + i + 1];
-
-                if (lowByte == 0x00 && highByte == 0x00)
-                    break;
-
-                chars.Add((char)lowByte);
-            }
-            return new string(chars.ToArray());
-        }
-
-        private int FindBytePattern(byte[] data, byte[] pattern)
-        {
-            for (int i = 0; i <= data.Length - pattern.Length; i++)
-            {
-                bool found = true;
-                for (int j = 0; j < pattern.Length; j++)
-                {
-                    if (data[i + j] != pattern[j])
-                    {
-                        found = false;
-                        break;
-                    }
-                }
-                if (found) return i;
-            }
-            return -1;
-        }
-
-        private byte[] StringToUtf16LE(string str)
-        {
-            List<byte> bytes = new List<byte>();
-            foreach (char c in str)
-            {
-                bytes.Add((byte)c);
-                bytes.Add(0x00);
-            }
-            return bytes.ToArray();
         }
 
         #endregion

@@ -9,6 +9,7 @@ namespace MirrorsEdgeTweaks.Models
         public string? TdInputIniPath { get; set; }
         public string? EnginePackagePath { get; set; }
         public string? TdGamePackagePath { get; set; }
+        public string LaunchArguments { get; set; } = string.Empty;
         public float FovValue { get; set; }
         public float AspectRatioWidth { get; set; }
         public float AspectRatioHeight { get; set; }
