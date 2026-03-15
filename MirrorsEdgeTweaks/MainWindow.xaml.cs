@@ -5043,6 +5043,9 @@ namespace MirrorsEdgeTweaks
             {
                 string[] lines = File.ReadAllLines(iniPath);
                 bool inCorrectSection = false;
+                string formattedMultiplier = calculatedValue.HasValue
+                    ? calculatedValue.Value.ToString("F6", CultureInfo.InvariantCulture)
+                    : string.Empty;
                 
                 for (int i = 0; i < lines.Length; i++)
                 {
@@ -5068,7 +5071,7 @@ namespace MirrorsEdgeTweaks
                         {
                             if (calculatedValue.HasValue)
                             {
-                                lines[i] = $"MaxSensitivityMultiplier={calculatedValue.Value:F6}";
+                                lines[i] = $"MaxSensitivityMultiplier={formattedMultiplier}";
                             }
                             else
                             {
@@ -5079,7 +5082,7 @@ namespace MirrorsEdgeTweaks
                         {
                             if (calculatedValue.HasValue)
                             {
-                                lines[i] = $"MinSensitivityMultiplier={calculatedValue.Value:F6}";
+                                lines[i] = $"MinSensitivityMultiplier={formattedMultiplier}";
                             }
                             else
                             {
