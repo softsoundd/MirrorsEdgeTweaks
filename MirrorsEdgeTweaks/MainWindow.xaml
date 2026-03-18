@@ -317,7 +317,8 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Launch Arguments:" VerticalAlignment="Center"
                                                FontWeight="Bold" Margin="0,0,20,0"/>
-                                    <TextBox x:Name="LaunchArgumentsTextBox" Grid.Column="1" 
+                                    <TextBox x:Name="LaunchArgumentsTextBox"
+                                             Grid.Column="1"
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
                                              materialDesign:HintAssist.Hint="Enter launch arguments"/>
@@ -336,6 +337,29 @@
                                             Click="ShowLaunchArgumentsInfo_Click">
                                         <materialDesign:PackIcon Kind="Information" />
                                     </Button>
+                                </Grid>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="1"
+                                            Grid.ColumnSpan="3"
+                                            Background="{DynamicResource MaterialDesignCardBackground}"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="8,2"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock x:Name="LaunchArgumentsPatchStatusTextBlock"
+                                                   Text="N/A"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
                                 </Grid>
                             </StackPanel>
                             

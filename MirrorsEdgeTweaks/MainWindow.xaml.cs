@@ -25,7 +25,6 @@ namespace MirrorsEdgeTweaks
     {
         private readonly GameConfiguration _config = new GameConfiguration();
         private readonly PackageOffsets _offsets = new PackageOffsets();
-        private readonly ConfigPatchPatterns _configPatterns = new ConfigPatchPatterns();
         
         private readonly IPackageService _packageService;
         private readonly IFileService _fileService;
@@ -182,6 +181,21 @@ namespace MirrorsEdgeTweaks
                 if (string.IsNullOrEmpty(launchArguments))
                 {
                     DialogHelper.ShowMessage("Error", "Please enter launch arguments first.", DialogHelper.MessageType.Error);
+                    return;
+                }
+
+                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                if (unlockMode == CommandLineUnlockMode.RuntimeLaunchPatch)
+                {
+                    CommandLineUnlockHelper.LaunchWithRuntimePatch(exePath, launchArguments);
+                    return;
+                }
+
+                if (unlockMode == CommandLineUnlockMode.Unsupported)
+                {
+                    DialogHelper.ShowMessage("Error",
+                        "This executable version does not support command line unlocking.",
+                        DialogHelper.MessageType.Error);
                     return;
                 }
 
@@ -389,6 +403,57 @@ namespace MirrorsEdgeTweaks
             _gameStatusViewModel.GameVersion = gameVersion.DisplayText;
             
             GameVersionTextBlock.Text = gameVersion.DisplayText;
+            UpdateLaunchArgumentsPatchStatus();
+        }
+
+        private void SetLaunchArgumentsPatchStatus(string status, System.Windows.Media.Brush foreground)
+        {
+            LaunchArgumentsPatchStatusTextBlock.Text = status;
+            LaunchArgumentsPatchStatusTextBlock.Foreground = foreground;
+        }
+
+        private void UpdateLaunchArgumentsPatchStatus()
+        {
+            if (string.IsNullOrEmpty(_config.GameDirectoryPath))
+            {
+                SetLaunchArgumentsPatchStatus("N/A (No game directory selected)", System.Windows.Media.Brushes.Gray);
+                return;
+            }
+
+            string exePath = Path.Combine(_config.GameDirectoryPath, "Binaries", "MirrorsEdge.exe");
+            if (!_fileService.FileExists(exePath))
+            {
+                SetLaunchArgumentsPatchStatus("N/A (EXE not found)", System.Windows.Media.Brushes.Gray);
+                return;
+            }
+
+            try
+            {
+                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                switch (unlockMode)
+                {
+                    case CommandLineUnlockMode.PersistentFilePatch:
+                        bool isUnlocked = CommandLineUnlockHelper.IsUnlocked(exePath);
+                        SetLaunchArgumentsPatchStatus(
+                            isUnlocked ? "Patched - Command line arguments are unlocked" : "Unpatched - Command line arguments are locked",
+                            isUnlocked ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Gray);
+                        break;
+
+                    case CommandLineUnlockMode.RuntimeLaunchPatch:
+                        SetLaunchArgumentsPatchStatus(
+                            "Protected EA App executable (must use the 'Launch Game w/ Args' button)",
+                            System.Windows.Media.Brushes.DarkOrange);
+                        break;
+
+                    default:
+                        SetLaunchArgumentsPatchStatus("Unsupported executable", System.Windows.Media.Brushes.Red);
+                        break;
+                }
+            }
+            catch
+            {
+                SetLaunchArgumentsPatchStatus("Error reading executable", System.Windows.Media.Brushes.Red);
+            }
         }
 
         private void SelectGameDirectory_Click(object sender, RoutedEventArgs e)
@@ -1824,6 +1889,20 @@ namespace MirrorsEdgeTweaks
                 UpdateTweaksScriptsStatus();
             }
         }
+        private void SetUnlockedConfigsState(string status, System.Windows.Media.Brush foreground, bool isPatchEnabled, bool isUnpatchEnabled)
+        {
+            Dispatcher.Invoke(() => {
+                _unlockedConfigsViewModel.UnlockedConfigsStatus = status;
+                _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = foreground;
+                _unlockedConfigsViewModel.IsPatchConfigsEnabled = isPatchEnabled;
+                _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = isUnpatchEnabled;
+                UnlockedConfigsStatus.Text = status;
+                UnlockedConfigsStatus.Foreground = foreground;
+                PatchConfigsButton.IsEnabled = isPatchEnabled;
+                UnpatchConfigsButton.IsEnabled = isUnpatchEnabled;
+            });
+        }
+
         private bool SetupUnlockedConfigsEditor()
         {
             if (string.IsNullOrEmpty(_config.GameDirectoryPath))
@@ -1834,80 +1913,33 @@ namespace MirrorsEdgeTweaks
             string exePath = Path.Combine(_config.GameDirectoryPath, "Binaries", "MirrorsEdge.exe");
             if (!_fileService.FileExists(exePath))
             {
-                Dispatcher.Invoke(() => {
-                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "N/A (EXE not found)";
-                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                    UnlockedConfigsStatus.Text = "N/A (EXE not found)";
-                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                    PatchConfigsButton.IsEnabled = false;
-                    UnpatchConfigsButton.IsEnabled = false;
-                });
+                SetUnlockedConfigsState("N/A (EXE not found)", System.Windows.Media.Brushes.Gray, false, false);
                 return false;
             }
 
             try
             {
-                byte[] exeBytes = _fileService.ReadAllBytes(exePath);
-
-                int retailPatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.RetailConfigPatternPatched);
-                int steamPatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.SteamConfigPatternPatched);
-                if (retailPatchedOffset != -1 || steamPatchedOffset != -1)
+                ConfigUnlockState state = ConfigUnlockHelper.GetState(exePath);
+                switch (state)
                 {
-                    Dispatcher.Invoke(() => {
-                        _unlockedConfigsViewModel.UnlockedConfigsStatus = "Patched";
-                        _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Green;
-                        _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
-                        _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
-                        UnlockedConfigsStatus.Text = "Patched";
-                        UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Green;
-                        PatchConfigsButton.IsEnabled = true;
-                        UnpatchConfigsButton.IsEnabled = true;
-                    });
-                    return true;
+                    case ConfigUnlockState.Patched:
+                        SetUnlockedConfigsState("Patched", System.Windows.Media.Brushes.Green, true, true);
+                        return true;
+                    case ConfigUnlockState.Unpatched:
+                        SetUnlockedConfigsState("Unpatched", System.Windows.Media.Brushes.Gray, true, true);
+                        return true;
+                    case ConfigUnlockState.Mixed:
+                        SetUnlockedConfigsState("Partially Patched", System.Windows.Media.Brushes.DarkOrange, true, true);
+                        return true;
+                    default:
+                        SetUnlockedConfigsState("Not Applicable", System.Windows.Media.Brushes.Gray, false, false);
+                        return false;
                 }
-
-                int retailUnpatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.RetailConfigPatternUnpatched);
-                int steamUnpatchedOffset = PatternHelper.FindPattern(exeBytes, _configPatterns.SteamConfigPatternUnpatched);
-                if (retailUnpatchedOffset != -1 || steamUnpatchedOffset != -1)
-                {
-                    Dispatcher.Invoke(() => {
-                        _unlockedConfigsViewModel.UnlockedConfigsStatus = "Unpatched";
-                        _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                        _unlockedConfigsViewModel.IsPatchConfigsEnabled = true;
-                        _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = true;
-                        UnlockedConfigsStatus.Text = "Unpatched";
-                        UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                        PatchConfigsButton.IsEnabled = true;
-                        UnpatchConfigsButton.IsEnabled = true;
-                    });
-                    return true;
-                }
-
-                Dispatcher.Invoke(() => {
-                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Not Applicable";
-                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Gray;
-                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                    UnlockedConfigsStatus.Text = "Not Applicable";
-                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Gray;
-                    PatchConfigsButton.IsEnabled = false;
-                    UnpatchConfigsButton.IsEnabled = false;
-                });
-                return false;
             }
             catch (Exception ex)
             {
+                SetUnlockedConfigsState("Error reading EXE", System.Windows.Media.Brushes.Red, false, false);
                 Dispatcher.Invoke(() => {
-                    _unlockedConfigsViewModel.UnlockedConfigsStatus = "Error reading EXE";
-                    _unlockedConfigsViewModel.UnlockedConfigsStatusForeground = System.Windows.Media.Brushes.Red;
-                    _unlockedConfigsViewModel.IsPatchConfigsEnabled = false;
-                    _unlockedConfigsViewModel.IsUnpatchConfigsEnabled = false;
-                    UnlockedConfigsStatus.Text = "Error reading EXE";
-                    UnlockedConfigsStatus.Foreground = System.Windows.Media.Brushes.Red;
-                    PatchConfigsButton.IsEnabled = false;
-                    UnpatchConfigsButton.IsEnabled = false;
                     _gameStatusViewModel.Status = $"Error checking config patch status: {ex.Message}";
                 });
                 return false;
@@ -1916,15 +1948,15 @@ namespace MirrorsEdgeTweaks
 
         private void PatchConfigs_Click(object sender, RoutedEventArgs e)
         {
-            ModifyExeConfigPatch(0x00); // patched value
+            ModifyExeConfigPatch(unlock: true);
         }
 
         private void UnpatchConfigs_Click(object sender, RoutedEventArgs e)
         {
-            ModifyExeConfigPatch(0x01); // original value
+            ModifyExeConfigPatch(unlock: false);
         }
 
-        private async void ModifyExeConfigPatch(byte newValue)
+        private async void ModifyExeConfigPatch(bool unlock)
         {
             if (string.IsNullOrEmpty(_config.GameDirectoryPath))
             {
@@ -1939,92 +1971,64 @@ namespace MirrorsEdgeTweaks
                 return;
             }
 
-            if (_unlockedConfigsViewModel.UnlockedConfigsStatus == "Patched")
+            ConfigUnlockState currentState;
+            try
             {
-                if (newValue == 0x00)
-                {
-                    DialogHelper.ShowMessage("No Action Needed", "Configs are already patched.", DialogHelper.MessageType.Information);
-                    return;
-                }
+                currentState = ConfigUnlockHelper.GetState(exePath);
             }
-            else if (UnlockedConfigsStatus.Text == "Unpatched")
+            catch (Exception ex)
             {
-                if (newValue == 0x01)
-                {
-                    DialogHelper.ShowMessage("No Action Needed", "Configs are already unpatched.", DialogHelper.MessageType.Information);
-                    return;
-                }
+                DialogHelper.ShowMessage("Error", $"Failed to read the executable state: {ex.Message}", DialogHelper.MessageType.Error);
+                return;
             }
-            else
+
+            if (currentState == ConfigUnlockState.NotApplicable)
             {
                 DialogHelper.ShowMessage("Not Applicable", "Config patching is not applicable for this executable.", DialogHelper.MessageType.Warning);
                 return;
             }
 
+            if (unlock && currentState == ConfigUnlockState.Patched)
+            {
+                DialogHelper.ShowMessage("No Action Needed", "Configs are already patched.", DialogHelper.MessageType.Information);
+                return;
+            }
+
+            if (!unlock && currentState == ConfigUnlockState.Unpatched)
+            {
+                DialogHelper.ShowMessage("No Action Needed", "Configs are already unpatched.", DialogHelper.MessageType.Information);
+                return;
+            }
+
             this.IsEnabled = false;
-            string actionText = newValue == 0x00 ? "Patching" : "Unpatching";
+            string actionText = unlock ? "Patching" : "Unpatching";
             ShowProgress($"{actionText} configs...", true);
 
             try
             {
-                int patchesApplied = await System.Threading.Tasks.Task.Run(() =>
+                bool patchChanged = await System.Threading.Tasks.Task.Run(() =>
                 {
                     _package?.Dispose();
                     _tdGamePackage?.Dispose();
                     _package = null;
                     _tdGamePackage = null;
 
-                    byte[] exeBytes = _fileService.ReadAllBytes(exePath);
-                    int count = 0;
-
-                    byte[] patternToFindRetail, patternToFindSteam;
-
-                    if (newValue == 0x00)
-                    {
-                        patternToFindRetail = _configPatterns.RetailConfigPatternUnpatched;
-                        patternToFindSteam = _configPatterns.SteamConfigPatternUnpatched;
-                    }
-                    else
-                    {
-                        patternToFindRetail = _configPatterns.RetailConfigPatternPatched;
-                        patternToFindSteam = _configPatterns.SteamConfigPatternPatched;
-                    }
-
-                    int retailOffset = PatternHelper.FindPattern(exeBytes, patternToFindRetail);
-                    if (retailOffset != -1)
-                    {
-                        exeBytes[retailOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
-                        count++;
-                    }
-
-                    int steamOffset = PatternHelper.FindPattern(exeBytes, patternToFindSteam);
-                    if (steamOffset != -1)
-                    {
-                        exeBytes[steamOffset + ConfigPatchPatterns.ConfigPatchOffset] = newValue;
-                        count++;
-                    }
-
-                    if (count > 0)
-                    {
-                        _fileService.WriteAllBytes(exePath, exeBytes);
-                    }
-                    
-                    return count;
+                    return unlock
+                        ? ConfigUnlockHelper.Unlock(exePath)
+                        : ConfigUnlockHelper.RestoreStock(exePath);
                 });
 
                 HideProgress();
 
-                if (patchesApplied > 0)
+                if (patchChanged)
                 {
                     SetupUnlockedConfigsEditor();
-                    string status = newValue == 0x00 ? "patched" : "unpatched";
+                    string status = unlock ? "patched" : "unpatched";
                     await DialogHelper.ShowMessageAsync("Success", $"Successfully {status} unlocked configs.", DialogHelper.MessageType.Success);
                 }
                 else
                 {
-                    string action = newValue == 0x00 ? "patch" : "unpatch";
-                    string state = newValue == 0x00 ? "unpatched" : "patched";
-                    await DialogHelper.ShowMessageAsync("Patch Failed", $"Could not find the {state} byte sequence to {action}. The executable might already be in the desired state.", DialogHelper.MessageType.Warning);
+                    await DialogHelper.ShowMessageAsync("No Action Needed", "The executable is already in the desired config-unlock state.", DialogHelper.MessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -4326,9 +4330,9 @@ namespace MirrorsEdgeTweaks
         private void ShowUnlockedConfigsInfo_Click(object sender, RoutedEventArgs e)
         {
             DialogHelper.ShowMessage("Unlocked Configs Information", 
-                "Applying this patch bypasses the \"corrupted config\" error message that prevents the game from launching when its config files have been modified " +
+                "Applying this patch bypasses the \"corrupted config\" error message that prevents the game from launching when the game directory's config files have been modified " +
                 "(e.g. when removing the streak effects, adding custom maps, removing startup wait period, etc.).\n\nThis is essentially achieving what the MEMLA tool does, " +
-                "except it patches the executable directly — MEMLA is no longer required while this patch is enabled.",
+                "except it patches the executable directly.",
                 DialogHelper.MessageType.Information);
         }
 
@@ -4337,8 +4341,10 @@ namespace MirrorsEdgeTweaks
             DialogHelper.ShowMessage("Launch Arguments Information", 
                 "Patches the executable to unlock Mirror's Edge's original UE3 command line handling so the game can forward the raw Windows command line arguments directly.\n\n" +
                 "Arguments can be entered here, or they can be added to your game library's launch options/other shortcuts.\n\n" +
-                "If entering arguments here, use the 'Launch Game w/ Args' button at the top of the window to start the game with the entered arguments.\n\n" +
-                "Multiple arguments should be separated by a space. The majority of arguments should be prefixed with a '-' character. Only URL-specific arguments do not require the '-' prefix, such as commands to load a specific map upon startup.\n\n" +
+                "Note: EA App/Xbox Game Pass for PC versions of the game are protected builds that cannot be patched on disk. The 'Launch Game w/ Args' button must be used instead which will perform the patch in memory.\n\n\n" +
+                "If entering arguments in Mirror's Edge Tweaks, use the 'Launch Game w/ Args' button at the top of the window to start the game with the entered arguments.\n\n" +
+                "The majority of arguments should be prefixed with a '-' character. Only URL-specific arguments do not require the '-' prefix, such as commands to load a specific map upon startup. " +
+                "Multiple arguments should be separated by a space.\n\n" +
                 "Refer to Unreal Engine 3 documentation for available stock command line arguments: https://docs.unrealengine.com/udk/Three/CommandLineArguments.html",
                 DialogHelper.MessageType.Information);
         }
@@ -4360,17 +4366,30 @@ namespace MirrorsEdgeTweaks
                     return;
                 }
 
-                bool patchWasRemoved = CommandLineUnlockHelper.RestoreStock(exePath);
+                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                bool patchWasRemoved = unlockMode == CommandLineUnlockMode.PersistentFilePatch &&
+                    CommandLineUnlockHelper.RestoreStock(exePath);
 
                 LaunchArgumentsTextBox.Text = string.Empty;
                 _config.LaunchArguments = string.Empty;
                 SaveSettingsToIni();
+                UpdateLaunchArgumentsPatchStatus();
+
+                string message = unlockMode switch
+                {
+                    CommandLineUnlockMode.PersistentFilePatch when patchWasRemoved =>
+                        "The command line unlock patch has been removed and the saved launch arguments were cleared.",
+                    CommandLineUnlockMode.PersistentFilePatch =>
+                        "The executable is already using the stock command line behavior. Saved launch arguments were cleared.",
+                    CommandLineUnlockMode.RuntimeLaunchPatch =>
+                        "Saved launch arguments were cleared. Note: This executable version is only unlocked temporarily when launched via the 'Launch Game w/ Args' button, so there were no on-disk command line changes to remove.",
+                    _ =>
+                        "Saved launch arguments were cleared."
+                };
 
                 DialogHelper.ShowMessage(
                     patchWasRemoved ? "Success" : "Information",
-                    patchWasRemoved
-                        ? "The command line unlock patch has been removed and the saved launch arguments were cleared."
-                        : "The executable is already using the stock command line behavior. Saved launch arguments were cleared.",
+                    message,
                     patchWasRemoved ? DialogHelper.MessageType.Success : DialogHelper.MessageType.Information);
             }
             catch (Exception ex)
@@ -4397,11 +4416,23 @@ namespace MirrorsEdgeTweaks
                 }
 
                 string launchArguments = LaunchArgumentsTextBox.Text?.Trim() ?? string.Empty;
-                bool patchWasApplied = CommandLineUnlockHelper.Unlock(exePath);
+                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                bool patchWasApplied = false;
+
+                string unlockMessage = unlockMode switch
+                {
+                    CommandLineUnlockMode.PersistentFilePatch => (patchWasApplied = CommandLineUnlockHelper.Unlock(exePath))
+                        ? "Command line arguments are now unlocked in the executable."
+                        : "Command line arguments are already unlocked in the executable.",
+                    CommandLineUnlockMode.RuntimeLaunchPatch =>
+                        "This executable version is protected, so Mirror's Edge Tweaks will unlock command line handling in memory each time you use 'Launch Game w/ Args'.",
+                    _ => throw new InvalidOperationException("This executable version does not support command line unlocking.")
+                };
 
                 LaunchArgumentsTextBox.Text = launchArguments;
                 _config.LaunchArguments = launchArguments;
                 SaveSettingsToIni();
+                UpdateLaunchArgumentsPatchStatus();
 
                 string argumentsMessage = string.IsNullOrEmpty(launchArguments)
                     ? "No launch arguments were saved. You can add them later, or add them to your game library's launch options/other shortcuts."
@@ -4409,9 +4440,7 @@ namespace MirrorsEdgeTweaks
 
                 DialogHelper.ShowMessage(
                     "Success",
-                    (patchWasApplied
-                        ? "Command line arguments are now unlocked in the executable."
-                        : "Command line arguments are already unlocked in the executable.") +
+                    unlockMessage +
                     "\n\n" +
                     argumentsMessage,
                     DialogHelper.MessageType.Success);
