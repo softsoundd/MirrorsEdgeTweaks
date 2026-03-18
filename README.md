@@ -10,7 +10,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 
 ## Features
 - Developer console unlocker
-- Command line argument patching
+- Command line argument unlocker
 - Unlocked configs patch (a nicer alternative to [MEMLA](https://github.com/btbd/memla))
 - TdGame version selector
 - Tweaks Scripts installer (custom UnrealScript package including cheats and trainer functions, Softimer, etc.)
