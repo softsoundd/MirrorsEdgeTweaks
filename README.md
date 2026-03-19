@@ -30,7 +30,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 
 - **OS**: Windows 10 or later
 - **.NET Runtime**: .NET 8.0 or later
-- **Game**: Mirror's Edge (Steam, GOG, or Retail version). All versions supported (1.0.0.0 - 1.1.0.0)
+- **Game**: Mirror's Edge (Steam, GOG, EA App/Xbox Game Pass for PC, Retail platforms). All versions supported (1.0.0.0 - 1.1.0.0 DLC)
 
 ## Installation
 
