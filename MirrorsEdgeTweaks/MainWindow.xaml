@@ -202,69 +202,88 @@
                                 </Button>
                             </Grid>
 
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Tweaks Scripts:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,47,0"/>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button x:Name="InstallTweaksScriptsButton" Content="Install"
-                                            Click="InstallTweaksScripts_Click"
-                                            Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
-                                    <Button x:Name="UninstallTweaksScriptsButton" Content="Uninstall"
-                                            Click="UninstallTweaksScripts_Click"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
-                                    <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                            BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
-                                            VerticalAlignment="Center">
-                                        <TextBlock x:Name="TweaksScriptsStatus" Text="N/A" 
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                    </Border>
-                                </StackPanel>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Click="ShowTweaksScriptsInfo_Click">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            <Border Margin="0,15,0,0"
+                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,10,10,8"
+                                    Background="#0D000000">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Tweaks Scripts:" VerticalAlignment="Center"
+                                                   FontWeight="Bold" Margin="0,0,47,0"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <Button x:Name="InstallTweaksScriptsButton" Content="Install"
+                                                    Click="InstallTweaksScripts_Click"
+                                                    Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
+                                            <Button x:Name="UninstallTweaksScriptsButton" Content="Uninstall"
+                                                    Click="UninstallTweaksScripts_Click"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                            <Border Background="{DynamicResource MaterialDesignCardBackground}"
+                                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                    BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock x:Name="TweaksScriptsStatus" Text="N/A" 
+                                                           FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
+                                                ToolTip="Information"
+                                                Margin="5,0,0,0"
+                                                Click="ShowTweaksScriptsInfo_Click">
+                                            <materialDesign:PackIcon Kind="Information" />
+                                        </Button>
+                                    </Grid>
 
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Tweaks Scripts UI:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,29,0"/>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button x:Name="InstallTweaksScriptsUIButton" Content="Install"
-                                            Click="InstallTweaksScriptsUI_Click"
-                                            Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
-                                    <Button x:Name="UninstallTweaksScriptsUIButton" Content="Uninstall"
-                                            Click="UninstallTweaksScriptsUI_Click"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
-                                    <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                            BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
-                                            VerticalAlignment="Center">
-                                        <TextBlock x:Name="TweaksScriptsUIStatus" Text="N/A" 
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                                    </Border>
+                                    <StackPanel x:Name="TweaksScriptsUIInstallDependencyPanel" Margin="0,10,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Tweaks Scripts UI:" VerticalAlignment="Center"
+                                                       FontWeight="Bold" Margin="0,0,29,0"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Button x:Name="InstallTweaksScriptsUIButton" Content="Install"
+                                                        Click="InstallTweaksScriptsUI_Click"
+                                                        ToolTip="Install Tweaks Scripts first to enable this installer."
+                                                        ToolTipService.ShowOnDisabled="True"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
+                                                <Button x:Name="UninstallTweaksScriptsUIButton" Content="Uninstall"
+                                                        Click="UninstallTweaksScriptsUI_Click"
+                                                        Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                                <Border Background="{DynamicResource MaterialDesignCardBackground}"
+                                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                        BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock x:Name="TweaksScriptsUIStatus" Text="N/A" 
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
+                                                    ToolTip="Information"
+                                                    Margin="5,0,0,0"
+                                                    Click="ShowTweaksScriptsUIInfo_Click">
+                                                <materialDesign:PackIcon Kind="Information" />
+                                            </Button>
+                                        </Grid>
+                                        <TextBlock x:Name="TweaksScriptsUIRequiresScriptsText"
+                                                   Text="Install 'Tweaks Scripts' first to enable Tweaks Scripts UI installation."
+                                                   Margin="0,6,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   Visibility="Collapsed"/>
+                                    </StackPanel>
                                 </StackPanel>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Click="ShowTweaksScriptsUIInfo_Click">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </Border>
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
@@ -307,31 +326,39 @@
                                 </Button>
                             </Grid>
 
-                            <StackPanel>
-                                <Grid Margin="0,15,0,0">
+                            <StackPanel Margin="0,15,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Launch Arguments:" VerticalAlignment="Center"
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Launch Arguments:" VerticalAlignment="Center"
                                                FontWeight="Bold" Margin="0,0,20,0"/>
                                     <TextBox x:Name="LaunchArgumentsTextBox"
-                                             Grid.Column="1"
+                                             Grid.Row="1"
+                                             Grid.Column="0"
+                                             Grid.ColumnSpan="3"
+                                             Margin="0,8,0,0"
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
                                              materialDesign:HintAssist.Hint="Enter launch arguments"/>
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0">
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
                                         <Button Content="Patch"
                                                 Click="ApplyLaunchArguments_Click"
                                                 Style="{StaticResource MaterialDesignRaisedButton}"
+                                                Width="70"
                                                 Margin="0,0,10,0"/>
-                                        <Button Content="Reset"
+                                        <Button Content="Unpatch"
                                                 Click="ResetLaunchArguments_Click"
-                                                Style="{StaticResource MaterialDesignOutlinedButton}"/>
-                                </StackPanel>
-                                    <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
+                                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                Width="87"/>
+                                    </StackPanel>
+                                    <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                             ToolTip="Information"
                                             Margin="5,0,0,0"
                                             Click="ShowLaunchArgumentsInfo_Click">
@@ -467,74 +494,90 @@
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                            <Border Margin="0,0,0,0"
+                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,10,10,8"
+                                    Background="#0D000000">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                    <TextBlock Text="Field of Vision" FontWeight="Bold" Margin="0,0,0,5"/>
-                                    <TextBox x:Name="NewFovValue" Width="100" HorizontalAlignment="Left"
-                                             Style="{StaticResource MaterialDesignTextBox}"/>
-                                    <Border BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                            BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,15,0,0">
-                                        <StackPanel>
-                                            <TextBlock>
-                                                <Run Text="Value: "/>
-                                                <Run x:Name="CurrentFovValue" Text="N/A" FontWeight="SemiBold"/>
-                                            </TextBlock>
-                                            <TextBlock x:Name="HorPlusStatus" Text="Scaling: N/A"
-                                                       Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
-                                            <TextBlock x:Name="ClippingPlaneStatus" Text="Clipping Fix: N/A"
-                                                       Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
-                                            <TextBlock x:Name="FovAgnosticSensStatus" Text="Sensitivity: N/A"
-                                                       Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                            <TextBlock Text="Field of Vision" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <TextBox x:Name="NewFovValue" Width="100" HorizontalAlignment="Left"
+                                                     Style="{StaticResource MaterialDesignTextBox}"/>
+                                            <Border BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                    BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,15,0,0">
+                                                <StackPanel>
+                                                    <TextBlock>
+                                                        <Run Text="Value: "/>
+                                                        <Run x:Name="CurrentFovValue" Text="N/A" FontWeight="SemiBold"/>
+                                                    </TextBlock>
+                                                    <TextBlock x:Name="HorPlusStatus" Text="Scaling: N/A"
+                                                               Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                                    <TextBlock x:Name="ClippingPlaneStatus" Text="Clipping Fix: N/A"
+                                                               Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                                    <TextBlock x:Name="FovAgnosticSensStatus" Text="Sensitivity: N/A"
+                                                               Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
                                         </StackPanel>
-                                    </Border>
-                                </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                    <TextBlock Text="Aspect Ratio" FontWeight="Bold" Margin="0,0,0,5"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBox x:Name="AspectRatioWidth" Width="50"
-                                                 Style="{StaticResource MaterialDesignTextBox}"/>
-                                        <TextBlock Text=" : " VerticalAlignment="Center" Margin="5,0"/>
-                                        <TextBox x:Name="AspectRatioHeight" Width="50"
-                                                 Style="{StaticResource MaterialDesignTextBox}"/>
-                                    </StackPanel>
-                                    <Border BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                            BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,15,0,0">
-                                        <StackPanel>
-                                            <TextBlock>
-                                                <Run Text="Value: "/>
-                                                <Run x:Name="CurrentAspectRatioValue" Text="N/A" FontWeight="SemiBold"/>
-                                            </TextBlock>
-                                            <TextBlock x:Name="CommonAspectRatioValue" Text=""
-                                                       Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                            <TextBlock Text="Aspect Ratio" FontWeight="Bold" Margin="0,0,0,5"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBox x:Name="AspectRatioWidth" Width="50"
+                                                         Style="{StaticResource MaterialDesignTextBox}"/>
+                                                <TextBlock Text=" : " VerticalAlignment="Center" Margin="5,0"/>
+                                                <TextBox x:Name="AspectRatioHeight" Width="50"
+                                                         Style="{StaticResource MaterialDesignTextBox}"/>
+                                            </StackPanel>
+                                            <Border BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                    BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,15,0,0">
+                                                <StackPanel>
+                                                    <TextBlock>
+                                                        <Run Text="Value: "/>
+                                                        <Run x:Name="CurrentAspectRatioValue" Text="N/A" FontWeight="SemiBold"/>
+                                                    </TextBlock>
+                                                    <TextBlock x:Name="CommonAspectRatioValue" Text=""
+                                                               Foreground="Gray" FontStyle="Italic" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
                                         </StackPanel>
-                                    </Border>
-                                </StackPanel>
 
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" 
-                                            VerticalAlignment="Top" Margin="20,10,0,0">
-                                    <Button Content="Apply"
-                                        Click="ApplyChanges_Click"
-                                        Padding="20,10"
-                                        Height="38"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
-                                    <Button Style="{StaticResource MaterialDesignIconButton}"
-                                            ToolTip="Information"
-                                            Margin="5,0,0,0"
-                                            VerticalAlignment="Center"
-                                            Click="ShowFOVInfo_Click">
-                                        <materialDesign:PackIcon Kind="Information" />
-                                    </Button>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" 
+                                                    VerticalAlignment="Top" Margin="20,0,0,0">
+                                            <Button Content="Apply"
+                                                Click="ApplyChanges_Click"
+                                                Padding="20,10"
+                                                Height="38"
+                                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                            <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                    ToolTip="Information"
+                                                    Margin="5,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="ShowFOVInfo_Click">
+                                                <materialDesign:PackIcon Kind="Information" />
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
                                 </StackPanel>
-                            </Grid>
+                            </Border>
 
-                            <Grid Margin="0,40,0,0">
+                            <TextBlock Text="Note: All following settings below set TdEngine.ini to read-only so Mirror's Edge does not overwrite your changes on launch. As a result, any video settings changed in-game will not be saved."
+                                       FontSize="12"
+                                       FontStyle="Italic"
+                                       Foreground="Gray"
+                                       Margin="0,20,0,0"
+                                       TextWrapping="Wrap"/>
+
+                            <Grid Margin="0,20,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="200"/>
                                     <ColumnDefinition Width="*"/>

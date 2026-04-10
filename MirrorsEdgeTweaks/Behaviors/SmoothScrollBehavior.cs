@@ -154,7 +154,7 @@ namespace MirrorsEdgeTweaks.Behaviors
                 {
                     _targetOffsets.Remove(scrollViewer);
                     _isAnimating.Remove(scrollViewer);
-                    
+
                     if (_renderingHandlers.ContainsKey(scrollViewer))
                     {
                         CompositionTarget.Rendering -= _renderingHandlers[scrollViewer];
@@ -265,8 +265,8 @@ namespace MirrorsEdgeTweaks.Behaviors
                     return false;
                 }
 
-                if (current is ScrollViewer || 
-                    current is System.Windows.Controls.ComboBox || 
+                if (current is ScrollViewer ||
+                    current is System.Windows.Controls.ComboBox ||
                     current is System.Windows.Controls.Primitives.Selector)
                 {
                     return true;

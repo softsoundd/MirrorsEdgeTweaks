@@ -2,7 +2,7 @@
 
 A tool for modding, tweaking settings and providing game fixes for Mirror's Edge.
 
-![Version](https://img.shields.io/badge/version-4.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.3.0-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
@@ -66,8 +66,8 @@ dotnet build --configuration Release
 
 ### Dependencies
 - **Eliot.UELib** (v1.12.0)
+- **NativeSharpLzo** (v0.3.5)
 - **MaterialDesignThemes** (v5.2.1)
-- **Microsoft.Xaml.Behaviors**
 
 ## Contributing
 
@@ -82,7 +82,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - EA DICE for creating Mirror's Edge
 - The Mirror's Edge community for your continued support and encouragement
 - [UELib](https://github.com/EliotVU/Unreal-Library) for Unreal Engine package reading
-- [UE Viewer](https://github.com/gildor2/UEViewer) for Unreal Engine package decompression
+- [UE Viewer](https://github.com/gildor2/UEViewer) for inspiring the Unreal Engine package decompression behavior ported into this tool
 
 ## Changelog
 

@@ -50,7 +50,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(filePath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -111,13 +111,13 @@ namespace MirrorsEdgeTweaks.Services
                     {
                         int insertIndex = nextSectionIndex >= 0 ? nextSectionIndex : lines.Length;
                         var newLines = new List<string>(lines);
-                        
+
                         foreach (var key in missingKeys)
                         {
                             newLines.Insert(insertIndex, replacements[key]);
                             insertIndex++;
                         }
-                        
+
                         lines = newLines.ToArray();
                     }
                 }
@@ -217,7 +217,7 @@ namespace MirrorsEdgeTweaks.Services
         public void ApplyRenderResolution(string tdEngineIniPath, int percentage)
         {
             bool upscale = percentage < 100;
-            
+
             var replacements = new Dictionary<string, string>
             {
                 { "ScreenPercentage", $"ScreenPercentage={percentage}.0" },
@@ -642,7 +642,7 @@ namespace MirrorsEdgeTweaks.Services
                 return "Custom";
             }
 
-            string[] textureSpecificKeys = 
+            string[] textureSpecificKeys =
             {
                 "MaxAnisotropy",
                 "SceneCaptureStreamingMultiplier",
@@ -669,7 +669,7 @@ namespace MirrorsEdgeTweaks.Services
             };
 
             string[] presets = { "Lowest", "Low", "Medium", "High", "Highest" };
-            
+
             foreach (string preset in presets)
             {
                 var expectedValues = GetTextureDetailReplacements(preset);
@@ -682,7 +682,7 @@ namespace MirrorsEdgeTweaks.Services
 
                     string? actualValue = ReadIniValue(tdEngineIniPath, kvp.Key);
                     string expectedValue = kvp.Value.Substring(kvp.Value.IndexOf('=') + 1);
-                    
+
                     if (actualValue != expectedValue)
                     {
                         matches = false;
@@ -701,7 +701,7 @@ namespace MirrorsEdgeTweaks.Services
 
         public string DetectGraphicsQualityPreset(string tdEngineIniPath)
         {
-            string[] qualitySpecificKeys = 
+            string[] qualitySpecificKeys =
             {
                 "DepthOfField",
                 "Bloom",
@@ -718,7 +718,7 @@ namespace MirrorsEdgeTweaks.Services
             };
 
             string[] presets = { "Lowest", "Low", "Medium", "High", "Highest" };
-            
+
             foreach (string preset in presets)
             {
                 var expectedValues = GetGraphicsQualityReplacements(preset);
@@ -731,7 +731,7 @@ namespace MirrorsEdgeTweaks.Services
 
                     string? actualValue = ReadIniValue(tdEngineIniPath, kvp.Key);
                     string expectedValue = kvp.Value.Substring(kvp.Value.IndexOf('=') + 1);
-                    
+
                     if (actualValue != expectedValue)
                     {
                         matches = false;
@@ -757,7 +757,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -766,12 +766,12 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 string fileData = File.ReadAllText(tdEngineIniPath);
-                
+
                 fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData, 
-                    @"(MinLODSize=)(\d+)", 
+                    fileData,
+                    @"(MinLODSize=)(\d+)",
                     "${1}" + value);
-                
+
                 File.WriteAllText(tdEngineIniPath, fileData);
             }
             finally
@@ -792,7 +792,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -801,12 +801,12 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 string fileData = File.ReadAllText(tdEngineIniPath);
-                
+
                 fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData, 
-                    @"(MaxLODSize=)(\d+)", 
+                    fileData,
+                    @"(MaxLODSize=)(\d+)",
                     "${1}" + value);
-                
+
                 File.WriteAllText(tdEngineIniPath, fileData);
             }
             finally
@@ -827,7 +827,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -836,12 +836,12 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 string fileData = File.ReadAllText(tdEngineIniPath);
-                
+
                 fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData, 
-                    @"(LODBias=)(-?\d+)", 
+                    fileData,
+                    @"(LODBias=)(-?\d+)",
                     "${1}" + value);
-                
+
                 File.WriteAllText(tdEngineIniPath, fileData);
             }
             finally
@@ -862,7 +862,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(defaultHudEffectsIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -871,7 +871,7 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 var replacementMap = new Dictionary<string, string>();
-                
+
                 if (enabled)
                 {
                     replacementMap["bEnableStreakEffect"] = "bEnableStreakEffect=true";
@@ -888,7 +888,7 @@ namespace MirrorsEdgeTweaks.Services
                 }
 
                 string[] lines = File.ReadAllLines(defaultHudEffectsIniPath);
-                
+
                 for (int i = 0; i < lines.Length; i++)
                 {
                     string line = lines[i];
@@ -958,7 +958,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;
@@ -1009,7 +1009,7 @@ namespace MirrorsEdgeTweaks.Services
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
             bool wasReadOnly = fileInfo.IsReadOnly;
-            
+
             if (wasReadOnly)
             {
                 fileInfo.IsReadOnly = false;

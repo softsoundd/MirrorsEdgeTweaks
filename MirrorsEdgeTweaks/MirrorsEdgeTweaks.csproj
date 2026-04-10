@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
@@ -11,15 +11,11 @@
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		
 		<!-- Version Information -->
-		<Version>4.2.0</Version>
-		<AssemblyVersion>4.2.0.0</AssemblyVersion>
-		<FileVersion>4.2.0.0</FileVersion>
-		<InformationalVersion>4.2.0</InformationalVersion>
+		<Version>4.3.0</Version>
+		<AssemblyVersion>4.3.0.0</AssemblyVersion>
+		<FileVersion>4.3.0.0</FileVersion>
+		<InformationalVersion>4.3.0</InformationalVersion>
 	</PropertyGroup>
-
-	<ItemGroup>
-	  <None Remove="decompress.exe" />
-	</ItemGroup>
 
 	<ItemGroup>
 	  <Resource Include="Icon.ico">
@@ -27,11 +23,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Include="decompress.exe" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<PackageReference Include="Eliot.UELib" Version="1.12.0" />
+		<PackageReference Include="NativeSharpLzo" Version="0.3.5" />
 		<PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
 	</ItemGroup>
 

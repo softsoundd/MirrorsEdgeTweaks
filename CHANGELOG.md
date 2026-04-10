@@ -1,5 +1,20 @@
 ## Changelog
 
+## [4.3.0] - 2026-04-11
+
+### Added
+- Added a `set`/`setnopec` executable patcher for the `1.1.0.0` DLC game version (both `PerformSetCommand` calls were removed only in this version for whatever reason)
+  - Tweaks Scripts features (e.g. Softimer) that relied on `set`, and user-called `set` commands are now supported in the DLC
+  - Automatically applies when installing the Developer Console or Tweaks Scripts if a DLC executable is detected
+- Added automatic reapplication for TdGame-linked tweaks when installing/swapping TdGame versions
+
+### Changed
+- Integrated Unreal package decompression directly into Mirror's Edge Tweaks. Ported the UEViewer/UModel decompression behavior into native C#
+  - Added handling for fully compressed and chunked UE3 package layouts used by Mirror's Edge
+  - Switched LZO block decoding to `NativeSharpLzo`
+  - Removed the standalone `decompress.exe` dependency
+- Refined some areas of the UI
+
 ## [4.2.0] - 2026-03-18
 
 ### Changed

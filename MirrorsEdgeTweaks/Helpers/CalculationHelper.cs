@@ -90,11 +90,14 @@ namespace MirrorsEdgeTweaks.Helpers
                 string? version = versionInfo.FileVersion;
                 if (!string.IsNullOrEmpty(version))
                 {
-                    return new GameVersion 
-                    { 
-                        Version = version, 
-                        DisplayText = $"Game Version: {version}", 
-                        IsValid = true 
+                    bool isDlcVersion = version.StartsWith("1.1.0.0", StringComparison.OrdinalIgnoreCase);
+                    string versionLabel = isDlcVersion ? $"{version} (DLC)" : version;
+
+                    return new GameVersion
+                    {
+                        Version = version,
+                        DisplayText = $"Game Version: {versionLabel}",
+                        IsValid = true
                     };
                 }
                 else
@@ -443,8 +446,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     if (devMode.dmPelsWidth > 0 && devMode.dmPelsHeight > 0)
                     {
                         string resolutionKey = $"{devMode.dmPelsWidth}x{devMode.dmPelsHeight}";
-                        
-                        if (!resolutionSet.Contains(resolutionKey) && 
+
+                        if (!resolutionSet.Contains(resolutionKey) &&
                             devMode.dmPelsWidth >= 800 && devMode.dmPelsHeight >= 600 &&
                             devMode.dmPelsWidth <= 7680 && devMode.dmPelsHeight <= 4320)
                         {

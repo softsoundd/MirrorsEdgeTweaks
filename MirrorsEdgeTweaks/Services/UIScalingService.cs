@@ -16,8 +16,8 @@ namespace MirrorsEdgeTweaks.Services
     {
         bool ShouldOfferUIScaling(int width);
         Task<bool> AskUserForUIScalingConfirmationAsync();
-        Task ApplyUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null);
-        Task RollbackUIScalingToDefaultsAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null);
+        Task ApplyUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true);
+        Task RollbackUIScalingToDefaultsAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true);
         bool IsUIScalingActive(string gameDirectoryPath);
     }
 
@@ -51,24 +51,24 @@ namespace MirrorsEdgeTweaks.Services
                 "text will appear smaller as you increase the resolution.");
         }
 
-        public async Task ApplyUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null)
+        public async Task ApplyUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true)
         {
             try
             {
                 if (width <= 1920)
                 {
-                    await RollbackUIScalingToDefaultsAsync(width, height, gameDirectoryPath, beforeShowingDialog);
+                    await RollbackUIScalingToDefaultsAsync(width, height, gameDirectoryPath, beforeShowingDialog, showDialogs);
                     return;
                 }
 
-                await ApplyHighResolutionUIScalingAsync(width, height, gameDirectoryPath, beforeShowingDialog);
+                await ApplyHighResolutionUIScalingAsync(width, height, gameDirectoryPath, beforeShowingDialog, showDialogs);
             }
             catch (Exception)
             {
             }
         }
 
-        private async Task ApplyHighResolutionUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null)
+        private async Task ApplyHighResolutionUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true)
         {
             try
             {
@@ -80,30 +80,33 @@ namespace MirrorsEdgeTweaks.Services
                 int cursorScalingValue = (int)Math.Round(32 * scalingFactor);
 
                 string cookedPcPath = Path.Combine(gameDirectoryPath, "TdGame", "CookedPC");
-                
+
                 if (!Directory.Exists(cookedPcPath))
                 {
                     throw new DirectoryNotFoundException("CookedPC directory not found");
                 }
 
                 DecompressFilesWithPattern(cookedPcPath, "Ts_LOC_*");
-                
+
                 DecompressFilesWithPattern(cookedPcPath, "Startup_*");
 
                 await ProcessFilesWithPatternAsync(cookedPcPath, "Ts_LOC_*", restestValue);
-                
+
                 await ProcessStartupFilesAsync(cookedPcPath, restestValue, cursorScalingValue);
 
                 await ProcessEngineUIStyleTextAsync(gameDirectoryPath, scalingFactor);
 
                 await ProcessCrosshairScalingAsync(cookedPcPath, scalingFactor);
 
-                beforeShowingDialog?.Invoke();
+                if (showDialogs)
+                {
+                    beforeShowingDialog?.Invoke();
 
-                await DialogHelper.ShowMessageAsync(
-                    "Resolution Updated",
-                    $"Resolution set to {width} x {height}\nUI fix applied successfully.",
-                    DialogHelper.MessageType.Success);
+                    await DialogHelper.ShowMessageAsync(
+                        "Resolution Updated",
+                        $"Resolution set to {width} x {height}\nUI fix applied successfully.",
+                        DialogHelper.MessageType.Success);
+                }
             }
             catch (Exception)
             {
@@ -115,7 +118,7 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 var files = Directory.GetFiles(directoryPath, pattern);
-                
+
                 foreach (string filePath in files)
                 {
                     try
@@ -136,7 +139,7 @@ namespace MirrorsEdgeTweaks.Services
         private async Task ProcessFilesWithPatternAsync(string directoryPath, string pattern, int restestValue)
         {
             var files = Directory.GetFiles(directoryPath, pattern);
-            
+
             foreach (string filePath in files)
             {
                 try
@@ -159,10 +162,10 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     UnrealConfig.VariableTypes = new Dictionary<string, Tuple<string, PropertyType>>();
                 }
-                
+
                 if (!UnrealConfig.VariableTypes.ContainsKey("ResolutionTestTable"))
                 {
-                    UnrealConfig.VariableTypes["ResolutionTestTable"] = 
+                    UnrealConfig.VariableTypes["ResolutionTestTable"] =
                         new Tuple<string, PropertyType>("FloatProperty", PropertyType.FloatProperty);
                 }
 
@@ -245,12 +248,12 @@ namespace MirrorsEdgeTweaks.Services
                             return Task.FromResult(false);
 
                         int actualArrayCount = BitConverter.ToInt32(data, (int)arrayCountOffset);
-                        
+
                         if (actualArrayCount <= 0 || actualArrayCount > 100)
                             return Task.FromResult(false);
-                        
+
                         long lastFloatOffset = i + 28 + (actualArrayCount - 1) * 4;
-                        
+
                         if (lastFloatOffset + 4 <= data.Length)
                         {
                             float currentValue = BitConverter.ToSingle(data, (int)lastFloatOffset);
@@ -278,7 +281,7 @@ namespace MirrorsEdgeTweaks.Services
         private async Task ProcessStartupFilesAsync(string directoryPath, int restestValue, int cursorScalingValue)
         {
             var files = Directory.GetFiles(directoryPath, "Startup_*");
-            
+
             foreach (string filePath in files)
             {
                 try
@@ -315,7 +318,7 @@ namespace MirrorsEdgeTweaks.Services
                 if (package == null)
                     return;
 
-                var arrowExport = package.Exports.FirstOrDefault(e => 
+                var arrowExport = package.Exports.FirstOrDefault(e =>
                     e.ObjectName?.ToString() == "Arrow" &&
                     e.Class?.ObjectName?.ToString() == "Texture2D");
 
@@ -323,7 +326,7 @@ namespace MirrorsEdgeTweaks.Services
                     return;
 
                 var arrowObject = arrowExport.Object as UObject;
-                
+
                 if (arrowObject == null)
                     return;
 
@@ -356,38 +359,38 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 string engineUPath = Path.Combine(gameDirectoryPath, "TdGame", "CookedPC", "Engine.u");
-                
+
                 if (File.Exists(engineUPath))
                 {
                     using var package = UnrealLoader.LoadPackage(engineUPath, FileAccess.Read);
                     package?.InitializePackage();
-                    
+
                     if (package != null)
                     {
                         var uiStyleTextClass = package.FindObject<UClass>("UIStyle_Text");
-                        
+
                         if (uiStyleTextClass != null)
                         {
                             if (uiStyleTextClass.Default is UObject uiStyleTextCDO)
                             {
                                 uiStyleTextCDO.Load<UObjectRecordStream>();
-                                
+
                                 if (uiStyleTextCDO.Properties != null)
                                 {
                                     var scaleProperty = uiStyleTextCDO.Properties
                                         .OfType<UDefaultProperty>()
                                         .FirstOrDefault(prop => prop.Name?.ToString() == "Scale");
-                                    
+
                                     if (scaleProperty != null)
                                     {
                                         float currentScaleX = 1.0f;
                                         float currentScaleY = 1.0f;
-                                        
+
                                         if (!string.IsNullOrEmpty(scaleProperty.Value))
                                         {
                                             var valueStr = scaleProperty.Value.TrimEnd(')');
                                             var parts = valueStr.Split(',');
-                                            
+
                                             if (parts.Length >= 2)
                                             {
                                                 var xPart = parts[0].Split('=');
@@ -395,7 +398,7 @@ namespace MirrorsEdgeTweaks.Services
                                                 {
                                                     currentScaleX = parsedX;
                                                 }
-                                                
+
                                                 var yPart = parts[1].Split('=');
                                                 if (yPart.Length >= 2 && float.TryParse(yPart[1], out float parsedY))
                                                 {
@@ -403,7 +406,7 @@ namespace MirrorsEdgeTweaks.Services
                                                 }
                                             }
                                         }
-                                        
+
                                         ModifyUIStyleTextScaleDirectlyAsync(engineUPath, scalingFactor, uiStyleTextCDO, scaleProperty, currentScaleX, currentScaleY);
                                     }
                                 }
@@ -430,7 +433,7 @@ namespace MirrorsEdgeTweaks.Services
                 try
                 {
                     byte[] data = _fileService.ReadAllBytes(engineUPath);
-                    
+
                     byte[] scaleBytes = BitConverter.GetBytes((float)scalingFactor);
 
                     byte[] currentScaleXBytes = BitConverter.GetBytes(currentScaleX);
@@ -442,15 +445,15 @@ namespace MirrorsEdgeTweaks.Services
                                      currentScaleYBytes[0], currentScaleYBytes[1], currentScaleYBytes[2], currentScaleYBytes[3] },
                         currentScaleXBytes,
                     };
-                    
+
                     if (uiStyleTextCDO.ExportTable != null)
                     {
                         long searchStart = uiStyleTextCDO.ExportTable.SerialOffset;
                         long searchEnd = searchStart + uiStyleTextCDO.ExportTable.SerialSize;
-                        
+
                         searchStart = Math.Max(0, searchStart);
                         searchEnd = Math.Min(data.Length, searchEnd);
-                        
+
                         foreach (var scalePattern in scalePatterns)
                         {
                             for (long i = searchStart; i <= searchEnd - scalePattern.Length; i++)
@@ -464,7 +467,7 @@ namespace MirrorsEdgeTweaks.Services
                                         break;
                                     }
                                 }
-                                
+
                                 if (found)
                                 {
                                     if (scalePattern.Length == 8)
@@ -494,15 +497,15 @@ namespace MirrorsEdgeTweaks.Services
                                             }
                                         }
                                     }
-                                    
+
                                     _fileService.WriteAllBytes(engineUPath, data);
                                     return;
                                 }
                             }
                         }
-                        
+
                         var foundPositions = new List<long>();
-                        
+
                         for (long i = searchStart; i <= searchEnd - 4; i++)
                         {
                             bool found = true;
@@ -519,16 +522,16 @@ namespace MirrorsEdgeTweaks.Services
                                 foundPositions.Add(i);
                             }
                         }
-                        
+
                         if (foundPositions.Count >= 2)
                         {
                             Array.Copy(scaleBytes, 0, data, foundPositions[0], 4);
                             Array.Copy(scaleBytes, 0, data, foundPositions[1], 4);
-                            
+
                             _fileService.WriteAllBytes(engineUPath, data);
                             return;
                         }
-                        
+
                     }
                     else
                     {
@@ -583,15 +586,15 @@ namespace MirrorsEdgeTweaks.Services
 
                 foreach (var crosshair in crosshairs)
                 {
-                    var crosshairExport = package.Exports.FirstOrDefault(e => 
-                        e.ObjectName?.ToString() == crosshair.Name && 
+                    var crosshairExport = package.Exports.FirstOrDefault(e =>
+                        e.ObjectName?.ToString() == crosshair.Name &&
                         e.Outer?.ObjectName?.ToString() == "TdUIResources_InGame");
 
                     if (crosshairExport == null)
                         continue;
 
                     var crosshairObject = crosshairExport.Object as UObject;
-                    
+
                     if (crosshairObject != null)
                     {
                         crosshairObject.Load<UObjectRecordStream>();
@@ -670,7 +673,7 @@ namespace MirrorsEdgeTweaks.Services
                     if (nameMatch)
                     {
                         long valueOffset = i + 24;
-                        
+
                         if (valueOffset + 4 <= data.Length)
                         {
                             int valueAtOffset = BitConverter.ToInt32(data, (int)valueOffset);
@@ -741,7 +744,7 @@ namespace MirrorsEdgeTweaks.Services
 
                 foreach (var crosshair in crosshairs)
                 {
-                    var crosshairExport = package.Exports.FirstOrDefault(e => 
+                    var crosshairExport = package.Exports.FirstOrDefault(e =>
                         e.ObjectName?.ToString() == crosshair.Name &&
                         e.Class?.ObjectName?.ToString() == "Texture2D");
 
@@ -749,7 +752,7 @@ namespace MirrorsEdgeTweaks.Services
                         continue;
 
                     var crosshairObject = crosshairExport.Object as UObject;
-                    
+
                     if (crosshairObject != null)
                     {
                         crosshairObject.Load<UObjectRecordStream>();
@@ -785,7 +788,7 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 string cookedPcPath = Path.Combine(gameDirectoryPath, "TdGame", "CookedPC");
-                
+
                 if (!Directory.Exists(cookedPcPath))
                 {
                     return false;
@@ -796,30 +799,30 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     using var package = UnrealLoader.LoadPackage(engineUPath, FileAccess.Read);
                     package?.InitializePackage();
-                    
+
                     if (package != null)
                     {
                         var uiStyleTextClass = package.FindObject<UClass>("UIStyle_Text");
                         if (uiStyleTextClass?.Default is UObject uiStyleTextCDO)
                         {
                             uiStyleTextCDO.Load<UObjectRecordStream>();
-                            
+
                             if (uiStyleTextCDO.Properties != null)
                             {
                                 var scaleProperty = uiStyleTextCDO.Properties
                                     .OfType<UDefaultProperty>()
                                     .FirstOrDefault(prop => prop.Name?.ToString() == "Scale");
-                                
+
                                 if (scaleProperty != null && !string.IsNullOrEmpty(scaleProperty.Value))
                                 {
                                     var valueStr = scaleProperty.Value.TrimEnd(')');
                                     var parts = valueStr.Split(',');
-                                    
+
                                     if (parts.Length >= 2)
                                     {
                                         var xPart = parts[0].Split('=');
                                         var yPart = parts[1].Split('=');
-                                        
+
                                         if (xPart.Length >= 2 && yPart.Length >= 2 &&
                                             float.TryParse(xPart[1], out float scaleX) &&
                                             float.TryParse(yPart[1], out float scaleY))
@@ -832,7 +835,7 @@ namespace MirrorsEdgeTweaks.Services
                         }
                     }
                 }
-                
+
                 return false;
             }
             catch
@@ -841,7 +844,7 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        public async Task RollbackUIScalingToDefaultsAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null)
+        public async Task RollbackUIScalingToDefaultsAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true)
         {
             try
             {
@@ -850,30 +853,33 @@ namespace MirrorsEdgeTweaks.Services
                 double defaultScalingFactor = 1.0;
 
                 string cookedPcPath = Path.Combine(gameDirectoryPath, "TdGame", "CookedPC");
-                
+
                 if (!Directory.Exists(cookedPcPath))
                 {
                     throw new DirectoryNotFoundException("CookedPC directory not found");
                 }
 
                 DecompressFilesWithPattern(cookedPcPath, "Ts_LOC_*");
-                
+
                 DecompressFilesWithPattern(cookedPcPath, "Startup_*");
 
                 await ProcessFilesWithPatternAsync(cookedPcPath, "Ts_LOC_*", defaultRestestValue);
-                
+
                 await ProcessStartupFilesAsync(cookedPcPath, defaultRestestValue, defaultCursorScalingValue);
 
                 await ProcessEngineUIStyleTextAsync(gameDirectoryPath, defaultScalingFactor);
 
                 await ProcessCrosshairScalingAsync(cookedPcPath, defaultScalingFactor);
 
-                beforeShowingDialog?.Invoke();
+                if (showDialogs)
+                {
+                    beforeShowingDialog?.Invoke();
 
-                await DialogHelper.ShowMessageAsync(
-                    "Resolution Updated",
-                    $"Resolution set to {width} x {height}\nUI fix reset to defaults.",
-                    DialogHelper.MessageType.Success);
+                    await DialogHelper.ShowMessageAsync(
+                        "Resolution Updated",
+                        $"Resolution set to {width} x {height}\nUI fix reset to defaults.",
+                        DialogHelper.MessageType.Success);
+                }
             }
             catch (Exception)
             {
