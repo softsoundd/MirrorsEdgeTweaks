@@ -9,6 +9,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		
 		<!-- Version Information -->
 		<Version>4.3.0</Version>
