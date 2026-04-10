@@ -6,7 +6,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
-![mirrorsedgetweaks](https://github.com/user-attachments/assets/2b98d4a7-cf04-4fdd-808d-f37446384252)
+<img width="636" height="793" alt="image" src="https://github.com/user-attachments/assets/65ff91c4-13ec-41f4-a480-6f1def75484e" />
 
 ## Features
 - Developer console unlocker
