@@ -11,36 +11,6 @@ using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    public static class MathHelper
-    {
-        public static double DegreesToRadians(double degrees) => degrees * (Math.PI / 180.0);
-        public static double RadiansToDegrees(double radians) => radians * (180.0 / Math.PI);
-
-        public static double CalculateVerticalFov(double horizontalFovDegrees, double aspectRatio)
-        {
-            double horizontalFovRadians = DegreesToRadians(horizontalFovDegrees);
-            double verticalFovRadians = 2 * Math.Atan(Math.Tan(horizontalFovRadians / 2) / aspectRatio);
-            return RadiansToDegrees(verticalFovRadians);
-        }
-
-        public static AspectRatioInfo FormatAspectRatio(float ar)
-        {
-            string decimalFormat = $"{ar:F2}:1";
-            string commonFormat = string.Empty;
-            const double tolerance = 0.05;
-
-            foreach (var ratio in CommonAspectRatios.Ratios)
-            {
-                if (Math.Abs(ar - ratio.Value) < tolerance)
-                {
-                    commonFormat = $"(≈ {ratio.Key})";
-                    break;
-                }
-            }
-            return new AspectRatioInfo { DecimalFormat = decimalFormat, CommonFormat = commonFormat, Value = ar };
-        }
-    }
-
     public static class ByteArrayHelper
     {
         public static byte[] StringToByteArray(string hex)
@@ -303,11 +273,10 @@ namespace MirrorsEdgeTweaks.Helpers
         public static void ModifyIniFile(string filePath, string section, string key, string value)
         {
             var fileInfo = new System.IO.FileInfo(filePath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
 
             try
             {
-                if (wasReadOnly)
+                if (fileInfo.IsReadOnly)
                     fileInfo.IsReadOnly = false;
 
                 var lines = System.IO.File.ReadAllLines(filePath).ToList();
@@ -357,8 +326,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             finally
             {
-                if (wasReadOnly)
-                    fileInfo.IsReadOnly = true;
+                fileInfo.IsReadOnly = true;
             }
         }
     }

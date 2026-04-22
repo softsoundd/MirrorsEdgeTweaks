@@ -12,15 +12,19 @@
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		
 		<!-- Version Information -->
-		<Version>4.3.0</Version>
-		<AssemblyVersion>4.3.0.0</AssemblyVersion>
-		<FileVersion>4.3.0.0</FileVersion>
-		<InformationalVersion>4.3.0</InformationalVersion>
+		<Version>4.4.0</Version>
+		<AssemblyVersion>4.4.0.0</AssemblyVersion>
+		<FileVersion>4.4.0.0</FileVersion>
+		<InformationalVersion>4.4.0</InformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
 	  <Resource Include="Icon.ico">
 	  </Resource>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Include="Versions\*.json" />
 	</ItemGroup>
 
 	<ItemGroup>

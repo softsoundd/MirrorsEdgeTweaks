@@ -2,7 +2,7 @@
 
 A tool for modding, tweaking settings and providing game fixes for Mirror's Edge.
 
-![Version](https://img.shields.io/badge/version-4.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.4.0-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
@@ -15,7 +15,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 - TdGame version selector
 - Tweaks Scripts installer (custom UnrealScript package including cheats and trainer functions, Softimer, etc.)
 - Persistent FOV with additional viewmodel and input fixes
-- Customisable aspect ratios with HOR+/VERT+ scaling
+- Unlocked aspect ratios with HOR+/VERT+ scaling
 - High-res UI fix for resolutions greater than 1080p
 - Highly configurable graphics settings
 - Adjustable PhysX cloth simulation rates

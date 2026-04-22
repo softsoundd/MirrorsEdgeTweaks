@@ -73,67 +73,11 @@ namespace MirrorsEdgeTweaks.ViewModels
     public class FovViewModel : BaseViewModel
     {
         private string _currentFovValue = "N/A";
-        private string _newFovValue = "90";
-        private string _aspectRatioWidth = "16";
-        private string _aspectRatioHeight = "9";
-        private string _currentAspectRatioValue = "N/A";
-        private string _commonAspectRatioValue = "";
-        private string _horPlusStatus = "";
-        private string _clippingPlaneStatus = "Clipping Fix: N/A";
-        private string _fovAgnosticSensStatus = "Sensitivity: N/A";
 
         public string CurrentFovValue
         {
             get => _currentFovValue;
             set => SetProperty(ref _currentFovValue, value);
-        }
-
-        public string NewFovValue
-        {
-            get => _newFovValue;
-            set => SetProperty(ref _newFovValue, value);
-        }
-
-        public string AspectRatioWidth
-        {
-            get => _aspectRatioWidth;
-            set => SetProperty(ref _aspectRatioWidth, value);
-        }
-
-        public string AspectRatioHeight
-        {
-            get => _aspectRatioHeight;
-            set => SetProperty(ref _aspectRatioHeight, value);
-        }
-
-        public string CurrentAspectRatioValue
-        {
-            get => _currentAspectRatioValue;
-            set => SetProperty(ref _currentAspectRatioValue, value);
-        }
-
-        public string CommonAspectRatioValue
-        {
-            get => _commonAspectRatioValue;
-            set => SetProperty(ref _commonAspectRatioValue, value);
-        }
-
-        public string HorPlusStatus
-        {
-            get => _horPlusStatus;
-            set => SetProperty(ref _horPlusStatus, value);
-        }
-
-        public string ClippingPlaneStatus
-        {
-            get => _clippingPlaneStatus;
-            set => SetProperty(ref _clippingPlaneStatus, value);
-        }
-
-        public string FovAgnosticSensStatus
-        {
-            get => _fovAgnosticSensStatus;
-            set => SetProperty(ref _fovAgnosticSensStatus, value);
         }
     }
 

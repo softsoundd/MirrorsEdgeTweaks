@@ -1,18 +1,16 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
+using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
     public enum CommandLineUnlockMode
     {
         Unsupported,
-        PersistentFilePatch,
-        RuntimeLaunchPatch
+        PersistentFilePatch
     }
 
     public static class CommandLineUnlockHelper
@@ -22,20 +20,12 @@ namespace MirrorsEdgeTweaks.Helpers
         private const string StockFlybyCommandLine = "escape_p?Loadcheckpoint=ChaseFlyby?Causeevent=startflyby -nostartupmovies";
         private const string StockNoStartupMoviesToken = "nostartupmovies";
         private const string StockNoStartupMoviesSwitch = "-nostartupmovies";
-        private const string PackedOoaSectionName = ".ooa";
 
         private const int BranchLength = 43;
         private const int EmptyGapBytes = 2;
         private const int EmptySpanBytes = 8;
-        private const int RuntimePatchTimeoutMs = 30000;
-        private const int RuntimeAttachTimeoutMs = 8000;
-        private const int RuntimeProcessPollMs = 100;
         private const uint ExecuteSectionFlag = 0x20000000;
         private static readonly byte[] BranchPrefix = Convert.FromHexString("83C40885C0740768");
-        private static readonly RuntimeLaunchCandidate[] RuntimeLaunchCandidates =
-        {
-            new RuntimeLaunchCandidate(0x01CC3CA0, 0x010EB3A4)
-        };
 
         public static CommandLineUnlockMode GetUnlockMode(string exePath)
         {
@@ -47,9 +37,9 @@ namespace MirrorsEdgeTweaks.Helpers
                 return CommandLineUnlockMode.PersistentFilePatch;
             }
 
-            if (TryDeriveRuntimeLaunchLayout(image, buffer, out _))
+            if (OoaService.HasOoaSection(buffer))
             {
-                return CommandLineUnlockMode.RuntimeLaunchPatch;
+                return CommandLineUnlockMode.PersistentFilePatch;
             }
 
             return CommandLineUnlockMode.Unsupported;
@@ -59,12 +49,39 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             byte[] buffer = File.ReadAllBytes(exePath);
             ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
-            if (!TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
+
+            if (TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
+            {
+                return buffer.AsSpan(layout.BranchOffset, BranchLength)
+                    .SequenceEqual(BuildUnlockedBranch(layout));
+            }
+
+            if (!OoaService.HasOoaSection(buffer))
             {
                 return false;
             }
 
-            return buffer.AsSpan(layout.BranchOffset, BranchLength).SequenceEqual(BuildUnlockedBranch(layout));
+            try
+            {
+                string? dlfPath = OoaService.FindLicensePath(buffer);
+                if (dlfPath == null) return false;
+
+                byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
+                OoaService.DecryptSections(buffer, key);
+                image = ExecutableImageLayout.Parse(buffer);
+
+                if (!TryDerivePersistentLayout(image, buffer, out layout))
+                {
+                    return false;
+                }
+
+                return buffer.AsSpan(layout.BranchOffset, BranchLength)
+                    .SequenceEqual(BuildUnlockedBranch(layout));
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static bool Unlock(string exePath)
@@ -77,46 +94,73 @@ namespace MirrorsEdgeTweaks.Helpers
             return PatchExecutable(exePath, unlock: false);
         }
 
-        public static void LaunchWithRuntimePatch(string exePath, string arguments)
-        {
-            byte[] buffer = File.ReadAllBytes(exePath);
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
-            if (!TryDeriveRuntimeLaunchLayout(image, buffer, out RuntimeLaunchLayout runtimeLayout))
-            {
-                throw new InvalidOperationException("This executable does not support runtime command line patching.");
-            }
-
-            LaunchProcessWithRuntimePatch(exePath, arguments, runtimeLayout);
-        }
-
         private static bool PatchExecutable(string exePath, bool unlock)
         {
             byte[] originalBuffer = File.ReadAllBytes(exePath);
             byte[] buffer = (byte[])originalBuffer.Clone();
 
             ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
-            if (!TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
+            if (TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
             {
-                if (TryDeriveRuntimeLaunchLayout(image, buffer, out _))
+                PatchBranch(buffer, image, layout, unlock);
+                PatchStrings(buffer, image, layout);
+
+                if (buffer.AsSpan().SequenceEqual(originalBuffer))
                 {
-                    throw new InvalidOperationException(
-                        "This executable uses protected code pages and can only be unlocked at launch time.");
+                    return false;
                 }
 
-                throw new InvalidOperationException("Could not locate the command line bootstrap in this executable.");
+                WriteAllBytesPreservingAttributes(exePath, buffer);
+                return true;
             }
+
+            if (OoaService.HasOoaSection(buffer))
+            {
+                return PatchOoaExecutable(exePath, buffer, unlock);
+            }
+
+            throw new InvalidOperationException(
+                "Could not locate the command line bootstrap in this executable.");
+        }
+
+        private static bool PatchOoaExecutable(string exePath, byte[] buffer, bool unlock)
+        {
+            string? dlfPath = OoaService.FindLicensePath(buffer);
+            if (dlfPath == null)
+            {
+                throw new OoaLicenseNotFoundException(
+                    OoaService.GetExpectedLicensePath(buffer));
+            }
+
+            byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
+            OoaService.StripAuthenticode(buffer);
+            OoaContext ctx = OoaService.DecryptSections(buffer, key);
+
+            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
+            if (!TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
+            {
+                throw new InvalidOperationException(
+                    "Could not locate the command line bootstrap in the decrypted EA executable.");
+            }
+
+            byte[] branchBefore = buffer.AsSpan(layout.BranchOffset, BranchLength).ToArray();
 
             PatchBranch(buffer, image, layout, unlock);
             PatchStrings(buffer, image, layout);
 
-            if (buffer.AsSpan().SequenceEqual(originalBuffer))
+            if (buffer.AsSpan(layout.BranchOffset, BranchLength).SequenceEqual(branchBefore))
             {
                 return false;
             }
 
-            WriteAllBytesPreservingAttributes(exePath, buffer);
+            OoaService.UpdateEncBlockCrcs(buffer, ctx);
+            OoaService.ReencryptSections(buffer, key, ctx);
+            byte[] output = OoaService.TruncateOverlay(buffer, ctx);
+            WriteAllBytesPreservingAttributes(exePath, output);
             return true;
         }
+
+        // Branch + string patching
 
         private static void PatchBranch(byte[] buffer, ExecutableImageLayout image, CommandLineUnlockLayout layout, bool unlock)
         {
@@ -159,6 +203,30 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] stockBranch = BuildStockBranch(image, layout);
             stockBranch.AsSpan().CopyTo(buffer.AsSpan(layout.BranchOffset, BranchLength));
         }
+
+        private static void PatchStrings(byte[] buffer, ExecutableImageLayout image, CommandLineUnlockLayout layout)
+        {
+            WriteSpan(buffer, image, layout.MarkerVa, checked((int)(layout.FlybyCommandLineVa - layout.MarkerVa)), EncodeUtf16Le(StockMarker));
+            WriteSpan(buffer, image, layout.FlybyCommandLineVa, checked((int)(layout.NoStartupMoviesTokenVa - layout.FlybyCommandLineVa)), EncodeUtf16Le(StockFlybyCommandLine));
+            WriteSpan(buffer, image, layout.NoStartupMoviesTokenVa, checked((int)(layout.NoStartupMoviesSwitchVa - layout.NoStartupMoviesTokenVa)), EncodeUtf16Le(StockNoStartupMoviesToken));
+            WriteSpan(buffer, image, layout.NoStartupMoviesSwitchVa, checked((int)(layout.EmptyVa - layout.NoStartupMoviesSwitchVa)), EncodeUtf16Le(StockNoStartupMoviesSwitch));
+            WriteSpan(buffer, image, layout.EmptyVa, checked((int)(layout.ErrorHistoryVa - layout.EmptyVa)), new byte[] { 0x00, 0x00 });
+        }
+
+        private static void WriteSpan(byte[] buffer, ExecutableImageLayout image, uint va, int spanSize, byte[] payload)
+        {
+            if (payload.Length > spanSize)
+            {
+                throw new InvalidOperationException($"Payload for 0x{va:X8} does not fit inside a {spanSize}-byte span.");
+            }
+
+            int offset = image.VaToOffset(va);
+            byte[] paddedPayload = new byte[spanSize];
+            payload.AsSpan().CopyTo(paddedPayload);
+            paddedPayload.AsSpan().CopyTo(buffer.AsSpan(offset, spanSize));
+        }
+
+        // Layout derivation
 
         private static bool TryDerivePersistentLayout(ExecutableImageLayout image, byte[] buffer, out CommandLineUnlockLayout layout)
         {
@@ -222,27 +290,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return false;
         }
 
-        private static void PatchStrings(byte[] buffer, ExecutableImageLayout image, CommandLineUnlockLayout layout)
-        {
-            WriteSpan(buffer, image, layout.MarkerVa, checked((int)(layout.FlybyCommandLineVa - layout.MarkerVa)), EncodeUtf16Le(StockMarker));
-            WriteSpan(buffer, image, layout.FlybyCommandLineVa, checked((int)(layout.NoStartupMoviesTokenVa - layout.FlybyCommandLineVa)), EncodeUtf16Le(StockFlybyCommandLine));
-            WriteSpan(buffer, image, layout.NoStartupMoviesTokenVa, checked((int)(layout.NoStartupMoviesSwitchVa - layout.NoStartupMoviesTokenVa)), EncodeUtf16Le(StockNoStartupMoviesToken));
-            WriteSpan(buffer, image, layout.NoStartupMoviesSwitchVa, checked((int)(layout.EmptyVa - layout.NoStartupMoviesSwitchVa)), EncodeUtf16Le(StockNoStartupMoviesSwitch));
-            WriteSpan(buffer, image, layout.EmptyVa, checked((int)(layout.ErrorHistoryVa - layout.EmptyVa)), new byte[] { 0x00, 0x00 });
-        }
-
-        private static void WriteSpan(byte[] buffer, ExecutableImageLayout image, uint va, int spanSize, byte[] payload)
-        {
-            if (payload.Length > spanSize)
-            {
-                throw new InvalidOperationException($"Payload for 0x{va:X8} does not fit inside a {spanSize}-byte span.");
-            }
-
-            int offset = image.VaToOffset(va);
-            byte[] paddedPayload = new byte[spanSize];
-            payload.AsSpan().CopyTo(paddedPayload);
-            paddedPayload.AsSpan().CopyTo(buffer.AsSpan(offset, spanSize));
-        }
+        // Branch construction
 
         private static byte[] BuildUnlockedBranch(CommandLineUnlockLayout layout)
         {
@@ -346,376 +394,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return true;
         }
 
-        private static bool TryDeriveRuntimeLaunchLayout(ExecutableImageLayout image, byte[] buffer, out RuntimeLaunchLayout layout)
-        {
-            layout = default;
-            if (!image.HasSectionNamed(PackedOoaSectionName))
-            {
-                return false;
-            }
-
-            int markerSpan = EncodeUtf16Le(StockMarker).Length;
-            int flybySpan = EncodeUtf16Le(StockFlybyCommandLine).Length;
-            int noStartupTokenSpan = EncodeUtf16Le(StockNoStartupMoviesToken).Length;
-            int noStartupSwitchSpan = EncodeUtf16Le(StockNoStartupMoviesSwitch).Length;
-
-            foreach (string markerText in new[] { StockMarker, LegacyMarker })
-            {
-                byte[] markerBytes = EncodeUtf16Le(markerText);
-                foreach (int markerOffset in FindAllOffsets(buffer, markerBytes))
-                {
-                    uint markerVa = image.OffsetToVa(markerOffset);
-                    uint flybyVa = markerVa + (uint)markerSpan;
-                    uint noStartupTokenVa = flybyVa + (uint)flybySpan;
-                    uint noStartupSwitchVa = noStartupTokenVa + (uint)noStartupTokenSpan;
-                    uint emptyVa = noStartupSwitchVa + (uint)noStartupSwitchSpan + EmptyGapBytes;
-                    uint errorHistoryVa = emptyVa + EmptySpanBytes;
-
-                    foreach (RuntimeLaunchCandidate candidate in RuntimeLaunchCandidates)
-                    {
-                        if (candidate.MarkerVa != markerVa)
-                        {
-                            continue;
-                        }
-
-                        layout = new RuntimeLaunchLayout(
-                            new CommandLineUnlockLayout(
-                                markerVa,
-                                flybyVa,
-                                noStartupTokenVa,
-                                noStartupSwitchVa,
-                                emptyVa,
-                                errorHistoryVa,
-                                -1,
-                                0,
-                                candidate.BranchVa));
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        private static void LaunchProcessWithRuntimePatch(string exePath, string arguments, RuntimeLaunchLayout runtimeLayout)
-        {
-            string? workingDirectory = Path.GetDirectoryName(exePath);
-            if (string.IsNullOrEmpty(workingDirectory))
-            {
-                throw new InvalidOperationException("Could not determine the game executable directory.");
-            }
-
-            HashSet<int> baselineProcessIds = SnapshotRuntimeProcessIds(exePath);
-
-            STARTUPINFO startupInfo = STARTUPINFO.Create();
-            string commandLine = BuildProcessCommandLine(exePath, arguments);
-            if (!CreateProcess(
-                exePath,
-                commandLine,
-                IntPtr.Zero,
-                IntPtr.Zero,
-                false,
-                0,
-                IntPtr.Zero,
-                workingDirectory,
-                ref startupInfo,
-                out PROCESS_INFORMATION processInformation))
-            {
-                throw new InvalidOperationException(
-                    $"Failed to create the game process (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-
-            try
-            {
-                WaitForRuntimePatch(exePath, checked((int)processInformation.dwProcessId), baselineProcessIds, runtimeLayout);
-            }
-            finally
-            {
-                if (processInformation.hThread != IntPtr.Zero)
-                {
-                    CloseHandle(processInformation.hThread);
-                }
-
-                if (processInformation.hProcess != IntPtr.Zero)
-                {
-                    CloseHandle(processInformation.hProcess);
-                }
-            }
-        }
-
-        private static void WaitForRuntimePatch(
-            string exePath,
-            int initialProcessId,
-            HashSet<int> baselineProcessIds,
-            RuntimeLaunchLayout runtimeLayout)
-        {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            HashSet<int> attemptedProcessIds = new HashSet<int>();
-
-            while (stopwatch.ElapsedMilliseconds < RuntimePatchTimeoutMs)
-            {
-                foreach (RuntimeProcessCandidate candidate in EnumerateRuntimeProcessCandidates(
-                    exePath,
-                    baselineProcessIds,
-                    attemptedProcessIds,
-                    initialProcessId))
-                {
-                    attemptedProcessIds.Add(candidate.ProcessId);
-                    if (TryPatchRunningProcess(candidate.ProcessId, runtimeLayout))
-                    {
-                        return;
-                    }
-                }
-
-                System.Threading.Thread.Sleep(RuntimeProcessPollMs);
-            }
-
-            throw new TimeoutException("Timed out waiting for the EA App launch chain to reach a patchable game process.");
-        }
-
-        private static IEnumerable<RuntimeProcessCandidate> EnumerateRuntimeProcessCandidates(
-            string exePath,
-            HashSet<int> baselineProcessIds,
-            HashSet<int> attemptedProcessIds,
-            int initialProcessId)
-        {
-            string processName = Path.GetFileNameWithoutExtension(exePath);
-            List<RuntimeProcessCandidate> candidates = new List<RuntimeProcessCandidate>();
-
-            foreach (Process process in Process.GetProcessesByName(processName))
-            {
-                using (process)
-                {
-                    if (baselineProcessIds.Contains(process.Id) || attemptedProcessIds.Contains(process.Id))
-                    {
-                        continue;
-                    }
-
-                    if (!TryGetProcessExecutablePath(process, out string? processPath) ||
-                        !string.Equals(processPath, exePath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (process.Id == initialProcessId)
-                    {
-                        continue;
-                    }
-
-                    DateTime startedAt;
-                    try
-                    {
-                        startedAt = process.StartTime;
-                    }
-                    catch
-                    {
-                        startedAt = DateTime.MinValue;
-                    }
-
-                    candidates.Add(new RuntimeProcessCandidate(process.Id, startedAt));
-                }
-            }
-
-            candidates.Sort((left, right) =>
-            {
-                return right.StartedAt.CompareTo(left.StartedAt);
-            });
-
-            return candidates;
-        }
-
-        private static bool TryPatchRunningProcess(int processId, RuntimeLaunchLayout runtimeLayout)
-        {
-            IntPtr processHandle = OpenProcess(ProcessPatchAccess, false, (uint)processId);
-            if (processHandle == IntPtr.Zero)
-            {
-                if (!IsProcessAlive(processId))
-                {
-                    return false;
-                }
-
-                throw new InvalidOperationException(
-                    $"Failed to open process {processId} for runtime patching (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
-            try
-            {
-                while (stopwatch.ElapsedMilliseconds < RuntimeAttachTimeoutMs)
-                {
-                    if (!IsProcessAlive(processId))
-                    {
-                        return false;
-                    }
-
-                    bool suspended = NtSuspendProcess(processHandle) == NtStatusSuccess;
-                    if (!suspended)
-                    {
-                        if (!IsProcessAlive(processId))
-                        {
-                            return false;
-                        }
-
-                        throw new InvalidOperationException("Failed to suspend the launched game process for runtime patching.");
-                    }
-
-                    try
-                    {
-                        byte[] currentBranch;
-                        try
-                        {
-                            currentBranch = ReadProcessBytes(processHandle, runtimeLayout.PatchLayout.BranchVa, BranchLength);
-                        }
-                        catch
-                        {
-                            currentBranch = Array.Empty<byte>();
-                        }
-
-                        if (currentBranch.Length == BranchLength)
-                        {
-                            byte[] unlockedBranch = BuildUnlockedBranch(runtimeLayout.PatchLayout);
-                            if (currentBranch.AsSpan().SequenceEqual(unlockedBranch))
-                            {
-                                return true;
-                            }
-
-                            if (MatchesStockBranch(currentBranch, runtimeLayout.PatchLayout))
-                            {
-                                PatchRemoteBranch(processHandle, runtimeLayout.PatchLayout);
-                                return true;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        NtResumeProcess(processHandle);
-                    }
-
-                    System.Threading.Thread.Sleep(RuntimeProcessPollMs);
-                }
-            }
-            finally
-            {
-                CloseHandle(processHandle);
-            }
-
-            return false;
-        }
-
-        private static void PatchRemoteBranch(IntPtr processHandle, CommandLineUnlockLayout layout)
-        {
-            byte[] currentBranch = ReadProcessBytes(processHandle, layout.BranchVa, BranchLength);
-            byte[] unlockedBranch = BuildUnlockedBranch(layout);
-
-            if (currentBranch.AsSpan().SequenceEqual(unlockedBranch))
-            {
-                return;
-            }
-
-            if (!MatchesStockBranch(currentBranch, layout))
-            {
-                throw new InvalidOperationException("Unexpected command line branch bytes in the launched process. Unsupported executable revision.");
-            }
-
-            if (!VirtualProtectEx(processHandle, new IntPtr(layout.BranchVa), (UIntPtr)BranchLength, PageExecuteReadWrite, out uint oldProtect))
-            {
-                throw new InvalidOperationException(
-                    $"Failed to change process memory protection at 0x{layout.BranchVa:X8} (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-
-            try
-            {
-                WriteProcessBytes(processHandle, layout.BranchVa, unlockedBranch);
-            }
-            finally
-            {
-                VirtualProtectEx(processHandle, new IntPtr(layout.BranchVa), (UIntPtr)BranchLength, oldProtect, out _);
-            }
-        }
-
-        private static byte[] ReadProcessBytes(IntPtr processHandle, uint address, int length)
-        {
-            byte[] buffer = new byte[length];
-            if (!ReadProcessMemory(processHandle, new IntPtr(address), buffer, buffer.Length, out IntPtr bytesRead) ||
-                bytesRead.ToInt64() != length)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to read process memory at 0x{address:X8} (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-
-            return buffer;
-        }
-
-        private static void WriteProcessBytes(IntPtr processHandle, uint address, byte[] payload)
-        {
-            if (!WriteProcessMemory(processHandle, new IntPtr(address), payload, payload.Length, out IntPtr bytesWritten) ||
-                bytesWritten.ToInt64() != payload.Length)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to write process memory at 0x{address:X8} (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-
-            if (!FlushInstructionCache(processHandle, new IntPtr(address), payload.Length))
-            {
-                throw new InvalidOperationException(
-                    $"Failed to flush the game instruction cache (Win32 error {Marshal.GetLastWin32Error()}).");
-            }
-        }
-
-        private static HashSet<int> SnapshotRuntimeProcessIds(string exePath)
-        {
-            HashSet<int> processIds = new HashSet<int>();
-            string processName = Path.GetFileNameWithoutExtension(exePath);
-
-            foreach (Process process in Process.GetProcessesByName(processName))
-            {
-                using (process)
-                {
-                    if (TryGetProcessExecutablePath(process, out string? processPath) &&
-                        string.Equals(processPath, exePath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        processIds.Add(process.Id);
-                    }
-                }
-            }
-
-            return processIds;
-        }
-
-        private static bool TryGetProcessExecutablePath(Process process, out string? processPath)
-        {
-            try
-            {
-                processPath = process.MainModule?.FileName;
-                return !string.IsNullOrEmpty(processPath);
-            }
-            catch
-            {
-                processPath = null;
-                return false;
-            }
-        }
-
-        private static bool IsProcessAlive(int processId)
-        {
-            try
-            {
-                using Process process = Process.GetProcessById(processId);
-                return !process.HasExited;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static string BuildProcessCommandLine(string exePath, string arguments)
-        {
-            return string.IsNullOrWhiteSpace(arguments)
-                ? $"\"{exePath}\""
-                : $"\"{exePath}\" {arguments}";
-        }
+        // Utility
 
         private static IEnumerable<int> FindAllOffsets(byte[] buffer, byte[] pattern)
         {
@@ -814,6 +493,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return BinaryPrimitives.ReadInt32LittleEndian(ReadSpan(buffer, offset, sizeof(int)));
         }
 
+        // Types
+
         private readonly struct CommandLineUnlockLayout
         {
             public CommandLineUnlockLayout(
@@ -847,40 +528,6 @@ namespace MirrorsEdgeTweaks.Helpers
             public int BranchOffset { get; }
             public uint ParseParamLikeTargetVa { get; }
             public uint BranchVa { get; }
-        }
-
-        private readonly struct RuntimeLaunchLayout
-        {
-            public RuntimeLaunchLayout(CommandLineUnlockLayout patchLayout)
-            {
-                PatchLayout = patchLayout;
-            }
-
-            public CommandLineUnlockLayout PatchLayout { get; }
-        }
-
-        private readonly struct RuntimeLaunchCandidate
-        {
-            public RuntimeLaunchCandidate(uint markerVa, uint branchVa)
-            {
-                MarkerVa = markerVa;
-                BranchVa = branchVa;
-            }
-
-            public uint MarkerVa { get; }
-            public uint BranchVa { get; }
-        }
-
-        private readonly struct RuntimeProcessCandidate
-        {
-            public RuntimeProcessCandidate(int processId, DateTime startedAt)
-            {
-                ProcessId = processId;
-                StartedAt = startedAt;
-            }
-
-            public int ProcessId { get; }
-            public DateTime StartedAt { get; }
         }
 
         private sealed class ExecutableImageLayout
@@ -977,19 +624,6 @@ namespace MirrorsEdgeTweaks.Helpers
                 return (section.Characteristics & ExecuteSectionFlag) != 0;
             }
 
-            public bool HasSectionNamed(string sectionName)
-            {
-                foreach (SectionInfo section in _sections)
-                {
-                    if (string.Equals(section.Name, sectionName, StringComparison.Ordinal))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
             private SectionInfo FindSectionByRawOffset(int offset)
             {
                 foreach (SectionInfo section in _sections)
@@ -1058,112 +692,5 @@ namespace MirrorsEdgeTweaks.Helpers
             public uint SizeOfRawData { get; }
             public uint Characteristics { get; }
         }
-
-        private const uint ProcessPatchAccess = 0x0800 | 0x0400 | 0x0020 | 0x0010 | 0x0008;
-        private const uint PageExecuteReadWrite = 0x40;
-        private const int NtStatusSuccess = 0;
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct STARTUPINFO
-        {
-            public uint Cb;
-            public string? Reserved;
-            public string? Desktop;
-            public string? Title;
-            public uint X;
-            public uint Y;
-            public uint XSize;
-            public uint YSize;
-            public uint XCountChars;
-            public uint YCountChars;
-            public uint FillAttribute;
-            public uint Flags;
-            public ushort ShowWindow;
-            public ushort Reserved2Length;
-            public IntPtr Reserved2;
-            public IntPtr StdInput;
-            public IntPtr StdOutput;
-            public IntPtr StdError;
-
-            public static STARTUPINFO Create()
-            {
-                return new STARTUPINFO
-                {
-                    Cb = (uint)Marshal.SizeOf<STARTUPINFO>()
-                };
-            }
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct PROCESS_INFORMATION
-        {
-            public IntPtr hProcess;
-            public IntPtr hThread;
-            public uint dwProcessId;
-            public uint dwThreadId;
-        }
-
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CreateProcess(
-            string? applicationName,
-            string commandLine,
-            IntPtr processAttributes,
-            IntPtr threadAttributes,
-            [MarshalAs(UnmanagedType.Bool)] bool inheritHandles,
-            uint creationFlags,
-            IntPtr environment,
-            string currentDirectory,
-            ref STARTUPINFO startupInfo,
-            out PROCESS_INFORMATION processInformation);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool ReadProcessMemory(
-            IntPtr processHandle,
-            IntPtr baseAddress,
-            [Out] byte[] buffer,
-            int size,
-            out IntPtr bytesRead);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool WriteProcessMemory(
-            IntPtr processHandle,
-            IntPtr baseAddress,
-            byte[] buffer,
-            int size,
-            out IntPtr bytesWritten);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool FlushInstructionCache(IntPtr processHandle, IntPtr baseAddress, int size);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool VirtualProtectEx(
-            IntPtr processHandle,
-            IntPtr address,
-            UIntPtr size,
-            uint newProtect,
-            out uint oldProtect);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool TerminateProcess(IntPtr processHandle, uint exitCode);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(IntPtr handle);
-
-        [DllImport("ntdll.dll")]
-        private static extern int NtSuspendProcess(IntPtr processHandle);
-
-        [DllImport("ntdll.dll")]
-        private static extern int NtResumeProcess(IntPtr processHandle);
     }
 }

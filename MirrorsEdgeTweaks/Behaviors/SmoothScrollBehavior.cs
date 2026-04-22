@@ -12,6 +12,57 @@ namespace MirrorsEdgeTweaks.Behaviors
         private static readonly Dictionary<ScrollViewer, double> _targetOffsets = new Dictionary<ScrollViewer, double>();
         private static readonly Dictionary<ScrollViewer, bool> _isAnimating = new Dictionary<ScrollViewer, bool>();
         private static readonly Dictionary<ScrollViewer, EventHandler> _renderingHandlers = new Dictionary<ScrollViewer, EventHandler>();
+        private static readonly Dictionary<ScrollViewer, TimeSpan> _lastRenderTime = new Dictionary<ScrollViewer, TimeSpan>();
+
+        private const double LerpPerFrame = 0.18;
+        private const double ReferenceFps = 60.0;
+
+        private static readonly LinearGradientBrush FadeBottomBrush;
+        private static readonly LinearGradientBrush FadeTopBrush;
+        private static readonly LinearGradientBrush FadeBothBrush;
+
+        static SmoothScrollBehavior()
+        {
+            FadeBottomBrush = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0, 0),
+                EndPoint = new System.Windows.Point(0, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Colors.Black, 0),
+                    new GradientStop(Colors.Black, 0.95),
+                    new GradientStop(Colors.Transparent, 1)
+                }
+            };
+            FadeBottomBrush.Freeze();
+
+            FadeTopBrush = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0, 0),
+                EndPoint = new System.Windows.Point(0, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Colors.Transparent, 0),
+                    new GradientStop(Colors.Black, 0.05),
+                    new GradientStop(Colors.Black, 1)
+                }
+            };
+            FadeTopBrush.Freeze();
+
+            FadeBothBrush = new LinearGradientBrush
+            {
+                StartPoint = new System.Windows.Point(0, 0),
+                EndPoint = new System.Windows.Point(0, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Colors.Transparent, 0),
+                    new GradientStop(Colors.Black, 0.05),
+                    new GradientStop(Colors.Black, 0.95),
+                    new GradientStop(Colors.Transparent, 1)
+                }
+            };
+            FadeBothBrush.Freeze();
+        }
 
         public static readonly DependencyProperty SmoothScrollProperty =
             DependencyProperty.RegisterAttached(
@@ -96,57 +147,28 @@ namespace MirrorsEdgeTweaks.Behaviors
                 return;
             }
 
-            double topFadeStart = 0;
-            double topFadeEnd = 0.05;
-            double bottomFadeStart = 0.95;
-            double bottomFadeEnd = 1;
-
             bool atTop = scrollViewer.VerticalOffset <= 0.1;
             bool atBottom = scrollViewer.VerticalOffset >= scrollViewer.ScrollableHeight - 0.1;
 
-            var gradientBrush = new LinearGradientBrush();
-            gradientBrush.StartPoint = new System.Windows.Point(0, 0);
-            gradientBrush.EndPoint = new System.Windows.Point(0, 1);
-
             if (atTop && atBottom)
-            {
                 scrollViewer.OpacityMask = null;
-                return;
-            }
             else if (atTop)
-            {
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, 0));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, bottomFadeStart));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Transparent, bottomFadeEnd));
-            }
+                scrollViewer.OpacityMask = FadeBottomBrush;
             else if (atBottom)
-            {
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Transparent, topFadeStart));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, topFadeEnd));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, 1));
-            }
+                scrollViewer.OpacityMask = FadeTopBrush;
             else
-            {
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Transparent, topFadeStart));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, topFadeEnd));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Black, bottomFadeStart));
-                gradientBrush.GradientStops.Add(new GradientStop(Colors.Transparent, bottomFadeEnd));
-            }
-
-            scrollViewer.OpacityMask = gradientBrush;
+                scrollViewer.OpacityMask = FadeBothBrush;
         }
 
         private static void OnSmoothScrollChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is ScrollViewer scrollViewer)
             {
-                scrollViewer.Loaded -= ScrollViewer_Loaded;
                 scrollViewer.PreviewMouseWheel -= ScrollViewer_PreviewMouseWheel;
                 scrollViewer.ScrollChanged -= ScrollViewer_ScrollChanged;
 
                 if ((bool)e.NewValue)
                 {
-                    scrollViewer.Loaded += ScrollViewer_Loaded;
                     scrollViewer.PreviewMouseWheel += ScrollViewer_PreviewMouseWheel;
                     scrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
                 }
@@ -161,15 +183,6 @@ namespace MirrorsEdgeTweaks.Behaviors
                         _renderingHandlers.Remove(scrollViewer);
                     }
                 }
-            }
-        }
-
-        private static void ScrollViewer_Loaded(object sender, RoutedEventArgs e)
-        {
-            if (sender is ScrollViewer scrollViewer)
-            {
-                scrollViewer.PreviewMouseWheel += ScrollViewer_PreviewMouseWheel;
-                scrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
             }
         }
 
@@ -207,7 +220,7 @@ namespace MirrorsEdgeTweaks.Behaviors
 
                 if (!_renderingHandlers.ContainsKey(scrollViewer))
                 {
-                    EventHandler handler = (s, args) => OnRendering(scrollViewer);
+                    EventHandler handler = (s, args) => OnRendering(scrollViewer, args);
                     _renderingHandlers[scrollViewer] = handler;
                     _isAnimating[scrollViewer] = true;
                     CompositionTarget.Rendering += handler;
@@ -222,12 +235,21 @@ namespace MirrorsEdgeTweaks.Behaviors
             }
         }
 
-        private static void OnRendering(ScrollViewer scrollViewer)
+        private static void OnRendering(ScrollViewer scrollViewer, EventArgs args)
         {
             if (!_targetOffsets.ContainsKey(scrollViewer))
             {
                 StopAnimation(scrollViewer);
                 return;
+            }
+
+            double deltaSeconds = 1.0 / ReferenceFps;
+            if (args is RenderingEventArgs renderArgs)
+            {
+                TimeSpan now = renderArgs.RenderingTime;
+                if (_lastRenderTime.TryGetValue(scrollViewer, out var last))
+                    deltaSeconds = Math.Min((now - last).TotalSeconds, 0.1);
+                _lastRenderTime[scrollViewer] = now;
             }
 
             double current = scrollViewer.VerticalOffset;
@@ -241,7 +263,8 @@ namespace MirrorsEdgeTweaks.Behaviors
                 return;
             }
 
-            double newOffset = current + (difference * 0.10);
+            double factor = 1.0 - Math.Pow(1.0 - LerpPerFrame, deltaSeconds * ReferenceFps);
+            double newOffset = current + (difference * factor);
             scrollViewer.ScrollToVerticalOffset(newOffset);
         }
 
@@ -252,6 +275,7 @@ namespace MirrorsEdgeTweaks.Behaviors
                 CompositionTarget.Rendering -= _renderingHandlers[scrollViewer];
             }
             _isAnimating[scrollViewer] = false;
+            _lastRenderTime.Remove(scrollViewer);
         }
 
         private static bool ShouldIgnoreMouseWheel(DependencyObject? originalSource, ScrollViewer mainScrollViewer)
@@ -261,21 +285,20 @@ namespace MirrorsEdgeTweaks.Behaviors
             while (current != null)
             {
                 if (current == mainScrollViewer)
-                {
                     return false;
-                }
 
-                if (current is ScrollViewer ||
-                    current is System.Windows.Controls.ComboBox ||
-                    current is System.Windows.Controls.Primitives.Selector)
-                {
+                if (current is System.Windows.Controls.ComboBox combo && combo.IsDropDownOpen)
                     return true;
-                }
+
+                if (current is ScrollViewer nested && nested != mainScrollViewer
+                    && nested.ScrollableHeight > 0
+                    && !(nested.TemplatedParent is System.Windows.Controls.TextBox))
+                    return true;
 
                 current = GetParent(current);
             }
 
-            return true;
+            return false;
         }
 
         private static DependencyObject? GetParent(DependencyObject child)

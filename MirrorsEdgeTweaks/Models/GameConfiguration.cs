@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace MirrorsEdgeTweaks.Models
 {
     public class GameConfiguration
@@ -10,9 +8,6 @@ namespace MirrorsEdgeTweaks.Models
         public string? EnginePackagePath { get; set; }
         public string? TdGamePackagePath { get; set; }
         public string LaunchArguments { get; set; } = string.Empty;
-        public float FovValue { get; set; }
-        public float AspectRatioWidth { get; set; }
-        public float AspectRatioHeight { get; set; }
     }
 
     public class PackageOffsets
@@ -52,24 +47,4 @@ namespace MirrorsEdgeTweaks.Models
         public string DownloadUrl { get; set; } = string.Empty;
         public bool IsDetected { get; set; }
     }
-
-    public class AspectRatioInfo
-    {
-        public string DecimalFormat { get; set; } = string.Empty;
-        public string CommonFormat { get; set; } = string.Empty;
-        public float Value { get; set; }
-    }
-
-    public static class CommonAspectRatios
-    {
-        public static readonly Dictionary<string, double> Ratios = new Dictionary<string, double>
-        {
-            { "4:3", 4.0 / 3.0 },
-            { "16:10", 16.0 / 10.0 },
-            { "16:9", 16.0 / 9.0 },
-            { "21:9", 21.0 / 9.0 },
-            { "32:9", 32.0 / 9.0 }
-        };
-    }
-
 }

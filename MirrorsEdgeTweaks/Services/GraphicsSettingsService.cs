@@ -49,12 +49,9 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(filePath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
 
-            if (wasReadOnly)
-            {
+            if (fileInfo.IsReadOnly)
                 fileInfo.IsReadOnly = false;
-            }
 
             try
             {
@@ -126,10 +123,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -216,7 +210,7 @@ namespace MirrorsEdgeTweaks.Services
 
         public void ApplyRenderResolution(string tdEngineIniPath, int percentage)
         {
-            bool upscale = percentage < 100;
+            bool upscale = percentage != 100;
 
             var replacements = new Dictionary<string, string>
             {
@@ -756,12 +750,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -776,10 +765,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -791,12 +777,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -811,10 +792,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -826,12 +804,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -846,10 +819,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -861,12 +831,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(defaultHudEffectsIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -906,10 +871,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -957,12 +919,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -993,10 +950,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 
@@ -1008,12 +962,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-
-            if (wasReadOnly)
-            {
-                fileInfo.IsReadOnly = false;
-            }
+            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
 
             try
             {
@@ -1039,10 +988,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             finally
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                fileInfo.IsReadOnly = true;
             }
         }
 

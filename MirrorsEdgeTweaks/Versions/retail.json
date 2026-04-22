@@ -1,0 +1,146 @@
+{
+    "version": "retail",
+    "label": "Retail (1.0.1.0, SecuROM)",
+    "sha256": "c6692e71956e2ce86c93b11816c9280ba72e771403a9261a6a516f3aa1c7b568",
+    "image_base": "0x00400000",
+
+    "symbols": {
+        "Logf":                     "0x010E18B0",
+        "GLog":                     "0x01F762CC",
+        "GFileManager":             "0x020317CC",
+        "GCmdLine":                 "0x02027520",
+        "Parse":                    "0x010DF4D0",
+        "FOutputDeviceFile.FileArchive": "0x01FB09A4",
+        "FOutputDeviceFile.Filename": "0x01FB09A8",
+        "FmtPercentS":              "0x01CD2750",
+        "GSystemSettings.ScreenPercentage": "0x02013950",
+        "Const_001f":               "0x01AA4E74",
+        "Const_1f":                 "0x01A96AA8",
+        "Const_100f":               "0x01A99568",
+        "Const_half":               "0x01A9B330",
+        "Const_u2f":                "0x01A9B338",
+        "GSystemSettings":          "0x020137D8",
+        "NeedsUpscale":             "0x00B319B0",
+        "Allocate":                 "0x00CE8BF0"
+    },
+
+    "hooks": {
+        "execLog": {
+            "pattern": "8B 44 24 14 3B C7",
+            "size": 6,
+            "return_offset": 6,
+            "scan_start": "0x0114E1F7",
+            "scan_size": 512
+        },
+        "scaleViewport_centering": {
+            "pattern": "2B 0F 5F D1 E9 03 CD 89 0B 2B 16",
+            "size": 26,
+            "return_offset": 26,
+            "scan_start": "0x00B31D13",
+            "scan_size": 512
+        },
+        "computeUpscale_centering": {
+            "pattern": "DB 01 8B 01 85 C0 7D 06 D8 05",
+            "size": 96,
+            "return_offset": 96,
+            "scan_start": "0x00B31DD2",
+            "scan_size": 512
+        },
+        "motionBlur_setup": {
+            "pattern": "83 BE 4C 02 00 00 00 74 72 8B 4C 24 14 F6 41 04 08 74 5C",
+            "size": 19,
+            "return_offset": 19,
+            "scan_start": "0x00FE0C9A",
+            "scan_size": 512
+        },
+        "motionBlur_teardown": {
+            "pattern": "39 86 4C 02 00 00 74 36 8B 4C 24 14 F6 41 04 08 75 51",
+            "size": 18,
+            "return_offset": 18,
+            "scan_start": "0x00FE0F86",
+            "scan_size": 512
+        }
+    },
+
+    "inline_patches": {
+        "needsUpscale_nop_gate": {
+            "va": "0x00B319B7",
+            "old": "74 20",
+            "new": "90 90"
+        },
+        "needsUpscale_jbe_to_je": {
+            "va": "0x00B319C8",
+            "old": "76 0F",
+            "new": "74 0F"
+        },
+        "scaleViewport_nop_clamp": {
+            "va": "0x00B31D87",
+            "old": "72 07",
+            "new": "90 90"
+        },
+        "computeUpscale_nop_gate": {
+            "va": "0x00B31E48",
+            "old": "0F 84 E8 00 00 00",
+            "new": "90 90 90 90 90 90"
+        },
+        "computeUpscale_jbe_to_je": {
+            "va": "0x00B31E5E",
+            "old": "86",
+            "new": "84"
+        },
+        "computeUpscale_remove_clamp": {
+            "va": "0x00B31E98",
+            "old": "73 03",
+            "new": "EB 03"
+        },
+        "renderTargetSize": {
+            "va": "0x00BC70BE",
+            "old": "8B 48 0C 8B 11 8B 42 08 FF D0 8B 0B 89 43 3C 8B 49 0C 8B 11 8B 42 0C FF D0",
+            "new": "F3 0F 2C 43 2C 89 43 3C F3 0F 2C 43 30 90 90 90 90 90 90 90 90 90 90 90 90"
+        },
+        "initViews_nop_x": {
+            "va": "0x00CE7EE2",
+            "old": "7F 02",
+            "new": "90 90"
+        },
+        "initViews_nop_y": {
+            "va": "0x00CE7F08",
+            "old": "7F 02",
+            "new": "90 90"
+        },
+        "allocate_site_base_renderer": {
+            "va": "0x00CE6D9B",
+            "old": "E8 50 1E 00 00"
+        },
+        "allocate_site_rt_realloc": {
+            "va": "0x00CE9AAD",
+            "old": "E8 3E F1 FF FF"
+        },
+        "allocate_site_rt_setup": {
+            "va": "0x00CEA65A",
+            "old": "E8 91 E5 FF FF"
+        },
+        "allocate_site_deferred_a": {
+            "va": "0x00F9C01D",
+            "old": "E8 CE CB D4 FF"
+        },
+        "allocate_site_deferred_b": {
+            "va": "0x00F9C63D",
+            "old": "E8 AE C5 D4 FF"
+        },
+        "allocate_site_deferred_shading": {
+            "va": "0x01083050",
+            "old": "E8 9B 5B C6 FF"
+        },
+        "multiInstance_bypass": {
+            "va": "0x01127FCD",
+            "old": "BF 01 00 00 00",
+            "new": "BF 00 00 00 00"
+        },
+        "ambiguousPackage_bypass": {
+            "va": "0x010EA60A",
+            "old": "74 40",
+            "new": "90 90"
+        }
+    }
+}
