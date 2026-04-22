@@ -1,5 +1,32 @@
 ## Changelog
 
+## [4.4.1] - 2026-04-23
+
+### Fixed
+- Fixed an oversight where the new TdGame patcher infrastructure was not accounting for file edits made from earlier Tweaks versions
+
+## [4.4.0] - 2026-04-22
+
+### Added
+- Graphics Tweaks
+  - Supersampling rendering has been introduced. The render resolution slider can now be increased up to 200% to provide downscaling at 4x pixel density for even further reduced aliasing. The supersampling patch will automatically apply when setting a render resolution value above 100%.
+- A new "Other Patches" section for power users has been introduced
+  - Logging - Restores the game's disabled logging system
+  - Multi-instance - Allows multiple instances of the game to be running at the same time
+  - Ambiguous package warning message bypasser
+- A new Audio Backend option - OpenAL Soft HRTF
+  - The HRTF option provides realistic 3D spatial audio through stereo headphones, and utilises a special proxy that intercepts UE3's audio stream by splitting the signal path so that HRTF is only applied to actual 3D world sounds. Without the proxy, standard OpenAL Soft HRTF colours everything - including music, dialogue, and Ul effects - which can sound unnatural. With the proxy, non-spatial audio bypasses HRTF entirely and plays back cleanly, while world-space sounds keep their full HRTF spatialisation.
+
+- Other Tweaks
+  - A patch for skipping the dead EA online login attempt for Time Trials and Speedruns has been added. With this enabled, the three intermediate connection scenes are skipped and the game goes straight to the offline mode.
+
+### Changed
+
+- Graphics Tweaks
+  - New implementation of the FOV and Resolution settings which now handles camera properties dynamically. As a result, the manual aspect ratio entry is no longer required when entering FOV - instead, aspect ratio and HOR+/VERT+ scaling are now automatically computed based on the selected resolution and dynamically adjust when changing resolution mid-game.
+    - FOV-agnostic sensitivity and near-clip plane compensation are also handled dynamically.
+    - A render target fix is also applied to address the long-standing white screen issue at narrow aspect ratios when the resolution exceeds 720p. For example, Steam Deck users can now play the game at their display's native resolution and with an unlocked aspect ratio without these issues anymore.
+
 ## [4.3.0] - 2026-04-11
 
 ### Added

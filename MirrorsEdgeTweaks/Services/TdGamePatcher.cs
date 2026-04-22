@@ -60,7 +60,8 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] tzsBc = new byte[tzsBss];
                 Buffer.BlockCopy(data, tzsBcStart, tzsBc, 0, tzsBss);
 
-                var clipResult = ExtractContextCallPattern(tzsBc, BytecodeBuilder.F32(10.0f));
+                var clipResult = ExtractContextCallPattern(tzsBc, BytecodeBuilder.F32(10.0f))
+                    ?? ExtractContextCallPattern(tzsBc, null);
                 if (clipResult == null)
                     throw new InvalidOperationException("Cannot find SetNearClippingPlane(10.0) in ToggleZoomState");
 
@@ -702,7 +703,8 @@ namespace MirrorsEdgeTweaks.Services
             int tzsBss2 = (int)PackageSplicer.ReadBSS(data, tzsExp.Value.serialOffset);
             byte[] tzsBc2 = new byte[tzsBss2];
             Buffer.BlockCopy(data, tzsBcStart2, tzsBc2, 0, tzsBss2);
-            var clipExtract = ExtractContextCallPattern(tzsBc2, BytecodeBuilder.F32(10.0f));
+            var clipExtract = ExtractContextCallPattern(tzsBc2, BytecodeBuilder.F32(10.0f))
+                ?? ExtractContextCallPattern(tzsBc2, null);
             if (clipExtract != null)
                 r.SncpVfunc = clipExtract.Value.vfunc;
 
@@ -786,15 +788,20 @@ namespace MirrorsEdgeTweaks.Services
         // Pattern extraction
 
         static (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)?
-            ExtractContextCallPattern(byte[] bc, byte[] floatPattern)
+            ExtractContextCallPattern(byte[] bc, byte[]? floatPattern)
         {
+            (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? lastMatch = null;
+
             for (int off = 0; off < bc.Length - 5; off++)
             {
                 if (bc[off] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                bool match = true;
-                for (int j = 0; j < floatPattern.Length; j++)
-                    if (bc[off + 1 + j] != floatPattern[j]) { match = false; break; }
-                if (!match) continue;
+                if (floatPattern != null)
+                {
+                    bool match = true;
+                    for (int j = 0; j < floatPattern.Length; j++)
+                        if (bc[off + 1 + j] != floatPattern[j]) { match = false; break; }
+                    if (!match) continue;
+                }
 
                 for (int ctxOff = off - 1; ctxOff >= Math.Max(0, off - 50); ctxOff--)
                 {
@@ -808,23 +815,34 @@ namespace MirrorsEdgeTweaks.Services
                     if (bc[p] != BytecodeBuilder.OP_VIRT_FUNC) continue;
                     byte[] vfunc = bc[p..(p + 9)];
                     int endOff = off + 5 + 1;
-                    return (ctxOff, endOff - ctxOff, dcast, powner, vfunc);
+
+                    if (floatPattern != null)
+                        return (ctxOff, endOff - ctxOff, dcast, powner, vfunc);
+
+                    // Collect the last float match so we get the
+                    // second SetNearClippingPlane call (the unzoom path).
+                    lastMatch = (ctxOff, endOff - ctxOff, dcast, powner, vfunc);
+                    break;
                 }
             }
-            return null;
+            return lastMatch;
         }
 
         static (int letStart, int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf, byte[] outerCtx)?
             FindFovScaleLet(byte[] bc)
         {
             byte[] flt = BytecodeBuilder.F32(BytecodeBuilder.K_SENS);
+
+            // Try exact K_SENS match first, otherwise match any FloatConst
+            (int, int, byte[], byte[], byte[], byte[])? fallback = null;
+
             for (int off = 0; off < bc.Length - 5; off++)
             {
                 if (bc[off] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                bool m = true;
+
+                bool exactMatch = true;
                 for (int j = 0; j < flt.Length; j++)
-                    if (bc[off + 1 + j] != flt[j]) { m = false; break; }
-                if (!m) continue;
+                    if (bc[off + 1 + j] != flt[j]) { exactMatch = false; break; }
 
                 int endFpPos = off + 5;
                 if (endFpPos >= bc.Length || bc[endFpPos] != BytecodeBuilder.OP_END_FP) continue;
@@ -847,10 +865,15 @@ namespace MirrorsEdgeTweaks.Services
                     byte[] getfovVf = bc[p..(p + 9)];
                     int ctxEnd = p + 9 + 1;
                     byte[] outerCtx = bc[ctxStart..ctxEnd];
-                    return (back, letEnd, fovscaleLocal, outerVar, getfovVf, outerCtx);
+
+                    if (exactMatch)
+                        return (back, letEnd, fovscaleLocal, outerVar, getfovVf, outerCtx);
+
+                    fallback ??= (back, letEnd, fovscaleLocal, outerVar, getfovVf, outerCtx);
+                    break;
                 }
             }
-            return null;
+            return fallback;
         }
 
         static (int startzoomOff, int zoomfovOff, byte[] controllerCtx)?
@@ -903,17 +926,14 @@ namespace MirrorsEdgeTweaks.Services
 
             if (ifInsertOff == -1 || localFov == null || localRate == null || instDefaultfov == null) return null;
 
-            byte[] float20 = BytecodeBuilder.F32(20.0f);
             int elseFloatOff = -1;
             for (int off = ifInsertOff; off < bc.Length - 5; off++)
             {
-                if (bc[off] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                bool m = true;
-                for (int j = 0; j < float20.Length; j++)
-                    if (bc[off + 1 + j] != float20[j]) { m = false; break; }
-                if (!m) continue;
-                elseFloatOff = off;
-                break;
+                if (bc[off] == BytecodeBuilder.OP_FLOAT_CONST)
+                {
+                    elseFloatOff = off;
+                    break;
+                }
             }
             if (elseFloatOff == -1) return null;
 
