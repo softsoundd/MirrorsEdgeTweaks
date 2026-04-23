@@ -2,11 +2,11 @@
 
 A tool for modding, tweaking settings and providing game fixes for Mirror's Edge.
 
-![Version](https://img.shields.io/badge/version-4.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-4.4.1-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
-<img width="636" height="793" alt="image" src="https://github.com/user-attachments/assets/65ff91c4-13ec-41f4-a480-6f1def75484e" />
+<img width="636" height="793" alt="image" src="https://github.com/user-attachments/assets/f79fcda7-cfc6-40d5-96e2-77e58b896255" />
 
 ## Features
 - Developer console unlocker
