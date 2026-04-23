@@ -12,10 +12,10 @@
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		
 		<!-- Version Information -->
-		<Version>4.4.1</Version>
-		<AssemblyVersion>4.4.1.0</AssemblyVersion>
-		<FileVersion>4.4.1.0</FileVersion>
-		<InformationalVersion>4.4.1</InformationalVersion>
+		<Version>4.4.2</Version>
+		<AssemblyVersion>4.4.2.0</AssemblyVersion>
+		<FileVersion>4.4.2.0</FileVersion>
+		<InformationalVersion>4.4.2</InformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
