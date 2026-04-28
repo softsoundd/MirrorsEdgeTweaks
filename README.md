@@ -11,7 +11,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ## Features
 - Developer console unlocker
 - Command line argument unlocker
-- Unlocked configs patch (a nicer alternative to [MEMLA](https://github.com/btbd/memla))
+- Unlocked configs patch (a persistent alternative to [MEMLA](https://github.com/btbd/memla))
 - TdGame version selector
 - Tweaks Scripts installer (custom UnrealScript package including cheats and trainer functions, Softimer, etc.)
 - Persistent FOV with additional viewmodel and input fixes
@@ -23,7 +23,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 - Xbox/PS3 gamepad button prompt swapper
 - Uniform mouse sensitivity, cm/360° converter
 - Game language switcher
-- OpenAL Soft audio upgrader
+- OpenAL Soft audio upgrader + bespoke UE3 HRTF support
 - Various other QoL
 
 ## Requirements
@@ -35,7 +35,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ## Installation
 
 1. Download the latest release from the [Releases](../../releases) page
-2. Extract the zip contents to a location of your choice
+2. Extract the zip to a location of your choice
 3. Run `Mirror's Edge Tweaks.exe`
 4. Click **"Select Game Directory"** and navigate to your Mirror's Edge installation folder. Typical install locations:
    - Steam: `C:\Program Files (x86)\Steam\steamapps\common\mirrors edge`
@@ -87,8 +87,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Changelog
 
 Refer to the [CHANGELOG](CHANGELOG.md) file for changes.
-
----
-
-Made with ❤️ by softsoundd
-
