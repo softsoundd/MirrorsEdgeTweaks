@@ -26,13 +26,15 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 - OpenAL Soft audio upgrader + bespoke UE3 HRTF support
 - Various other QoL
 
+For further information and guides, refer to the [wiki](https://github.com/softsoundd/MirrorsEdgeTweaks/wiki).
+
 ## Requirements
 
 - **OS**: Windows 10 or later
 - **.NET Runtime**: .NET 8.0 or later
 - **Game**: Mirror's Edge (Steam, GOG, EA App/Xbox Game Pass for PC, Retail platforms). All versions supported (1.0.0.0 - 1.1.0.0 DLC)
 
-## Installation
+## Setup
 
 1. Download the latest release from the [Releases](../../releases) page
 2. Extract the zip to a location of your choice
@@ -69,14 +71,6 @@ dotnet build --configuration Release
 - **NativeSharpLzo** (v0.3.5)
 - **MaterialDesignThemes** (v5.2.1)
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - EA DICE for creating Mirror's Edge
@@ -86,4 +80,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-Refer to the [CHANGELOG](CHANGELOG.md) file for changes.
+Refer to [CHANGELOG](CHANGELOG.md) for changes.
