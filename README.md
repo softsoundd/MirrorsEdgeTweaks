@@ -26,7 +26,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 - OpenAL Soft audio upgrader + bespoke UE3 HRTF support
 - Various other QoL
 
-For further information and guides, refer to the [wiki](https://github.com/softsoundd/MirrorsEdgeTweaks/wiki/Mirror's-Edge-Tweaks-Wiki).
+For further information and guides, refer to the [wiki](https://github.com/softsoundd/MirrorsEdgeTweaks/wiki).
 
 ## Requirements
 
