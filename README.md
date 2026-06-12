@@ -72,11 +72,6 @@ dotnet build --configuration Release
 # The executable will be in: MirrorsEdgeTweaks/bin/Release/net8.0-windows/
 ```
 
-### Dependencies
-- **Eliot.UELib** (v1.12.0)
-- **NativeSharpLzo** (v0.3.5)
-- **MaterialDesignThemes** (v5.2.1)
-
 ## Acknowledgments
 
 - EA DICE for creating Mirror's Edge
