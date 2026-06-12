@@ -6,7 +6,13 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
-<img width="636" height="793" alt="image" src="https://github.com/user-attachments/assets/f79fcda7-cfc6-40d5-96e2-77e58b896255" />
+<img width="1280" height="720" alt="MET" src="https://github.com/user-attachments/assets/3c072b76-7266-4468-bda7-922386558c7c" />
+
+&nbsp;
+
+[![Ko-fi](https://img.shields.io/badge/support_me_on_ko--fi-F16061?style=for-the-badge&logo=kofi&logoColor=f5f5f5)](https://ko-fi.com/softsoundd)
+
+If you like what I do and would like to support my work, please consider visiting my Ko-fi page.
 
 ## Features
 - Developer console unlocker
