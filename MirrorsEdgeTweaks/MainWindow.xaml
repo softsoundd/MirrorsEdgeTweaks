@@ -2256,7 +2256,7 @@
         </TabControl>
         </Border>
 
-        <StatusBar Grid.Row="4">
+        <StatusBar Grid.Row="4" BorderThickness="0">
             <StatusBarItem VerticalAlignment="Center">
                 <TextBlock x:Name="StatusTextBlock"
                            Text="Ready. Please select your Mirror's Edge game directory."

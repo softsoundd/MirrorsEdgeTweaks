@@ -827,6 +827,7 @@ namespace MirrorsEdgeTweaks
             using (var dialog = new System.Windows.Forms.FolderBrowserDialog())
             {
                 dialog.Description = "Select the main Mirror's Edge game directory";
+                dialog.UseDescriptionForTitle = true;
                 if (!string.IsNullOrEmpty(_config.GameDirectoryPath))
                 {
                     dialog.SelectedPath = _config.GameDirectoryPath;
