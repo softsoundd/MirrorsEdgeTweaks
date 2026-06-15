@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+using MaterialDesignThemes.Wpf;
 using System.Windows;
 using System.Windows.Media;
-using MaterialDesignThemes.Wpf;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

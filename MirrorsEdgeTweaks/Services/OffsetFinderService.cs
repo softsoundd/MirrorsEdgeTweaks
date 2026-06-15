@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using MirrorsEdgeTweaks.Models;
 using UELib;
 using UELib.Core;
 using UELib.Flags;
@@ -278,7 +273,14 @@ namespace MirrorsEdgeTweaks.Services
 
             package.Stream.Position = offset;
             byte[] buffer = new byte[4];
-            package.Stream.Read(buffer, 0, 4);
+            int totalRead = 0;
+            while (totalRead < buffer.Length)
+            {
+                int bytesRead = package.Stream.Read(buffer, totalRead, buffer.Length - totalRead);
+                if (bytesRead == 0) return 0f;
+                totalRead += bytesRead;
+            }
+
             return BitConverter.ToSingle(buffer, 0);
         }
     }

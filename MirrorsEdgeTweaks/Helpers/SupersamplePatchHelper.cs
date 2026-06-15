@@ -1,8 +1,6 @@
-using System;
-using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.IO;
 using MirrorsEdgeTweaks.Services;
+using System.Buffers.Binary;
+using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

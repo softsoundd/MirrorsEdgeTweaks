@@ -1,7 +1,5 @@
-using System;
 using System.IO;
 using UELib;
-using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Services
 {

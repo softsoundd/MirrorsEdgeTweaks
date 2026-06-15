@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
+using SharpLzo;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Text;
-using SharpLzo;
 
 namespace MirrorsEdgeTweaks.Services
 {

@@ -1,8 +1,5 @@
-using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Media;
-using MirrorsEdgeTweaks.Models;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {

@@ -1,13 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using MirrorsEdgeTweaks.Models;
-using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Helpers;
+using System.IO;
 using UELib;
 using UELib.Core;
-using UELib.Flags;
 using UELib.Types;
 
 namespace MirrorsEdgeTweaks.Services

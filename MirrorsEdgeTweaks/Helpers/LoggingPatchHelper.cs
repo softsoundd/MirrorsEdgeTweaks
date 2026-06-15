@@ -1,9 +1,7 @@
-using System;
+using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace MirrorsEdgeTweaks.Services
 {
     // Low level UE3 bytecode construction for Mirror's Edge (v536)

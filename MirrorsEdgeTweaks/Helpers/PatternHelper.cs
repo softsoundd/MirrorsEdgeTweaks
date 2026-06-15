@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace MirrorsEdgeTweaks.Helpers
 {
     public static class PatternHelper

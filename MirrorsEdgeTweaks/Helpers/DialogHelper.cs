@@ -1,9 +1,7 @@
-using System;
-using System.Threading.Tasks;
+using MaterialDesignThemes.Wpf;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Documents;
-using System.Text.RegularExpressions;
-using MaterialDesignThemes.Wpf;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

@@ -1,11 +1,9 @@
-using System;
+using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

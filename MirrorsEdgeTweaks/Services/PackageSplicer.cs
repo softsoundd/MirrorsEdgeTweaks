@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace MirrorsEdgeTweaks.Services
 {
     // Shared splice/fixup infrastructure for UE3 bytecode patching.
