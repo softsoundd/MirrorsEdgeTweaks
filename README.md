@@ -69,7 +69,7 @@ dotnet restore
 # Build the solution
 dotnet build --configuration Release
 
-# The executable will be in: MirrorsEdgeTweaks/bin/Release/net8.0-windows/
+# The executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/
 ```
 
 ## Acknowledgments

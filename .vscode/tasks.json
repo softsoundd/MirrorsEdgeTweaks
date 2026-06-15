@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/MirrorsEdgeTweaks.sln",
+                "${workspaceFolder}/MirrorsEdgeTweaks.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/MirrorsEdgeTweaks.sln",
+                "${workspaceFolder}/MirrorsEdgeTweaks.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -33,7 +33,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/MirrorsEdgeTweaks.sln"
+                "${workspaceFolder}/MirrorsEdgeTweaks.slnx"
             ],
             "problemMatcher": "$msCompile"
         }
