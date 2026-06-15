@@ -54,7 +54,7 @@ For further information and guides, refer to the [wiki](https://github.com/softs
 
 ### Prerequisites
 - Visual Studio 2022 or later
-- .NET 8.0 SDK
+- .NET 10.0 SDK
 - Windows 10/11
 
 ### Build Steps
