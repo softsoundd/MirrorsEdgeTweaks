@@ -37,7 +37,7 @@ For further information and guides, refer to the [wiki](https://github.com/softs
 ## Requirements
 
 - **OS**: Windows 10 or later
-- **.NET Runtime**: .NET 8.0 or later
+- **.NET Runtime**: .NET 10.0 or later
 - **Game**: Mirror's Edge (Steam, GOG, EA App/Xbox Game Pass for PC, Retail platforms). All versions supported (1.0.0.0 - 1.1.0.0 DLC)
 
 ## Setup
