@@ -54,7 +54,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     data.AsSpan(foff, execDef.Pattern.Length).SequenceEqual(execDef.Pattern))
                     return LoggingPatchState.Unpatched;
             }
-            catch {}
+            catch { }
 
             // Pattern replaced: scan the same window for our hook signature (E9 + NOP pad)
             int startOff = (int)(execDef.ScanStart - ImageBase);

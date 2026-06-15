@@ -1,6 +1,7 @@
 using System;
 using System.IO;
-using System.Collections.Generic;
+using UELib;
+using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Services
 {
@@ -9,43 +10,15 @@ namespace MirrorsEdgeTweaks.Services
     // Bidirectional patcher for Engine.u
     public static class EnginePatcher
     {
-        // UpdateCamera function start
-        static readonly byte[] FUNC_START = { 0x07, 0x5F, 0x00, 0x2D, 0x01, 0xFF, 0x0A, 0x00, 0x00 };
-
-        // Phase 1 constants
-        const int BC_ASSIGN = 0x0A8;
+        // bConstrainAspectRatio bool token offset inside UpdateCamera (memory offset, stable).
         const int BC_BOOL = 0x066;
+
         const int UNPATCHED_BSS = 739;
         const int PHASE1_NET = 11;
-
-        // Property/local/import indices
-        static readonly byte[] LOCAL_BLENDPCT   = { 0x00, 0x42, 0x0F, 0x00, 0x00 };
-        static readonly byte[] LOCAL_NEWPOV     = { 0x00, 0x44, 0x0F, 0x00, 0x00 };
-        static readonly byte[] INST_PCOWNER     = { 0x01, 0x07, 0x0B, 0x00, 0x00 };
-        static readonly byte[] INST_MYHUD       = { 0x01, 0xE9, 0x07, 0x00, 0x00 };
-        static readonly byte[] INST_SIZEX       = { 0x01, 0x36, 0x23, 0x00, 0x00 };
-        static readonly byte[] INST_SIZEY       = { 0x01, 0x35, 0x23, 0x00, 0x00 };
-        static readonly byte[] INST_DEFAULT_FOV = { 0x01, 0x05, 0x0B, 0x00, 0x00 };
-        static readonly byte[] INST_DEFAULT_AR  = { 0x01, 0xFC, 0x0A, 0x00, 0x00 };
-        static readonly byte[] IMP_FOV  = BitConverter.GetBytes(-57);
-        static readonly byte[] IMP_TPOV = BitConverter.GetBytes(-151);
-
-        // Phase 1 old prefix (Let ConstrainedAspectRatio = FloatConst(...))
-        static readonly byte[] P1_OLD_PREFIX = { 0x0F, 0x01, 0xFD, 0x0A, 0x00, 0x00, 0x1E };
         const int P1_OLD_LEN = 11;
+        const int BLOB_A_SIZE = 40;
 
-        // Phase 1 new: Let ConstrainedAspectRatio = ViewTarget.AspectRatio (22 bytes)
-        static readonly byte[] P1_NEW = {
-            0x0F, 0x01, 0xFD, 0x0A, 0x00, 0x00,
-            0x35, 0x0C, 0x0B, 0x00, 0x00,
-            0x10, 0x0B, 0x00, 0x00, 0x00, 0x00,
-            0x01, 0xF2, 0x0A, 0x00, 0x00
-        };
-
-        // ConstrainedAspectRatio property token for stock pattern reconstruction
-        static readonly byte[] AR_PROPERTY_TOKEN = { 0x01, 0xFD, 0x0A, 0x00, 0x00 };
-
-        // Phase 1 jump table: (bc_offset, expected_target) for targets >= 0x0B3
+        // Phase 1 jump table: (bc_offset, expected_target) for targets >= 0x0B3.
         static readonly (int bcOff, ushort oldTarget)[] P1_JUMPS = {
             (0x0B3, 0x02D5), (0x0F8, 0x026F), (0x13C, 0x015B), (0x158, 0x0224),
             (0x15B, 0x0188), (0x185, 0x0224), (0x188, 0x01BB), (0x1B8, 0x0224),
@@ -53,17 +26,96 @@ namespace MirrorsEdgeTweaks.Services
             (0x26C, 0x02D5),
         };
 
-        // P2 idempotency signature
-        static byte[] P2_SIG => BytecodeBuilder.GetP2Signature(INST_DEFAULT_AR);
+        // Per file resolved object references and the patterns built from them.
+        sealed class Resolved
+        {
+            public int SerialOffset;
 
-        const int BLOB_A_SIZE = 40;
+            public byte[] InstDefaultFov = Array.Empty<byte>();
+            public byte[] InstDefaultAr = Array.Empty<byte>();
+            public byte[] InstPcOwner = Array.Empty<byte>();
+            public byte[] InstMyHud = Array.Empty<byte>();
+            public byte[] InstSizeX = Array.Empty<byte>();
+            public byte[] InstSizeY = Array.Empty<byte>();
+            public byte[] ImpFov = Array.Empty<byte>();
+            public byte[] ImpTpov = Array.Empty<byte>();
+            public byte[] LocalBlendPct = Array.Empty<byte>();
+            public byte[] LocalNewPov = Array.Empty<byte>();
+
+            public byte[] ArPropertyToken = Array.Empty<byte>();  // InstVar(ConstrainedAspectRatio)
+            public byte[] P1Old = Array.Empty<byte>();            // Let CAR = FloatConst (find prefix)
+            public byte[] P1New = Array.Empty<byte>();            // Let CAR = ViewTarget.AspectRatio
+            public byte[] P2Sig = Array.Empty<byte>();            // GreaterThan + DefaultAR + FloatConst
+        }
+
+        static Resolved Resolve(UnrealPackage pkg)
+        {
+            var uc = UePackageLocator.FindFunction(pkg, "Camera", "UpdateCamera")
+                ?? throw new InvalidOperationException("Cannot find Camera.UpdateCamera in Engine.u");
+
+            var r = new Resolved { SerialOffset = uc.SerialOffset };
+
+            int car = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "ConstrainedAspectRatio", "Camera"));
+            int defaultFov = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "DefaultFOV", "Camera"));
+            int defaultAr = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "DefaultAspectRatio", "Camera"));
+            int pcOwner = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "PCOwner", "Camera"));
+            int myHud = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "myHUD", "PlayerController"));
+            int sizeX = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "SizeX", "HUD"));
+            int sizeY = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "SizeY", "HUD"));
+            int viewTarget = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "ViewTarget", "Camera"));
+            var aspectRatioObj = UePackageLocator.FindExportObject(pkg, "AspectRatio", "TViewTarget");
+            int aspectRatio = UePackageLocator.ObjRef(aspectRatioObj);
+            int tViewTarget = aspectRatioObj != null ? UePackageLocator.ObjRef(aspectRatioObj.Outer) : 0;
+            int fovImp = UePackageLocator.FindImportObjRef(pkg, "FOV", "FloatProperty");
+            int tpovImp = UePackageLocator.FindImportObjRef(pkg, "TPOV", "ScriptStruct");
+            // UpdateCamera locals (children of the function export), resolved by name so we
+            // never depend on decompiling the (possibly already patched) function body.
+            int blendPct = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "BlendPct", "UpdateCamera"));
+            int newPov = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "NewPOV", "UpdateCamera"));
+
+            if (car == 0 || defaultFov == 0 || defaultAr == 0 || pcOwner == 0 || myHud == 0
+                || sizeX == 0 || sizeY == 0 || viewTarget == 0 || aspectRatio == 0 || tViewTarget == 0
+                || fovImp == 0 || tpovImp == 0 || blendPct == 0 || newPov == 0)
+                throw new InvalidOperationException("Cannot resolve Engine.u camera properties");
+
+            r.InstDefaultFov = BytecodeBuilder.InstVar(defaultFov);
+            r.InstDefaultAr = BytecodeBuilder.InstVar(defaultAr);
+            r.InstPcOwner = BytecodeBuilder.InstVar(pcOwner);
+            r.InstMyHud = BytecodeBuilder.InstVar(myHud);
+            r.InstSizeX = BytecodeBuilder.InstVar(sizeX);
+            r.InstSizeY = BytecodeBuilder.InstVar(sizeY);
+            r.ImpFov = BytecodeBuilder.I32(fovImp);
+            r.ImpTpov = BytecodeBuilder.I32(tpovImp);
+            r.LocalBlendPct = BytecodeBuilder.LocalVar(blendPct);
+            r.LocalNewPov = BytecodeBuilder.LocalVar(newPov);
+
+            // Index dependent patterns rebuilt from the resolved object references.
+            r.ArPropertyToken = BytecodeBuilder.InstVar(car);
+            r.P1Old = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_LET }, r.ArPropertyToken,
+                new byte[] { BytecodeBuilder.OP_FLOAT_CONST });
+            r.P1New = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_LET }, r.ArPropertyToken,
+                BytecodeBuilder.StructMemberFov(
+                    BytecodeBuilder.I32(aspectRatio), BytecodeBuilder.I32(tViewTarget),
+                    BytecodeBuilder.InstVar(viewTarget)));
+            r.P2Sig = BytecodeBuilder.GetP2Signature(r.InstDefaultAr);
+
+            return r;
+        }
 
         public static EnginePatchState DetectState(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
-            bool hasP1New = BytecodeBuilder.FindPattern(data, P1_NEW) != -1;
-            bool hasP2Sig = BytecodeBuilder.FindPattern(data, P2_SIG) != -1;
+            using var pkg = UePackageLocator.Load(enginePath);
+            var r = Resolve(pkg);
+            return DetectFromResolved(data, r);
+        }
 
+        static EnginePatchState DetectFromResolved(byte[] data, Resolved r)
+        {
+            bool hasP1New = BytecodeBuilder.FindPattern(data, r.P1New) != -1;
+            bool hasP2Sig = BytecodeBuilder.FindPattern(data, r.P2Sig) != -1;
             if (hasP2Sig) return EnginePatchState.FullyPatched;
             if (hasP1New) return EnginePatchState.Phase1Only;
             return EnginePatchState.Unpatched;
@@ -72,18 +124,20 @@ namespace MirrorsEdgeTweaks.Services
         public static void Apply(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
+            Resolved r;
+            using (var pkg = UePackageLocator.Load(enginePath))
+            {
+                r = Resolve(pkg);
+            }
+
             int origLen = data.Length;
 
-            bool hasP1New = BytecodeBuilder.FindPattern(data, P1_NEW) != -1;
-            bool hasP2Sig = BytecodeBuilder.FindPattern(data, P2_SIG) != -1;
+            bool hasP1New = BytecodeBuilder.FindPattern(data, r.P1New) != -1;
+            bool hasP2Sig = BytecodeBuilder.FindPattern(data, r.P2Sig) != -1;
             if (hasP2Sig) return; // already fully patched
 
-            int funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-            if (funcPos == -1)
-                throw new InvalidOperationException("Cannot find UpdateCamera function start in Engine.u");
-
-            int bcStart = funcPos;
-            int exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
+            int exportStart = r.SerialOffset;
+            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
             uint bss = PackageSplicer.ReadBSS(data, exportStart);
             var hdr = PackageSplicer.ParseHeader(data);
 
@@ -93,7 +147,7 @@ namespace MirrorsEdgeTweaks.Services
                 if (bss != UNPATCHED_BSS)
                     throw new InvalidOperationException($"Engine.u BSS mismatch: expected {UNPATCHED_BSS}, got {bss}");
 
-                int p1Pos = BytecodeBuilder.FindPattern(data, P1_OLD_PREFIX, bcStart, bcStart + (int)bss);
+                int p1Pos = BytecodeBuilder.FindPattern(data, r.P1Old, bcStart, bcStart + (int)bss);
                 if (p1Pos == -1)
                     throw new InvalidOperationException("Cannot find ConstrainedAspectRatio assignment in Engine.u");
 
@@ -116,7 +170,7 @@ namespace MirrorsEdgeTweaks.Services
                 PackageSplicer.WriteBSS(data, exportStart, (uint)(UNPATCHED_BSS + PHASE1_NET));
 
                 // Splice: replace P1_OLD (11 bytes) with P1_NEW (22 bytes)
-                data = PackageSplicer.ReplaceBytes(data, p1Pos, P1_OLD_LEN, P1_NEW);
+                data = PackageSplicer.ReplaceBytes(data, p1Pos, P1_OLD_LEN, r.P1New);
 
                 // Fix export table
                 hdr = PackageSplicer.ParseHeader(data);
@@ -124,10 +178,7 @@ namespace MirrorsEdgeTweaks.Services
                 origLen = data.Length;
             }
 
-            // Phase 2: HOR+/VERT+ FOV scaling
-            funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-            bcStart = funcPos;
-            exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
+            // Phase 2: HOR+/VERT+ FOV scaling (function start is unchanged by Phase 1)
             bss = PackageSplicer.ReadBSS(data, exportStart);
 
             if (bss != UNPATCHED_BSS + PHASE1_NET)
@@ -149,12 +200,12 @@ namespace MirrorsEdgeTweaks.Services
             int pointBBc = fcPos - bcStart;
             int pointBFile = fcPos;
 
-            byte[] blobA = BytecodeBuilder.BuildBlobA(pointABc, INST_DEFAULT_FOV, INST_DEFAULT_AR);
+            byte[] blobA = BytecodeBuilder.BuildBlobA(pointABc, r.InstDefaultFov, r.InstDefaultAr);
             int blobBBc = pointBBc + blobA.Length;
             byte[] blobB = BytecodeBuilder.BuildBlobB(blobBBc,
-                LOCAL_BLENDPCT, LOCAL_NEWPOV, INST_PCOWNER, INST_MYHUD,
-                INST_SIZEX, INST_SIZEY, INST_DEFAULT_FOV,
-                IMP_FOV, IMP_TPOV);
+                r.LocalBlendPct, r.LocalNewPov, r.InstPcOwner, r.InstMyHud,
+                r.InstSizeX, r.InstSizeY, r.InstDefaultFov,
+                r.ImpFov, r.ImpTpov);
             int totalP2 = blobA.Length + blobB.Length;
 
             // Fix jump targets (shift targets >= pointABc)
@@ -197,7 +248,13 @@ namespace MirrorsEdgeTweaks.Services
         public static void Remove(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
-            var state = DetectStateFromData(data);
+            Resolved r;
+            using (var pkg = UePackageLocator.Load(enginePath))
+            {
+                r = Resolve(pkg);
+            }
+
+            var state = DetectFromResolved(data, r);
             if (state == EnginePatchState.Unpatched) return;
 
             var hdr = PackageSplicer.ParseHeader(data);
@@ -206,11 +263,10 @@ namespace MirrorsEdgeTweaks.Services
             RemovePhase3(data, hdr);
 
             // Remove Phase 2
-            if (BytecodeBuilder.FindPattern(data, P2_SIG) != -1)
+            if (BytecodeBuilder.FindPattern(data, r.P2Sig) != -1)
             {
-                int funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-                int bcStart = funcPos;
-                int exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
+                int exportStart = r.SerialOffset;
+                int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
                 uint bss = PackageSplicer.ReadBSS(data, exportStart);
                 int origLen = data.Length;
 
@@ -219,10 +275,8 @@ namespace MirrorsEdgeTweaks.Services
 
                 // Compute blob B size by building it
                 var (checkVt, fillCache) = FindPhase2Patterns(bc);
-                // Blob A is always at the CheckViewTarget position (before it, but we find it via signature)
-                int p2SigPos = BytecodeBuilder.FindPattern(data, P2_SIG, bcStart, bcStart + (int)bss);
+                int p2SigPos = BytecodeBuilder.FindPattern(data, r.P2Sig, bcStart, bcStart + (int)bss);
                 // Blob A starts where the P2 signature's GreaterFF condition is in the if-body.
-                // The blob A starts 3 bytes before the condition (JumpIfNot opcode + 2 target bytes).
                 // Walk back to find the JumpIfNot that begins blob A.
                 int blobAStart = -1;
                 for (int i = p2SigPos - 1; i >= bcStart && i > p2SigPos - 50; i--)
@@ -239,9 +293,9 @@ namespace MirrorsEdgeTweaks.Services
                 int blobABc = blobAStart - bcStart;
                 int blobBBc = blobABc + BLOB_A_SIZE;
                 byte[] blobB = BytecodeBuilder.BuildBlobB(blobBBc,
-                    LOCAL_BLENDPCT, LOCAL_NEWPOV, INST_PCOWNER, INST_MYHUD,
-                    INST_SIZEX, INST_SIZEY, INST_DEFAULT_FOV,
-                    IMP_FOV, IMP_TPOV);
+                    r.LocalBlendPct, r.LocalNewPov, r.InstPcOwner, r.InstMyHud,
+                    r.InstSizeX, r.InstSizeY, r.InstDefaultFov,
+                    r.ImpFov, r.ImpTpov);
                 int totalP2 = BLOB_A_SIZE + blobB.Length;
 
                 int blobBFile = blobAStart + BLOB_A_SIZE;
@@ -250,10 +304,7 @@ namespace MirrorsEdgeTweaks.Services
                 data = PackageSplicer.RemoveBytes(data, blobBFile, blobB.Length);
                 data = PackageSplicer.RemoveBytes(data, blobAStart, BLOB_A_SIZE);
 
-                // Re-locate function and fix BSS
-                funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-                bcStart = funcPos;
-                exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
+                // Function start is unchanged; fix BSS
                 PackageSplicer.UpdateBSS(data, exportStart, -totalP2);
                 bss = PackageSplicer.ReadBSS(data, exportStart);
 
@@ -265,28 +316,23 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             // Remove Phase 1
-            if (BytecodeBuilder.FindPattern(data, P1_NEW) != -1)
+            if (BytecodeBuilder.FindPattern(data, r.P1New) != -1)
             {
                 int origLen = data.Length;
-                int funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-                int bcStart = funcPos;
-                int exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
+                int exportStart = r.SerialOffset;
+                int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
 
                 // Flip bConstrainAspectRatio back to true
                 data[bcStart + BC_BOOL] = BytecodeBuilder.OP_TRUE;
 
                 // Find P1_NEW and replace with stock P1_OLD
-                int p1Pos = BytecodeBuilder.FindPattern(data, P1_NEW, bcStart);
-                byte[] stockAr = BytecodeBuilder.BuildStockArAssignment(AR_PROPERTY_TOKEN);
-                data = PackageSplicer.ReplaceBytes(data, p1Pos, P1_NEW.Length, stockAr);
+                int p1Pos = BytecodeBuilder.FindPattern(data, r.P1New, bcStart);
+                byte[] stockAr = BytecodeBuilder.BuildStockArAssignment(r.ArPropertyToken);
+                data = PackageSplicer.ReplaceBytes(data, p1Pos, r.P1New.Length, stockAr);
 
                 // Reverse jump target shifts
-                funcPos = BytecodeBuilder.FindPattern(data, FUNC_START);
-                bcStart = funcPos;
-                exportStart = bcStart - BytecodeBuilder.SCRIPT_HDR;
                 uint bss = PackageSplicer.ReadBSS(data, exportStart);
 
-                // Shift targets back
                 foreach (var (bcOff, oldTarget) in P1_JUMPS)
                 {
                     int fp = bcStart + bcOff + 1;
@@ -328,15 +374,6 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // Private helpers
-
-        static EnginePatchState DetectStateFromData(byte[] data)
-        {
-            bool hasP1New = BytecodeBuilder.FindPattern(data, P1_NEW) != -1;
-            bool hasP2Sig = BytecodeBuilder.FindPattern(data, P2_SIG) != -1;
-            if (hasP2Sig) return EnginePatchState.FullyPatched;
-            if (hasP1New) return EnginePatchState.Phase1Only;
-            return EnginePatchState.Unpatched;
-        }
 
         static (byte[] checkVt, byte[] fillCache) FindPhase2Patterns(byte[] bc)
         {

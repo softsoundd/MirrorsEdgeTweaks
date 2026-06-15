@@ -1,5 +1,10 @@
 ## Changelog
 
+## [4.4.2] - 2026-04-24
+
+### Fixed
+- Fixed a regression introduced with the new TdGame patcher infrastructure where FOV unzooms would become stuck.
+
 ## [4.4.1] - 2026-04-23
 
 ### Fixed

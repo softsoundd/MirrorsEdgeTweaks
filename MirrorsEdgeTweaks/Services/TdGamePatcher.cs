@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UELib;
+using UELib.Core;
+using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Services
 {
@@ -19,7 +22,8 @@ namespace MirrorsEdgeTweaks.Services
         public static TdGamePatchState DetectState(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
-            return DetectStateFromData(data);
+            using var pkg = UePackageLocator.LoadHeader(tdGamePath);
+            return DetectStateCore(data, pkg);
         }
 
         public static void Reconcile(string tdGamePath, bool enableSens, bool enableClip,
@@ -44,11 +48,12 @@ namespace MirrorsEdgeTweaks.Services
             bool enableOnlineSkip = false)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
-            int origLen = data.Length;
-            var hdr = PackageSplicer.ParseHeader(data);
 
-            // Resolve indices from package structure
-            var resolved = ResolveIndices(data, hdr);
+            ResolvedIndices resolved;
+            using (var pkg = UePackageLocator.Load(tdGamePath))
+            {
+                resolved = ResolveIndices(pkg, data);
+            }
 
             // ToggleZoomState: near clip
             int clipNet = 0;
@@ -57,11 +62,8 @@ namespace MirrorsEdgeTweaks.Services
             {
                 int tzsBcStart = tzsSo + BytecodeBuilder.SCRIPT_HDR;
                 int tzsBss = (int)PackageSplicer.ReadBSS(data, tzsSo);
-                byte[] tzsBc = new byte[tzsBss];
-                Buffer.BlockCopy(data, tzsBcStart, tzsBc, 0, tzsBss);
 
-                var clipResult = ExtractContextCallPattern(tzsBc, BytecodeBuilder.F32(10.0f))
-                    ?? ExtractContextCallPattern(tzsBc, null);
+                var clipResult = resolved.ClipResult;
                 if (clipResult == null)
                     throw new InvalidOperationException("Cannot find SetNearClippingPlane(10.0) in ToggleZoomState");
 
@@ -86,14 +88,12 @@ namespace MirrorsEdgeTweaks.Services
                 int piSoAdj = piSo + (piSo > tzsSo ? clipNet : 0);
                 int piBcStart = piSoAdj + BytecodeBuilder.SCRIPT_HDR;
                 int piBss = (int)PackageSplicer.ReadBSS(data, piSoAdj);
-                byte[] piBc = new byte[piBss];
-                Buffer.BlockCopy(data, piBcStart, piBc, 0, piBss);
 
-                var fovResult = FindFovScaleLet(piBc);
+                var fovResult = resolved.FovResult;
                 if (fovResult == null)
                     throw new InvalidOperationException("Cannot find FOVScale LET in PlayerInput");
 
-                var (_, letEnd, fovscaleLocal, outerVar, getfovVf, _) = fovResult.Value;
+                var (letEnd, fovscaleLocal, outerVar, getfovVf) = fovResult.Value;
                 int insertBc = letEnd;
                 int insertFile = piBcStart + insertBc;
 
@@ -119,10 +119,8 @@ namespace MirrorsEdgeTweaks.Services
             int smSoAdj = smSo + smShift;
             int smBcStart = smSoAdj + BytecodeBuilder.SCRIPT_HDR;
             int smBss = (int)PackageSplicer.ReadBSS(data, smSoAdj);
-            byte[] smBc = new byte[smBss];
-            Buffer.BlockCopy(data, smBcStart, smBc, 0, smBss);
 
-            var vertigoResult = FindVertigoStartZoom(smBc);
+            var vertigoResult = resolved.VertigoResult;
             if (vertigoResult == null)
                 throw new InvalidOperationException("Cannot find StartZoom in TdMove_Vertigo.StartMove");
 
@@ -150,13 +148,11 @@ namespace MirrorsEdgeTweaks.Services
             int uzSoAdj = uzSo + uzShift;
             int uzBcStart = uzSoAdj + BytecodeBuilder.SCRIPT_HDR;
             int uzBss = (int)PackageSplicer.ReadBSS(data, uzSoAdj);
-            byte[] uzBc = new byte[uzBss];
-            Buffer.BlockCopy(data, uzBcStart, uzBc, 0, uzBss);
 
-            var uzResult = FindUnzoomPatches(uzBc);
+            var uzResult = resolved.UnzoomResult;
             if (uzResult == null)
                 throw new InvalidOperationException("Cannot find UnZoom patch points");
-            var (_, _, _, uzDefaultFov, uzElseFloatOff) = uzResult.Value;
+            var (uzDefaultFov, uzElseFloatOff) = uzResult.Value;
 
             byte[] uzElseReplacement = BytecodeBuilder.BuildUnzoomElseReplacement(uzDefaultFov, resolved.InstFovangle);
             int uzElseOrigSize = 5; // FloatConst(20.0)
@@ -177,10 +173,8 @@ namespace MirrorsEdgeTweaks.Services
             int sfSoAdj = sfSo + sfShift;
             int sfBcStart = sfSoAdj + BytecodeBuilder.SCRIPT_HDR;
             int sfBss = (int)PackageSplicer.ReadBSS(data, sfSoAdj);
-            byte[] sfBc = new byte[sfBss];
-            Buffer.BlockCopy(data, sfBcStart, sfBc, 0, sfBss);
 
-            var sfResult = FindSetFovInsertion(sfBc);
+            var sfResult = resolved.SetFovResult;
             if (sfResult == null)
                 throw new InvalidOperationException("Cannot find StartZoom call in SetFOV");
             var (sfInsertBc, sfLocalNewfov, sfLocalRate, sfDcast, sfControllerVar) = sfResult.Value;
@@ -210,14 +204,12 @@ namespace MirrorsEdgeTweaks.Services
                 int scSoAdj = scSo + scShift;
                 int scBcStart = scSoAdj + BytecodeBuilder.SCRIPT_HDR;
                 int scBss = (int)PackageSplicer.ReadBSS(data, scSoAdj);
-                byte[] scBc = new byte[scBss];
-                Buffer.BlockCopy(data, scBcStart, scBc, 0, scBss);
 
-                var connReq = FindConnectionRequiredBoolvar(scBc);
+                var connReq = resolved.ConnReqBoolvar;
                 if (connReq == null)
                     throw new InvalidOperationException("Cannot find ConnectionRequired BoolVar in StartConnection");
 
-                var branch = FindElseBranch(scBc);
+                var branch = resolved.ElseBranch;
                 if (branch == null)
                     throw new InvalidOperationException("Cannot find if(Connection.IsLoggedIn()) branch in StartConnection");
 
@@ -244,7 +236,7 @@ namespace MirrorsEdgeTweaks.Services
             modifications.Add((sfSo, setfovNet, resolved.SfExportIndex));
             if (onlineSkipNet != 0) modifications.Add((scSo, onlineSkipNet, resolved.ScExportIndex));
 
-            hdr = PackageSplicer.ParseHeader(data);
+            var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsStructural(data, hdr, modifications);
 
             File.WriteAllBytes(tdGamePath, data);
@@ -253,23 +245,28 @@ namespace MirrorsEdgeTweaks.Services
         public static void Remove(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
-            var state = DetectStateFromData(data);
+
+            ResolvedIndices resolved;
+            TdGamePatchState state;
+            using (var pkg = UePackageLocator.Load(tdGamePath))
+            {
+                resolved = ResolveIndices(pkg, data);
+                state = DetectStateCore(data, pkg);
+            }
+
             if (!state.CoreApplied && !state.SensApplied && !state.ClipApplied
                 && !state.OnlineSkipApplied) return;
 
             // Collect all removals first (function serial offsets, deltas, export indices)
             // then apply them in a single coordinated pass from highest offset to lowest.
             // This ensures each removal doesn't shift offsets for the others.
-            var hdr = PackageSplicer.ParseHeader(data);
-            var resolved = ResolveIndices(data, hdr);
-
             var ops = new List<RemovalOp>();
 
             // Analyse each patched function and compute the removal operation
             AnalyzeOnlineSkipRemoval(data, resolved, state, ops);
-            AnalyzeSetFovRemoval(data, resolved, state, ops);
-            AnalyzeUnzoomRemoval(data, resolved, state, ops);
-            AnalyzeVertigoRemoval(data, resolved, state, ops);
+            AnalyzeSetFovRemoval(data, resolved, ops);
+            AnalyzeUnzoomRemoval(data, resolved, ops);
+            AnalyzeVertigoRemoval(data, resolved, ops);
             AnalyzePlayerInputRemoval(data, resolved, state, ops);
             AnalyzeToggleZoomStateRemoval(data, resolved, state, ops);
 
@@ -305,7 +302,7 @@ namespace MirrorsEdgeTweaks.Services
             // Fix export table in one pass
             var modifications = ops.Select(op =>
                 (op.OriginalSerialOffset, op.BssDelta, op.ExportIndex)).ToList();
-            hdr = PackageSplicer.ParseHeader(data);
+            var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsStructural(data, hdr, modifications);
 
             File.WriteAllBytes(tdGamePath, data);
@@ -330,7 +327,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             if (!state.OnlineSkipApplied || r.ScExportIndex == 0) return;
 
-            int scSo = FindCurrentSerialOffset(data, r.ScSerialOffset, r.ScExportIndex);
+            int scSo = r.ScSerialOffset;
             int scBcStart = scSo + BytecodeBuilder.SCRIPT_HDR;
             int scBss = (int)PackageSplicer.ReadBSS(data, scSo);
 
@@ -360,15 +357,13 @@ namespace MirrorsEdgeTweaks.Services
             });
         }
 
-        static void AnalyzeSetFovRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
+        static void AnalyzeSetFovRemoval(byte[] data, ResolvedIndices r, List<RemovalOp> ops)
         {
-            int sfSo = FindCurrentSerialOffset(data, r.SfSerialOffset, r.SfExportIndex);
+            int sfSo = r.SfSerialOffset;
             int sfBcStart = sfSo + BytecodeBuilder.SCRIPT_HDR;
             int sfBss = (int)PackageSplicer.ReadBSS(data, sfSo);
-            byte[] sfBc = new byte[sfBss];
-            Buffer.BlockCopy(data, sfBcStart, sfBc, 0, sfBss);
 
-            var sfResult = FindSetFovInsertion(sfBc);
+            var sfResult = r.SetFovResult;
             if (sfResult == null) return;
             var (sfInsertBc, sfLocalNewfov, sfLocalRate, sfDcast, sfControllerVar) = sfResult.Value;
 
@@ -391,9 +386,9 @@ namespace MirrorsEdgeTweaks.Services
             });
         }
 
-        static void AnalyzeUnzoomRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
+        static void AnalyzeUnzoomRemoval(byte[] data, ResolvedIndices r, List<RemovalOp> ops)
         {
-            int uzSo = FindCurrentSerialOffset(data, r.UzSerialOffset, r.UzExportIndex);
+            int uzSo = r.UzSerialOffset;
             int uzBcStart = uzSo + BytecodeBuilder.SCRIPT_HDR;
             int uzBss = (int)PackageSplicer.ReadBSS(data, uzSo);
 
@@ -426,9 +421,9 @@ namespace MirrorsEdgeTweaks.Services
             });
         }
 
-        static void AnalyzeVertigoRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
+        static void AnalyzeVertigoRemoval(byte[] data, ResolvedIndices r, List<RemovalOp> ops)
         {
-            int smSo = FindCurrentSerialOffset(data, r.SmSerialOffset, r.SmExportIndex);
+            int smSo = r.SmSerialOffset;
             int smBcStart = smSo + BytecodeBuilder.SCRIPT_HDR;
             int smBss = (int)PackageSplicer.ReadBSS(data, smSo);
 
@@ -471,7 +466,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             if (!state.SensApplied && !state.ClipApplied) return;
 
-            int piSo = FindCurrentSerialOffset(data, r.PiSerialOffset, r.PiExportIndex);
+            int piSo = r.PiSerialOffset;
             int piBcStart = piSo + BytecodeBuilder.SCRIPT_HDR;
             int piBss = (int)PackageSplicer.ReadBSS(data, piSo);
 
@@ -483,9 +478,7 @@ namespace MirrorsEdgeTweaks.Services
 
             if (!hasSens && !hasClip) return;
 
-            byte[] piBc = new byte[piBss];
-            Buffer.BlockCopy(data, piBcStart, piBc, 0, piBss);
-            var fovResult = FindFovScaleLet(piBc);
+            var fovResult = r.FovResult;
             if (fovResult == null) return;
 
             int blobStartBc = fovResult.Value.letEnd;
@@ -516,7 +509,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             if (!state.ClipApplied) return;
 
-            int tzsSo = FindCurrentSerialOffset(data, r.TzsSerialOffset, r.TzsExportIndex);
+            int tzsSo = r.TzsSerialOffset;
             int tzsBcStart = tzsSo + BytecodeBuilder.SCRIPT_HDR;
             int tzsBss = (int)PackageSplicer.ReadBSS(data, tzsSo);
 
@@ -592,496 +585,328 @@ namespace MirrorsEdgeTweaks.Services
             // Online skip: delegate property export index (4-byte LE i32) and FName (8 bytes)
             public byte[] OnPlayOfflinePropI32 = Array.Empty<byte>();
             public byte[] OnPlayOfflineFnameBytes = Array.Empty<byte>();
+
+            // Patch point token positions/spans located from UELib token stream up
+            // front so the splice logic never needs to rescan raw bytecode
+            public (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? ClipResult;
+            public (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf)? FovResult;
+            public (int startzoomOff, int zoomfovOff, byte[] controllerCtx)? VertigoResult;
+            public (byte[] instDefaultfov, int elseFloatOff)? UnzoomResult;
+            public (int insertOff, byte[] localNewfov, byte[] localRate, byte[] dcast, byte[] controllerVar)? SetFovResult;
+            public byte[]? ConnReqBoolvar;
+            public (int jnotOff, int elseTarget)? ElseBranch;
         }
 
-        static ResolvedIndices ResolveIndices(byte[] data, PackageSplicer.PackageHeader hdr)
+        static ResolvedIndices ResolveIndices(UnrealPackage pkg, byte[] data)
         {
-            var names = PackageSplicer.ReadNameTable(data, hdr);
-            var imports = ReadImportTable(data, hdr, names);
-            var exports = ReadExportTable(data, hdr, names);
-
             var r = new ResolvedIndices();
 
-            // Find HUD.SizeX/SizeY imports
-            var sizexImp = imports.FirstOrDefault(i => i.name == "SizeX" && i.className == "FloatProperty");
-            var sizeyImp = imports.FirstOrDefault(i => i.name == "SizeY" && i.className == "FloatProperty");
-            var myhudImp = imports.FirstOrDefault(i => i.name == "myHUD" && i.className == "ObjectProperty");
-            if (sizexImp.name == null || sizeyImp.name == null || myhudImp.name == null)
+            // HUD imports
+            r.SizexImp = UePackageLocator.FindImportObjRef(pkg, "SizeX", "FloatProperty");
+            r.SizeyImp = UePackageLocator.FindImportObjRef(pkg, "SizeY", "FloatProperty");
+            r.MyhudImp = UePackageLocator.FindImportObjRef(pkg, "myHUD", "ObjectProperty");
+            if (r.SizexImp == 0 || r.SizeyImp == 0 || r.MyhudImp == 0)
                 throw new InvalidOperationException("Cannot find HUD imports in TdGame.u");
 
-            r.SizexImp = sizexImp.index;
-            r.SizeyImp = sizeyImp.index;
-            r.MyhudImp = myhudImp.index;
+            var tzs = UePackageLocator.FindFunction(pkg, "TdHUD", "ToggleZoomState")
+                ?? throw new InvalidOperationException("Cannot find TdHUD.ToggleZoomState");
+            var pi = UePackageLocator.FindFunction(pkg, "TdPlayerInput", "PlayerInput")
+                ?? throw new InvalidOperationException("Cannot find TdPlayerInput.PlayerInput");
+            var sm = UePackageLocator.FindFunction(pkg, "TdMove_Vertigo", "StartMove")
+                ?? throw new InvalidOperationException("Cannot find TdMove_Vertigo.StartMove");
+            var uz = UePackageLocator.FindFunction(pkg, "TdPlayerController", "UnZoom")
+                ?? throw new InvalidOperationException("Cannot find TdPlayerController.UnZoom");
+            var sf = UePackageLocator.FindFunction(pkg, "TdPlayerPawn", "SetFOV")
+                ?? throw new InvalidOperationException("Cannot find TdPlayerPawn.SetFOV");
+            var ez = UePackageLocator.FindFunction(pkg, "TdPlayerController", "EndZoom")
+                ?? throw new InvalidOperationException("Cannot find TdPlayerController.EndZoom");
 
-            // Find export functions
-            var tzsExp = FindExport(exports, "ToggleZoomState", "TdHUD");
-            var piExp = FindExport(exports, "PlayerInput", "TdPlayerInput");
-            var smExp = FindExport(exports, "StartMove", "TdMove_Vertigo");
-            var uzExp = FindExport(exports, "UnZoom", "TdPlayerController");
-            var sfExp = FindExport(exports, "SetFOV", "TdPlayerPawn");
-            var ezExp = FindExport(exports, "EndZoom", "TdPlayerController");
+            r.TzsSerialOffset = tzs.SerialOffset; r.TzsExportIndex = tzs.ExportIndex;
+            r.PiSerialOffset = pi.SerialOffset; r.PiExportIndex = pi.ExportIndex;
+            r.SmSerialOffset = sm.SerialOffset; r.SmExportIndex = sm.ExportIndex;
+            r.UzSerialOffset = uz.SerialOffset; r.UzExportIndex = uz.ExportIndex;
+            r.SfSerialOffset = sf.SerialOffset; r.SfExportIndex = sf.ExportIndex;
 
-            if (tzsExp == null) throw new InvalidOperationException("Cannot find TdHUD.ToggleZoomState");
-            if (piExp == null) throw new InvalidOperationException("Cannot find TdPlayerInput.PlayerInput");
-            if (smExp == null) throw new InvalidOperationException("Cannot find TdMove_Vertigo.StartMove");
-            if (uzExp == null) throw new InvalidOperationException("Cannot find TdPlayerController.UnZoom");
-            if (sfExp == null) throw new InvalidOperationException("Cannot find TdPlayerPawn.SetFOV");
-            if (ezExp == null) throw new InvalidOperationException("Cannot find TdPlayerController.EndZoom");
+            // Function bodies used to harvest raw token spans located via the token stream.
+            byte[] tzsBc = Body(data, tzs.SerialOffset);
+            byte[] piBc = Body(data, pi.SerialOffset);
+            byte[] smBc = Body(data, sm.SerialOffset);
+            byte[] uzBc = Body(data, uz.SerialOffset);
+            byte[] sfBc = Body(data, sf.SerialOffset);
+            byte[] ezBc = Body(data, ez.SerialOffset);
 
-            r.TzsSerialOffset = tzsExp.Value.serialOffset;
-            r.TzsExportIndex = tzsExp.Value.exportIndex;
-            r.PiSerialOffset = piExp.Value.serialOffset;
-            r.PiExportIndex = piExp.Value.exportIndex;
-            r.SmSerialOffset = smExp.Value.serialOffset;
-            r.SmExportIndex = smExp.Value.exportIndex;
-            r.UzSerialOffset = uzExp.Value.serialOffset;
-            r.UzExportIndex = uzExp.Value.exportIndex;
-            r.SfSerialOffset = sfExp.Value.serialOffset;
-            r.SfExportIndex = sfExp.Value.exportIndex;
+            // Precompute patch point locations from the decompiled token streams.
+            r.ClipResult = ExtractContextCall(tzs.Tokens, tzsBc, 10.0f)
+                ?? ExtractContextCall(tzs.Tokens, tzsBc, null);
+            r.FovResult = FindFovScaleLet(pi.Tokens, piBc);
+            r.VertigoResult = FindVertigoStartZoom(sm.Tokens, smBc);
+            r.UnzoomResult = FindUnzoomPatches(uz.Tokens, uzBc);
+            r.SetFovResult = FindSetFovInsertion(sf.Tokens, sfBc);
 
-            // Online skip: StartConnection + OnPlayOffline delegate
-            var scExp = FindExport(exports, "StartConnection", "TdOnlineLoginHandler");
-            if (scExp != null)
+            // SetNearClippingPlane vfunc token
+            r.SncpVfunc = r.ClipResult != null
+                ? r.ClipResult.Value.vfunc
+                : HarvestVFunc(tzs.Tokens, tzsBc, "SetNearClippingPlane");
+
+            // Tokens harvested from UnZoom (TdWeapon cast, Pawn, Weapon, IsZoomingOrZoomed, DefaultFOV).
+            ExtractZoomTokens(uz.Tokens, uzBc, r);
+
+            // DefaultFOV / FOVAngle from EndZoom (both InstanceVariables of TdPlayerController).
+            r.DefaultFovInst = HarvestInst(ez.Tokens, ezBc, "DefaultFOV");
+            r.InstFovangle = HarvestInst(ez.Tokens, ezBc, "FOVAngle");
+
+            // Controller context chain at the very start of StartMove (Context.DynamicCast(...));
+            if (sm.Tokens.Count >= 2 && sm.Tokens[0] is ContextToken && sm.Tokens[1] is DynamicCastToken)
+                r.ControllerCtx = UePackageLocator.Harvest(smBc, sm.Tokens[1], 20);
+
+            // InstanceVar(ZoomFOV)
+            byte[] zoomFov = HarvestInst(sm.Tokens, smBc, "ZoomFOV");
+            if (zoomFov.Length == 5)
             {
-                r.ScSerialOffset = scExp.Value.serialOffset;
-                r.ScExportIndex = scExp.Value.exportIndex;
+                r.InstZoomFov = zoomFov;
+            }
+            else
+            {
+                int zoomFovIdx = UePackageLocator.FindExportIndex(pkg, "ZoomFOV", "TdMove_Vertigo");
+                if (zoomFovIdx != 0)
+                    r.InstZoomFov = BytecodeBuilder.InstVar(zoomFovIdx);
+            }
 
-                var opoExp = FindExport(exports, "__OnPlayOffline__Delegate", "TdOnlineLoginHandler");
-                if (opoExp != null)
-                    r.OnPlayOfflinePropI32 = BitConverter.GetBytes(opoExp.Value.exportIndex);
+            // Online skip: StartConnection + OnPlayOffline delegate.
+            var sc = UePackageLocator.FindFunction(pkg, "TdOnlineLoginHandler", "StartConnection");
+            if (sc != null)
+            {
+                r.ScSerialOffset = sc.SerialOffset;
+                r.ScExportIndex = sc.ExportIndex;
+                byte[] scBc = Body(data, sc.SerialOffset);
 
-                int opoNameIdx = names.IndexOf("OnPlayOffline");
+                r.ConnReqBoolvar = FindConnectionRequiredBoolvar(sc.Tokens, scBc);
+                r.ElseBranch = FindElseBranch(sc.Tokens);
+
+                int opoIdx = UePackageLocator.FindExportIndex(pkg, "__OnPlayOffline__Delegate", "TdOnlineLoginHandler");
+                if (opoIdx != 0)
+                    r.OnPlayOfflinePropI32 = BytecodeBuilder.I32(opoIdx);
+
+                int opoNameIdx = UePackageLocator.FindNameIndex(pkg, "OnPlayOffline");
                 if (opoNameIdx >= 0)
                     r.OnPlayOfflineFnameBytes = BytecodeBuilder.Concat(
                         BytecodeBuilder.I32(opoNameIdx), BytecodeBuilder.I32(0));
             }
 
-            // Extract tokens from UnZoom bytecodes
-            int uzSo = uzExp.Value.serialOffset;
-            int uzBcStart = uzSo + BytecodeBuilder.SCRIPT_HDR;
-            int uzBss = (int)PackageSplicer.ReadBSS(data, uzSo);
-            byte[] uzBc = new byte[uzBss];
-            Buffer.BlockCopy(data, uzBcStart, uzBc, 0, uzBss);
-
-            ExtractZoomTokens(uzBc, r);
-
-            // Extract DefaultFOV and FOVAngle from EndZoom
-            int ezSo = ezExp.Value.serialOffset;
-            int ezBcStart = ezSo + BytecodeBuilder.SCRIPT_HDR;
-            int ezBss = (int)PackageSplicer.ReadBSS(data, ezSo);
-            byte[] ezBc = new byte[ezBss];
-            Buffer.BlockCopy(data, ezBcStart, ezBc, 0, ezBss);
-
-            // FOVAngle: second LET's LHS in EndZoom
-            int letCount = 0;
-            for (int off = 0; off < ezBc.Length - 6; off++)
-            {
-                if (ezBc[off] == BytecodeBuilder.OP_LET && ezBc[off + 1] == BytecodeBuilder.OP_INST_VAR)
-                {
-                    letCount++;
-                    if (letCount == 1)
-                    {
-                        // First LET RHS is DefaultFOV
-                        if (ezBc[off + 6] == BytecodeBuilder.OP_INST_VAR)
-                            r.DefaultFovInst = ezBc[(off + 6)..(off + 11)];
-                    }
-                    if (letCount == 2)
-                    {
-                        r.InstFovangle = ezBc[(off + 1)..(off + 6)];
-                        break;
-                    }
-                }
-            }
-
-            // DefaultFOV from UnZoom: Let DesiredFOV = DefaultFOV
-            for (int off = 0; off < uzBc.Length - 10; off++)
-            {
-                if (uzBc[off] == BytecodeBuilder.OP_LET
-                    && uzBc[off + 1] == BytecodeBuilder.OP_INST_VAR
-                    && uzBc[off + 6] == BytecodeBuilder.OP_INST_VAR)
-                {
-                    r.UzDefaultFov = uzBc[(off + 6)..(off + 11)];
-                    break;
-                }
-            }
-
-            // Extract ToggleZoomState SNCP VirtualFunction token.
-            // In patched data, the else-branch of the clip blob still has
-            // a SetNearClippingPlane(10.0) call, so the pattern still works.
-            int tzsBcStart2 = tzsExp.Value.serialOffset + BytecodeBuilder.SCRIPT_HDR;
-            int tzsBss2 = (int)PackageSplicer.ReadBSS(data, tzsExp.Value.serialOffset);
-            byte[] tzsBc2 = new byte[tzsBss2];
-            Buffer.BlockCopy(data, tzsBcStart2, tzsBc2, 0, tzsBss2);
-            var clipExtract = ExtractContextCallPattern(tzsBc2, BytecodeBuilder.F32(10.0f))
-                ?? ExtractContextCallPattern(tzsBc2, null);
-            if (clipExtract != null)
-                r.SncpVfunc = clipExtract.Value.vfunc;
-
-            // Extract controller context chain from StartMove.
-            // In unpatched data, FindVertigoStartZoom finds the original pattern.
-            // In patched data, the vertigo replacement changes the ZoomFOV arg,
-            // but the function header (EndZoom context chain at bc+0x00) is unchanged.
-            int smSoR = smExp.Value.serialOffset;
-            int smBssR = (int)PackageSplicer.ReadBSS(data, smSoR);
-            byte[] smBcR = new byte[smBssR];
-            Buffer.BlockCopy(data, smSoR + BytecodeBuilder.SCRIPT_HDR, smBcR, 0, smBssR);
-
-            // Controller context chain is always at the start of StartMove (bc+1..bc+21)
-            if (smBcR.Length >= 21 && smBcR[0] == BytecodeBuilder.OP_CONTEXT
-                && smBcR[1] == BytecodeBuilder.OP_DYNAMIC_CAST && smBcR[6] == BytecodeBuilder.OP_CONTEXT)
-            {
-                r.ControllerCtx = smBcR[1..21];
-            }
-
-            // InstZoomFov: in unpatched data, it's at the first arg of StartZoom.
-            // In patched data, the VertigoSignature replaced it.
-            // Try the unpatched path first.
-            var vertigoResult = FindVertigoStartZoom(smBcR);
-            if (vertigoResult != null)
-            {
-                r.InstZoomFov = smBcR[vertigoResult.Value.zoomfovOff..(vertigoResult.Value.zoomfovOff + 5)];
-            }
-            else
-            {
-                // Patched: ZoomFOV is a property on TdMove_Vertigo. Find its index
-                // from the export table by looking for "ZoomFOV" in the name table.
-                int zoomFovNameIdx = names.IndexOf("ZoomFOV");
-                if (zoomFovNameIdx >= 0)
-                {
-                    // Find the property export whose name is ZoomFOV and outer is TdMove_Vertigo
-                    var zoomFovProp = exports.FirstOrDefault(e =>
-                        e.name == "ZoomFOV" && exports.Any(o => o.exportIndex == e.outerIdx && o.name == "TdMove_Vertigo"));
-                    if (zoomFovProp.name != null)
-                    {
-                        // Build the InstanceVar token using the export's package index
-                        r.InstZoomFov = BytecodeBuilder.InstVar(zoomFovProp.exportIndex);
-                    }
-                }
-            }
-
             return r;
         }
 
-        static void ExtractZoomTokens(byte[] uzBc, ResolvedIndices r)
+        // Reads a function body (bytecode) slice from the package bytes.
+        static byte[] Body(byte[] data, int serialOffset)
         {
-            // TdWeapon DynamicCast, Pawn, Weapon, IsZoomingOrZoomed from UnZoom bytecodes
-            for (int off = 0; off < uzBc.Length - 5; off++)
-            {
-                if (uzBc[off] == BytecodeBuilder.OP_DYNAMIC_CAST && r.TdweaponDcast.Length == 0)
-                    r.TdweaponDcast = uzBc[off..(off + 5)];
-
-                if (uzBc[off] == BytecodeBuilder.OP_CONTEXT && off + 1 < uzBc.Length
-                    && uzBc[off + 1] == BytecodeBuilder.OP_INST_VAR)
-                {
-                    if (r.InstPawn.Length == 0)
-                    {
-                        r.InstPawn = uzBc[(off + 1)..(off + 6)];
-                        int p = off + 6 + 2 + 2; // skip + proptype
-                        if (p < uzBc.Length && uzBc[p] == BytecodeBuilder.OP_INST_VAR)
-                            r.InstWeapon = uzBc[p..(p + 5)];
-                    }
-                }
-            }
-
-            // IsZoomingOrZoomed: first VirtualFunction after offset 0x20
-            for (int off = 0; off < uzBc.Length - 9; off++)
-            {
-                if (uzBc[off] == BytecodeBuilder.OP_VIRT_FUNC && off > 0x20)
-                {
-                    r.IsZoomingVf = uzBc[off..(off + 9)];
-                    break;
-                }
-            }
+            int bcStart = serialOffset + BytecodeBuilder.SCRIPT_HDR;
+            int bss = (int)PackageSplicer.ReadBSS(data, serialOffset);
+            var bc = new byte[bss];
+            Buffer.BlockCopy(data, bcStart, bc, 0, bss);
+            return bc;
         }
 
-        // Pattern extraction
+        // Harvests the 5-byte InstanceVariable token for a named property
+        static byte[] HarvestInst(IList<Token> tokens, byte[] bc, string name)
+        {
+            foreach (var t in tokens)
+                if (t is InstanceVariableToken iv && iv.Object?.Name?.ToString() == name)
+                    return UePackageLocator.Harvest(bc, t, BytecodeBuilder.VAR_TOKEN_SIZE);
+            return Array.Empty<byte>();
+        }
 
+        // Harvests the 9-byte VirtualFunction name token for a named call (empty if absent).
+        static byte[] HarvestVFunc(IList<Token> tokens, byte[] bc, string name)
+        {
+            foreach (var t in tokens)
+                if (t is VirtualFunctionToken vf && vf.FunctionName?.ToString() == name)
+                    return UePackageLocator.Harvest(bc, t, BytecodeBuilder.NAME_TOKEN_SIZE);
+            return Array.Empty<byte>();
+        }
+
+        static void ExtractZoomTokens(IList<Token> tokens, byte[] uzBc, ResolvedIndices r)
+        {
+            foreach (var t in tokens)
+            {
+                if (r.TdweaponDcast.Length == 0 && t is DynamicCastToken dc
+                    && dc.CastClass?.Name?.ToString() == "TdWeapon")
+                    r.TdweaponDcast = UePackageLocator.Harvest(uzBc, t, BytecodeBuilder.VAR_TOKEN_SIZE);
+
+                if (r.InstPawn.Length == 0 && t is InstanceVariableToken pawn
+                    && pawn.Object?.Name?.ToString() == "Pawn")
+                    r.InstPawn = UePackageLocator.Harvest(uzBc, t, BytecodeBuilder.VAR_TOKEN_SIZE);
+
+                if (r.InstWeapon.Length == 0 && t is InstanceVariableToken weapon
+                    && weapon.Object?.Name?.ToString() == "Weapon")
+                    r.InstWeapon = UePackageLocator.Harvest(uzBc, t, BytecodeBuilder.VAR_TOKEN_SIZE);
+
+                if (r.IsZoomingVf.Length == 0 && t is VirtualFunctionToken vf
+                    && vf.FunctionName?.ToString() == "IsZoomingOrZoomed")
+                    r.IsZoomingVf = UePackageLocator.Harvest(uzBc, t, BytecodeBuilder.NAME_TOKEN_SIZE);
+            }
+
+            // DefaultFOV instance var (used to rebuild the UnZoom else-branch).
+            r.UzDefaultFov = HarvestInst(tokens, uzBc, "DefaultFOV");
+        }
+
+        // Token-based patch-point location. Position == StoragePosition for Mirror's Edge
+        // so a token's bytecode offset doubles as its file offset within the function body
+
+        // Context(DynamicCast(owner)).VirtualFunc(FloatConst) - the SetNearClippingPlane calls.
         static (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)?
-            ExtractContextCallPattern(byte[] bc, byte[]? floatPattern)
+            ExtractContextCall(IList<Token> tokens, byte[] bc, float? floatValue)
         {
-            (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? lastMatch = null;
-
-            for (int off = 0; off < bc.Length - 5; off++)
+            (int, int, byte[], byte[], byte[])? last = null;
+            for (int i = 0; i + 4 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                if (floatPattern != null)
-                {
-                    bool match = true;
-                    for (int j = 0; j < floatPattern.Length; j++)
-                        if (bc[off + 1 + j] != floatPattern[j]) { match = false; break; }
-                    if (!match) continue;
-                }
+                if (tokens[i] is not ContextToken ctx) continue;
+                if (tokens[i + 1] is not DynamicCastToken) continue;
+                if (tokens[i + 2] is not FieldToken) continue;
+                if (tokens[i + 3] is not VirtualFunctionToken) continue;
+                if (tokens[i + 4] is not FloatConstToken fc) continue;
+                if (floatValue.HasValue && Math.Abs(fc.Value - floatValue.Value) > 0.001f) continue;
 
-                for (int ctxOff = off - 1; ctxOff >= Math.Max(0, off - 50); ctxOff--)
-                {
-                    if (bc[ctxOff] != BytecodeBuilder.OP_CONTEXT) continue;
-                    int p = ctxOff + 1;
-                    if (bc[p] != BytecodeBuilder.OP_DYNAMIC_CAST) continue;
-                    byte[] dcast = bc[p..(p + 5)]; p += 5;
-                    if (bc[p] != BytecodeBuilder.OP_INST_VAR) continue;
-                    byte[] powner = bc[p..(p + 5)]; p += 5;
-                    p += 2 + 2; // skip + proptype
-                    if (bc[p] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                    byte[] vfunc = bc[p..(p + 9)];
-                    int endOff = off + 5 + 1;
-
-                    if (floatPattern != null)
-                        return (ctxOff, endOff - ctxOff, dcast, powner, vfunc);
-
-                    // Collect the last float match so we get the
-                    // second SetNearClippingPlane call (the unzoom path).
-                    lastMatch = (ctxOff, endOff - ctxOff, dcast, powner, vfunc);
-                    break;
-                }
+                int ctxOff = UePackageLocator.Pos(ctx);
+                int ctxLen = UePackageLocator.Pos(fc) + 5 + 1 - ctxOff;   // + FloatConst(5) + EndFP(1)
+                byte[] dcast = UePackageLocator.Harvest(bc, tokens[i + 1], BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] powner = UePackageLocator.Harvest(bc, tokens[i + 2], BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] vfunc = UePackageLocator.Harvest(bc, tokens[i + 3], BytecodeBuilder.NAME_TOKEN_SIZE);
+                var result = (ctxOff, ctxLen, dcast, powner, vfunc);
+                if (floatValue.HasValue) return result;
+                last = result;
             }
-            return lastMatch;
+            return last;
         }
 
-        static (int letStart, int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf, byte[] outerCtx)?
-            FindFovScaleLet(byte[] bc)
+        // FOVScale = Context(Outer).GetFOVAngle() * K_SENS
+        static (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf)?
+            FindFovScaleLet(IList<Token> tokens, byte[] bc)
         {
-            byte[] flt = BytecodeBuilder.F32(BytecodeBuilder.K_SENS);
-
-            // Try exact K_SENS match first, otherwise match any FloatConst
-            (int, int, byte[], byte[], byte[], byte[])? fallback = null;
-
-            for (int off = 0; off < bc.Length - 5; off++)
+            for (int i = 0; i + 8 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_FLOAT_CONST) continue;
+                if (tokens[i] is not LetToken) continue;
+                if (tokens[i + 1] is not LocalVariableToken lv
+                    || lv.Object?.Name?.ToString() != "FOVScale") continue;
+                if (tokens[i + 2] is not NativeFunctionToken) continue;       // multiply
+                if (tokens[i + 3] is not ContextToken) continue;
+                if (tokens[i + 4] is not FieldToken outerVarTok) continue;
+                if (tokens[i + 5] is not VirtualFunctionToken vf) continue;
+                if (tokens[i + 6] is not EndFunctionParmsToken) continue;
+                if (tokens[i + 7] is not FloatConstToken) continue;
+                if (tokens[i + 8] is not EndFunctionParmsToken endfp) continue;
 
-                bool exactMatch = true;
-                for (int j = 0; j < flt.Length; j++)
-                    if (bc[off + 1 + j] != flt[j]) { exactMatch = false; break; }
-
-                int endFpPos = off + 5;
-                if (endFpPos >= bc.Length || bc[endFpPos] != BytecodeBuilder.OP_END_FP) continue;
-                int letEnd = endFpPos + 1;
-
-                for (int back = off - 1; back >= Math.Max(0, off - 60); back--)
-                {
-                    if (bc[back] != BytecodeBuilder.OP_LET) continue;
-                    int p = back + 1;
-                    if (bc[p] != BytecodeBuilder.OP_LOCAL_VAR) continue;
-                    byte[] fovscaleLocal = bc[p..(p + 5)]; p += 5;
-                    if (bc[p] != BytecodeBuilder.OP_MULTIPLY_FF) continue;
-                    p++;
-                    if (bc[p] != BytecodeBuilder.OP_CONTEXT) continue;
-                    int ctxStart = p; p++;
-                    if (bc[p] != BytecodeBuilder.OP_INST_VAR) continue;
-                    byte[] outerVar = bc[p..(p + 5)]; p += 5;
-                    p += 2 + 2;
-                    if (bc[p] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                    byte[] getfovVf = bc[p..(p + 9)];
-                    int ctxEnd = p + 9 + 1;
-                    byte[] outerCtx = bc[ctxStart..ctxEnd];
-
-                    if (exactMatch)
-                        return (back, letEnd, fovscaleLocal, outerVar, getfovVf, outerCtx);
-
-                    fallback ??= (back, letEnd, fovscaleLocal, outerVar, getfovVf, outerCtx);
-                    break;
-                }
+                int letEnd = UePackageLocator.Pos(endfp) + 1;
+                byte[] fovscaleLocal = UePackageLocator.Harvest(bc, lv, BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] outerVar = UePackageLocator.Harvest(bc, outerVarTok, BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] getfovVf = UePackageLocator.Harvest(bc, vf, BytecodeBuilder.NAME_TOKEN_SIZE);
+                return (letEnd, fovscaleLocal, outerVar, getfovVf);
             }
-            return fallback;
+            return null;
         }
 
+        // Controller.StartZoom(ZoomFOV, ZoomRate, 0.0) in the stock StartMove.
         static (int startzoomOff, int zoomfovOff, byte[] controllerCtx)?
-            FindVertigoStartZoom(byte[] bc)
+            FindVertigoStartZoom(IList<Token> tokens, byte[] bc)
         {
-            if (bc[0] != BytecodeBuilder.OP_CONTEXT || bc[1] != BytecodeBuilder.OP_DYNAMIC_CAST) return null;
-            if (bc[6] != BytecodeBuilder.OP_CONTEXT) return null;
-            byte[] controllerCtx = bc[1..21];
+            if (tokens.Count < 3) return null;
+            if (tokens[0] is not ContextToken) return null;
+            if (tokens[1] is not DynamicCastToken dcast) return null;
+            if (tokens[2] is not ContextToken) return null;
+            byte[] controllerCtx = UePackageLocator.Harvest(bc, dcast, 20);
 
-            for (int off = 0; off < bc.Length - 9; off++)
+            for (int i = 0; i + 3 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                int endPos = off + 9 + 5 + 5 + 5 + 1;
-                if (endPos > bc.Length) continue;
-                if (bc[endPos - 1] != BytecodeBuilder.OP_END_FP) continue;
-                int fltPos = off + 9 + 5 + 5;
-                if (bc[fltPos] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                float val = BitConverter.ToSingle(bc, fltPos + 1);
-                if (Math.Abs(val) < 0.001f)
-                    return (off, off + 9, controllerCtx);
+                if (tokens[i] is not VirtualFunctionToken vf
+                    || vf.FunctionName?.ToString() != "StartZoom") continue;
+                if (tokens[i + 1] is not FieldToken) continue;   // ZoomFOV
+                if (tokens[i + 2] is not FieldToken) continue;   // ZoomRate
+                if (tokens[i + 3] is not FloatConstToken fc || Math.Abs(fc.Value) > 0.001f) continue;
+                return (UePackageLocator.Pos(vf), UePackageLocator.Pos(vf) + 9, controllerCtx);
             }
             return null;
         }
 
-        static (int ifInsertOff, byte[] localFov, byte[] localRate, byte[] instDefaultfov, int elseFloatOff)?
-            FindUnzoomPatches(byte[] bc)
+        // StartZoom(DefaultFOV, ...) followed by the else-branch FOVZoomRate FloatConst.
+        // Returns the DefaultFOV instance-var token and the bytecode offset of the FloatConst
+        // that the UnZoom else-branch replacement overwrites
+        static (byte[] instDefaultfov, int elseFloatOff)?
+            FindUnzoomPatches(IList<Token> tokens, byte[] bc)
         {
-            int ifInsertOff = -1;
-            byte[]? localFov = null, localRate = null, instDefaultfov = null;
-
-            for (int off = 0; off < bc.Length - 20; off++)
+            for (int i = 0; i + 1 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                int p = off + 9;
-                if (p + 10 >= bc.Length) continue;
-                if (bc[p] != BytecodeBuilder.OP_LOCAL_VAR) continue;
-                localFov = bc[p..(p + 5)]; p += 5;
-                if (bc[p] != BytecodeBuilder.OP_LOCAL_VAR) continue;
-                localRate = bc[p..(p + 5)]; p += 5;
-                if (bc[p] != BytecodeBuilder.OP_END_FP) continue;
-                p++;
-                if (bc[p] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                int p2 = p + 9;
-                if (bc[p2] != BytecodeBuilder.OP_INST_VAR) continue;
-                instDefaultfov = bc[p2..(p2 + 5)]; p2 += 5;
-                if (!bc[p2..(p2 + 5)].SequenceEqual(localRate)) continue;
-                ifInsertOff = p;
-                break;
+                if (tokens[i] is not VirtualFunctionToken vf
+                    || vf.FunctionName?.ToString() != "StartZoom") continue;
+                if (tokens[i + 1] is not InstanceVariableToken dfov
+                    || dfov.Object?.Name?.ToString() != "DefaultFOV") continue;
+                byte[] instDefaultfov = UePackageLocator.Harvest(bc, dfov, BytecodeBuilder.VAR_TOKEN_SIZE);
+
+                // First FloatConst after the StartZoom call's closing EndFunctionParms
+                // (the else-branch FOVZoomRate assignment)
+                int afterPos = UePackageLocator.Pos(vf) + 19;
+                Token? endfp = null;
+                foreach (var t in tokens)
+                    if (t is EndFunctionParmsToken && UePackageLocator.Pos(t) >= afterPos) { endfp = t; break; }
+                if (endfp == null) return null;
+
+                FloatConstToken? elseFloat = null;
+                foreach (var t in tokens)
+                    if (t is FloatConstToken f && UePackageLocator.Pos(t) > UePackageLocator.Pos(endfp)) { elseFloat = f; break; }
+                if (elseFloat == null) return null;
+
+                return (instDefaultfov, UePackageLocator.Pos(elseFloat));
             }
-
-            if (ifInsertOff == -1 || localFov == null || localRate == null || instDefaultfov == null) return null;
-
-            // Skip past the second VirtFunc's (StartZoom) EndFP so we don't
-            // match its FloatConst(0.0) delay arg instead of the else-branch target.
-            int afterCall = -1;
-            for (int off = ifInsertOff + 19; off < bc.Length; off++)
-            {
-                if (bc[off] == BytecodeBuilder.OP_END_FP) { afterCall = off + 1; break; }
-            }
-            if (afterCall == -1) return null;
-
-            // Match any FloatConst in the else-branch
-            int elseFloatOff = -1;
-            for (int off = afterCall; off < bc.Length - 5; off++)
-            {
-                if (bc[off] == BytecodeBuilder.OP_FLOAT_CONST)
-                {
-                    elseFloatOff = off;
-                    break;
-                }
-            }
-            if (elseFloatOff == -1) return null;
-
-            return (ifInsertOff, localFov, localRate, instDefaultfov, elseFloatOff);
+            return null;
         }
 
+        // if (Controller != None) Context(DynamicCast(Controller)).StartZoom(NewFOV, Rate, 0.0)
         static (int insertOff, byte[] localNewfov, byte[] localRate, byte[] dcast, byte[] controllerVar)?
-            FindSetFovInsertion(byte[] bc)
+            FindSetFovInsertion(IList<Token> tokens, byte[] bc)
         {
-            for (int off = 0; off < bc.Length - 20; off++)
+            for (int i = 0; i + 6 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_CONTEXT || bc[off + 1] != BytecodeBuilder.OP_DYNAMIC_CAST) continue;
-                int p = off + 1;
-                byte[] dcast = bc[p..(p + 5)]; p += 5;
-                if (bc[p] != BytecodeBuilder.OP_INST_VAR) continue;
-                byte[] controllerVar = bc[p..(p + 5)]; p += 5;
-                p += 2 + 2;
-                if (bc[p] != BytecodeBuilder.OP_VIRT_FUNC) continue;
-                p += 9;
-                if (bc[p] != BytecodeBuilder.OP_LOCAL_VAR) continue;
-                byte[] localNewfov = bc[p..(p + 5)]; p += 5;
-                if (bc[p] != BytecodeBuilder.OP_LOCAL_VAR) continue;
-                byte[] localRate = bc[p..(p + 5)]; p += 5;
-                if (bc[p] != BytecodeBuilder.OP_FLOAT_CONST) continue;
-                return (off, localNewfov, localRate, dcast, controllerVar);
+                if (tokens[i] is not ContextToken ctx) continue;
+                if (tokens[i + 1] is not DynamicCastToken) continue;
+                if (tokens[i + 2] is not FieldToken) continue;            // controllerVar
+                if (tokens[i + 3] is not VirtualFunctionToken vf
+                    || vf.FunctionName?.ToString() != "StartZoom") continue;
+                if (tokens[i + 4] is not FieldToken) continue;            // NewFOV (local)
+                if (tokens[i + 5] is not FieldToken) continue;            // Rate (local)
+                if (tokens[i + 6] is not FloatConstToken) continue;
+
+                int insertOff = UePackageLocator.Pos(ctx);
+                byte[] dcast = UePackageLocator.Harvest(bc, tokens[i + 1], BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] controllerVar = UePackageLocator.Harvest(bc, tokens[i + 2], BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] localNewfov = UePackageLocator.Harvest(bc, tokens[i + 4], BytecodeBuilder.VAR_TOKEN_SIZE);
+                byte[] localRate = UePackageLocator.Harvest(bc, tokens[i + 5], BytecodeBuilder.VAR_TOKEN_SIZE);
+                return (insertOff, localNewfov, localRate, dcast, controllerVar);
             }
             return null;
         }
 
-        // Online skip: bytecode analysis helpers
-
-        // Extract the 6-byte BoolVar(InstVar(ConnectionRequired)) token from the
-        // first LetBool whose RHS is a BoolVar (parameter reference, not a constant).
-        static byte[]? FindConnectionRequiredBoolvar(byte[] bc)
+        // Online skip
+        // The 6-byte BoolVar(InstanceVar(ConnectionRequired)) operand from the LetBool that
+        // stores the function's ConnectionRequired parameter into the instance variable
+        static byte[]? FindConnectionRequiredBoolvar(IList<Token> tokens, byte[] bc)
         {
-            int limit = Math.Min(40, bc.Length - 13);
-            for (int off = 0; off < limit; off++)
+            for (int i = 0; i + 3 < tokens.Count; i++)
             {
-                if (bc[off] != BytecodeBuilder.OP_LET_BOOL) continue;
-                if (bc[off + 1] != BytecodeBuilder.OP_BOOL_VAR || bc[off + 2] != BytecodeBuilder.OP_INST_VAR) continue;
-                if (bc[off + 7] == BytecodeBuilder.OP_BOOL_VAR)
-                    return bc[(off + 1)..(off + 7)];
+                if (tokens[i] is not LetBoolToken) continue;
+                if (UePackageLocator.Pos(tokens[i]) >= 40) break;
+                if (tokens[i + 1] is not BoolVariableToken lhs) continue;
+                if (tokens[i + 2] is not InstanceVariableToken iv
+                    || iv.Object?.Name?.ToString() != "ConnectionRequired") continue;
+                if (tokens[i + 3] is not BoolVariableToken) continue;   // RHS is also a bool var
+                return UePackageLocator.Harvest(bc, lhs, 6);
             }
             return null;
         }
 
-        // Find the first JumpIfNot in StartConnection (the if(Connection.IsLoggedIn()) branch).
-        // Returns (jnot_offset, else_target).
-        static (int jnotOff, int elseTarget)? FindElseBranch(byte[] bc)
+        // The first JumpIfNot in StartConnection (the if(Connection.IsLoggedIn()) branch)
+        static (int jnotOff, int elseTarget)? FindElseBranch(IList<Token> tokens)
         {
-            for (int off = 0; off < bc.Length - 3; off++)
-            {
-                if (bc[off] == BytecodeBuilder.OP_JUMP_IF_NOT)
-                {
-                    ushort target = BitConverter.ToUInt16(bc, off + 1);
-                    return (off, target);
-                }
-            }
-            return null;
-        }
-
-        // Import/export table reading
-
-        struct ImportEntry { public int index; public string className; public string name; public int outerIdx; }
-        struct ExportEntry { public int exportIndex; public string name; public int outerIdx; public int serialSize; public int serialOffset; }
-
-        static List<ImportEntry> ReadImportTable(byte[] data, PackageSplicer.PackageHeader hdr, List<string> names)
-        {
-            var imports = new List<ImportEntry>();
-            int pos = hdr.ImportOffset;
-            for (int i = 0; i < hdr.ImportCount; i++)
-            {
-                pos += 8; // ClassPackageName UName
-                int clsNi = BitConverter.ToInt32(data, pos); pos += 8;
-                int outerIdx = BitConverter.ToInt32(data, pos); pos += 4;
-                int objNi = BitConverter.ToInt32(data, pos); pos += 8;
-                imports.Add(new ImportEntry
-                {
-                    index = -(i + 1),
-                    className = (clsNi >= 0 && clsNi < names.Count) ? names[clsNi] : "?",
-                    name = (objNi >= 0 && objNi < names.Count) ? names[objNi] : "?",
-                    outerIdx = outerIdx,
-                });
-            }
-            return imports;
-        }
-
-        static List<ExportEntry> ReadExportTable(byte[] data, PackageSplicer.PackageHeader hdr, List<string> names)
-        {
-            var exports = new List<ExportEntry>();
-            int pos = hdr.ExportOffset;
-            for (int i = 0; i < hdr.ExportCount; i++)
-            {
-                pos += 4; // class_idx
-                pos += 4; // super_idx
-                int outerIdx = BitConverter.ToInt32(data, pos); pos += 4;
-                int nameIdx = BitConverter.ToInt32(data, pos); pos += 4;
-                pos += 4; // name_num
-                pos += 4; // archetype_idx
-                pos += 8; // obj_flags
-                int serialSize = BitConverter.ToInt32(data, pos); pos += 4;
-                int serialOffset = BitConverter.ToInt32(data, pos); pos += 4;
-                int compCount = BitConverter.ToInt32(data, pos); pos += 4;
-                pos += compCount * 12;
-                pos += 4; // export_flags
-                int netCount = BitConverter.ToInt32(data, pos); pos += 4;
-                pos += netCount * 4;
-                pos += 16 + 4; // GUID + PackageFlags
-                exports.Add(new ExportEntry
-                {
-                    exportIndex = i + 1,
-                    name = (nameIdx >= 0 && nameIdx < names.Count) ? names[nameIdx] : "?",
-                    outerIdx = outerIdx,
-                    serialSize = serialSize,
-                    serialOffset = serialOffset,
-                });
-            }
-            return exports;
-        }
-
-        static ExportEntry? FindExport(List<ExportEntry> exports, string name, string outerName)
-        {
-            var byIdx = exports.ToDictionary(e => e.exportIndex);
-            foreach (var exp in exports)
-            {
-                if (exp.name != name) continue;
-                if (byIdx.TryGetValue(exp.outerIdx, out var outer) && outer.name == outerName)
-                    return exp;
-            }
+            foreach (var t in tokens)
+                if (t is JumpIfNotToken j)
+                    return (UePackageLocator.Pos(j), j.CodeOffset);
             return null;
         }
 
@@ -1095,13 +920,10 @@ namespace MirrorsEdgeTweaks.Services
             try
             {
                 byte[] data = File.ReadAllBytes(tdGamePath);
-                var hdr = PackageSplicer.ParseHeader(data);
-                var names = PackageSplicer.ReadNameTable(data, hdr);
-                var exports = ReadExportTable(data, hdr, names);
-                var uzExp = FindExport(exports, "UnZoom", "TdPlayerController");
-                if (uzExp == null) return false;
+                using var pkg = UePackageLocator.LoadHeader(tdGamePath);
+                int uzSo = UePackageLocator.FindExportSerialOffset(pkg, "TdPlayerController", "UnZoom");
+                if (uzSo < 0) return false;
 
-                int uzSo = uzExp.Value.serialOffset;
                 int uzBcStart = uzSo + BytecodeBuilder.SCRIPT_HDR;
                 int uzBss = (int)PackageSplicer.ReadBSS(data, uzSo);
 
@@ -1115,20 +937,15 @@ namespace MirrorsEdgeTweaks.Services
             catch { return false; }
         }
 
-        static TdGamePatchState DetectStateFromData(byte[] data)
+        static TdGamePatchState DetectStateCore(byte[] data, UnrealPackage pkg)
         {
             var result = new TdGamePatchState();
             try
             {
-                var hdr = PackageSplicer.ParseHeader(data);
-                var names = PackageSplicer.ReadNameTable(data, hdr);
-                var exports = ReadExportTable(data, hdr, names);
-
-                byte[] GetFuncBc(string funcName, string outerName)
+                byte[] FuncBc(string outerName, string funcName)
                 {
-                    var exp = FindExport(exports, funcName, outerName);
-                    if (exp == null) return Array.Empty<byte>();
-                    int so = exp.Value.serialOffset;
+                    int so = UePackageLocator.FindExportSerialOffset(pkg, outerName, funcName);
+                    if (so < 0) return Array.Empty<byte>();
                     int bss = (int)PackageSplicer.ReadBSS(data, so);
                     if (bss <= 0 || bss > 100_000) return Array.Empty<byte>();
                     int bcStart = so + BytecodeBuilder.SCRIPT_HDR;
@@ -1138,23 +955,23 @@ namespace MirrorsEdgeTweaks.Services
                     return bc;
                 }
 
-                byte[] tzsBc = GetFuncBc("ToggleZoomState", "TdHUD");
+                byte[] tzsBc = FuncBc("TdHUD", "ToggleZoomState");
                 result.ClipApplied = BytecodeBuilder.FindPattern(tzsBc, BytecodeBuilder.ClipSignature) != -1;
 
-                byte[] piBc = GetFuncBc("PlayerInput", "TdPlayerInput");
+                byte[] piBc = FuncBc("TdPlayerInput", "PlayerInput");
                 result.SensApplied = BytecodeBuilder.FindPattern(piBc, BytecodeBuilder.SensSignature) != -1;
 
-                byte[] smBc = GetFuncBc("StartMove", "TdMove_Vertigo");
+                byte[] smBc = FuncBc("TdMove_Vertigo", "StartMove");
                 bool vertigoApplied = smBc.Length > 0
                     && BytecodeBuilder.FindPattern(smBc, BytecodeBuilder.VertigoSignature) != -1;
 
-                byte[] uzBc = GetFuncBc("UnZoom", "TdPlayerController");
+                byte[] uzBc = FuncBc("TdPlayerController", "UnZoom");
                 bool unzoomApplied = uzBc.Length > 0
                     && BytecodeBuilder.FindPattern(uzBc, BytecodeBuilder.ZoomRateSignature) != -1;
 
                 result.CoreApplied = vertigoApplied || unzoomApplied;
 
-                byte[] scBc = GetFuncBc("StartConnection", "TdOnlineLoginHandler");
+                byte[] scBc = FuncBc("TdOnlineLoginHandler", "StartConnection");
                 result.OnlineSkipApplied = scBc.Length > 0
                     && BytecodeBuilder.FindPattern(scBc, BytecodeBuilder.OnlineSkipSignature) != -1;
             }
@@ -1162,17 +979,6 @@ namespace MirrorsEdgeTweaks.Services
             {
             }
             return result;
-        }
-
-        static int FindCurrentSerialOffset(byte[] data, int originalSo, int exportIndex)
-        {
-            // After previous removals the offset may have shifted.
-            // Re read the export table to find the current serial offset for this export.
-            var hdr = PackageSplicer.ParseHeader(data);
-            var names = PackageSplicer.ReadNameTable(data, hdr);
-            var exports = ReadExportTable(data, hdr, names);
-            var exp = exports.FirstOrDefault(e => e.exportIndex == exportIndex);
-            return exp.serialOffset;
         }
 
         static (byte[] dcast, byte[] powner, byte[] vfunc) ExtractContextCallFromPatchedBlob(

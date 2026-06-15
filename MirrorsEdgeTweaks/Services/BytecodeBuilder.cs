@@ -57,6 +57,9 @@ namespace MirrorsEdgeTweaks.Services
         public const int SCRIPT_HDR = 0x2C;
         public const int BSS_REL = 0x28;
 
+        public const int VAR_TOKEN_SIZE = 5;
+        public const int NAME_TOKEN_SIZE = 9;
+
         // Primitive token builders
 
         public static byte[] F32(float val)

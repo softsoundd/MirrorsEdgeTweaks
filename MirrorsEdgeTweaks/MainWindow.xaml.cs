@@ -1239,7 +1239,7 @@ namespace MirrorsEdgeTweaks
                 _offsets.FovScaleMultiplierOffset != -1;
         }
 
-        
+
 
         private bool SetupAspectRatioEditor()
         {
@@ -1462,7 +1462,7 @@ namespace MirrorsEdgeTweaks
             Dispatcher.Invoke(ApplyDependencyState);
         }
 
-        
+
 
         private async void ApplyChanges_Click(object sender, RoutedEventArgs e)
         {
@@ -1511,7 +1511,7 @@ namespace MirrorsEdgeTweaks
                                 ooaEx.Message,
                                 DialogHelper.MessageType.Warning));
                         }
-                        catch {}
+                        catch { }
                     }
 
                     Dispatcher.Invoke(() => LoadPackages());
@@ -1811,7 +1811,7 @@ namespace MirrorsEdgeTweaks
             return snapshot;
         }
 
-        
+
 
         private float? GetUniformSensitivityTargetValueFromUiSelection()
         {
@@ -1967,7 +1967,7 @@ namespace MirrorsEdgeTweaks
             }
         }
 
-        
+
 
         private static string BuildTdGameInstallSuccessMessage(string selectedVersionName, TdGameTouchpointReapplyResult reapplyResult)
         {
@@ -6581,11 +6581,10 @@ namespace MirrorsEdgeTweaks
             public string SetCommand { get; }
             public string RemoveCommand { get; }
             public KeybindType Type { get; }
-
-            public KeybindInfo(string setCommand, string removeCommand = null, KeybindType type = KeybindType.Standard)
+            public KeybindInfo(string? setCommand, string? removeCommand = null, KeybindType type = KeybindType.Standard)
             {
-                SetCommand = setCommand;
-                RemoveCommand = removeCommand ?? setCommand;
+                SetCommand = setCommand ?? string.Empty;
+                RemoveCommand = removeCommand ?? setCommand ?? string.Empty;
                 Type = type;
             }
         }
