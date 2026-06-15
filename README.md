@@ -3,7 +3,7 @@
 A tool for modding, tweaking settings and providing game fixes for Mirror's Edge.
 
 ![Version](https://img.shields.io/badge/version-4.4.2-blue.svg)
-![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
+![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
 <img width="1280" height="720" alt="MET" src="https://github.com/user-attachments/assets/3c072b76-7266-4468-bda7-922386558c7c" />
