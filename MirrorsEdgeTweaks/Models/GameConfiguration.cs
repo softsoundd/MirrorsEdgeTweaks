@@ -8,6 +8,12 @@ namespace MirrorsEdgeTweaks.Models
         public string? EnginePackagePath { get; set; }
         public string? TdGamePackagePath { get; set; }
         public string LaunchArguments { get; set; } = string.Empty;
+
+        // Persisted user-entered scalar settings (metweaksconfig.ini). Kept here so a single
+        // settings service can read/write them without depending on the feature view models.
+        public string? Fov { get; set; }
+        public string? Dpi { get; set; }
+        public string? Cm360 { get; set; }
     }
 
     public class PackageOffsets

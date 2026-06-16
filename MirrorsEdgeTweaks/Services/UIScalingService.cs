@@ -1,4 +1,3 @@
-using MirrorsEdgeTweaks.Helpers;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -21,13 +20,15 @@ namespace MirrorsEdgeTweaks.Services
         private readonly IFileService _fileService;
         private readonly IOffsetFinderService _offsetFinderService;
         private readonly IDecompressionService _decompressionService;
+        private readonly IDialogService _dialogService;
 
-        public UIScalingService(IPackageService packageService, IFileService fileService, IOffsetFinderService offsetFinderService, IDecompressionService decompressionService)
+        public UIScalingService(IPackageService packageService, IFileService fileService, IOffsetFinderService offsetFinderService, IDecompressionService decompressionService, IDialogService dialogService)
         {
             _packageService = packageService;
             _fileService = fileService;
             _offsetFinderService = offsetFinderService;
             _decompressionService = decompressionService;
+            _dialogService = dialogService;
         }
 
         public bool ShouldOfferUIScaling(int width)
@@ -38,7 +39,7 @@ namespace MirrorsEdgeTweaks.Services
 
         public async Task<bool> AskUserForUIScalingConfirmationAsync()
         {
-            return await DialogHelper.ShowConfirmationAsync(
+            return await _dialogService.ShowConfirmationAsync(
                 "Fix UI and blurry text?",
                 "Do you wish to fix the game's UI to render natively at this resolution? This resolves the blurry text issues at higher resolutions and ensures consistent UI scaling.\n\n" +
                 "Note: This solution partially works at the moment. While blurriness is resolved, some text elements such as subtitles, lists, timer HUD and loading screen " +
@@ -96,10 +97,10 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     beforeShowingDialog?.Invoke();
 
-                    await DialogHelper.ShowMessageAsync(
+                    await _dialogService.ShowMessageAsync(
                         "Resolution Updated",
                         $"Resolution set to {width} x {height}\nUI fix applied successfully.",
-                        DialogHelper.MessageType.Success);
+                        DialogMessageType.Success);
                 }
             }
             catch (Exception)
@@ -869,10 +870,10 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     beforeShowingDialog?.Invoke();
 
-                    await DialogHelper.ShowMessageAsync(
+                    await _dialogService.ShowMessageAsync(
                         "Resolution Updated",
                         $"Resolution set to {width} x {height}\nUI fix reset to defaults.",
-                        DialogHelper.MessageType.Success);
+                        DialogMessageType.Success);
                 }
             }
             catch (Exception)

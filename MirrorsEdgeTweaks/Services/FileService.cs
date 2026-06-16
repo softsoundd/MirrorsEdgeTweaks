@@ -17,6 +17,15 @@ namespace MirrorsEdgeTweaks.Services
         void DeleteDirectory(string path, bool recursive = false);
         string GetTempPath();
         string CombinePaths(params string[] paths);
+        string[] ReadAllLines(string path);
+        void WriteAllLines(string path, IEnumerable<string> lines);
+        bool IsReadOnly(string path);
+        void SetReadOnly(string path, bool readOnly);
+
+        // Writes the given lines, clearing the read-only attribute first if set and then
+        // re-applying it afterwards. Mirrors the pattern used for the game's config files
+        // which are kept read-only so the game does not overwrite user changes on launch.
+        void WriteAllLinesPreservingReadOnly(string path, IEnumerable<string> lines);
     }
 
     public class FileService : IFileService
@@ -84,6 +93,46 @@ namespace MirrorsEdgeTweaks.Services
         public string CombinePaths(params string[] paths)
         {
             return Path.Combine(paths);
+        }
+
+        public string[] ReadAllLines(string path)
+        {
+            return File.ReadAllLines(path);
+        }
+
+        public void WriteAllLines(string path, IEnumerable<string> lines)
+        {
+            File.WriteAllLines(path, lines);
+        }
+
+        public bool IsReadOnly(string path)
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
+        }
+
+        public void SetReadOnly(string path, bool readOnly)
+        {
+            FileAttributes attributes = File.GetAttributes(path);
+            if (readOnly)
+            {
+                File.SetAttributes(path, attributes | FileAttributes.ReadOnly);
+            }
+            else
+            {
+                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            }
+        }
+
+        public void WriteAllLinesPreservingReadOnly(string path, IEnumerable<string> lines)
+        {
+            bool wasReadOnly = IsReadOnly(path);
+            if (wasReadOnly)
+            {
+                SetReadOnly(path, false);
+            }
+
+            File.WriteAllLines(path, lines);
+            SetReadOnly(path, true);
         }
     }
 }

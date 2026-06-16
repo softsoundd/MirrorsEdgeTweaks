@@ -1,0 +1,560 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
+using MirrorsEdgeTweaks.Services;
+using System.IO;
+
+namespace MirrorsEdgeTweaks.ViewModels
+{
+    // View model for the "Patches" section of the Game Tweaks tab. Owns the Unlocked Configs
+    // patch/unpatch commands and status refresh, plus the section's informational dialogs.
+    public partial class PatchesViewModel : ObservableObject
+    {
+        private readonly IDialogService _dialogService;
+        private readonly IFileService _fileService;
+        private readonly GameSession _session;
+        private readonly GameStatusViewModel _gameStatus;
+        private readonly DownloadProgressViewModel _downloadProgress;
+        private readonly UnlockedConfigsViewModel _unlockedConfigs;
+
+        [ObservableProperty] private string _loggingPatchStatus = "N/A";
+        [ObservableProperty] private System.Windows.Media.Brush _loggingPatchStatusForeground = System.Windows.Media.Brushes.Gray;
+        [ObservableProperty] private string _multiInstancePatchStatus = "N/A";
+        [ObservableProperty] private System.Windows.Media.Brush _multiInstancePatchStatusForeground = System.Windows.Media.Brushes.Gray;
+        [ObservableProperty] private string _ambiguousBypassPatchStatus = "N/A";
+        [ObservableProperty] private System.Windows.Media.Brush _ambiguousBypassPatchStatusForeground = System.Windows.Media.Brushes.Gray;
+
+        public PatchesViewModel(
+            IDialogService dialogService,
+            IFileService fileService,
+            GameSession session,
+            GameStatusViewModel gameStatus,
+            DownloadProgressViewModel downloadProgress,
+            UnlockedConfigsViewModel unlockedConfigs)
+        {
+            _dialogService = dialogService;
+            _fileService = fileService;
+            _session = session;
+            _gameStatus = gameStatus;
+            _downloadProgress = downloadProgress;
+            _unlockedConfigs = unlockedConfigs;
+
+            LoggingPatchStatusForeground = BodyLightBrush();
+            MultiInstancePatchStatusForeground = BodyLightBrush();
+            AmbiguousBypassPatchStatusForeground = BodyLightBrush();
+        }
+
+        private static System.Windows.Media.Brush PatchedBrush() =>
+            new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#4CAF50"));
+
+        private static System.Windows.Media.Brush BodyLightBrush() =>
+            System.Windows.Application.Current.TryFindResource("MaterialDesignBodyLight") as System.Windows.Media.Brush
+            ?? System.Windows.Media.Brushes.Gray;
+
+        private string? GetExePathIfPresent()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                return null;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            return File.Exists(exePath) ? exePath : null;
+        }
+
+        // ---- Logging / Multi-instance / Ambiguous-bypass status ----
+
+        public void RefreshLoggingStatus()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
+            {
+                LoggingPatchStatus = "N/A";
+                return;
+            }
+
+            try
+            {
+                switch (LoggingPatchHelper.GetPatchState(exePath))
+                {
+                    case LoggingPatchState.Patched:
+                        LoggingPatchStatus = "Patched";
+                        LoggingPatchStatusForeground = PatchedBrush();
+                        break;
+                    case LoggingPatchState.Unpatched:
+                        LoggingPatchStatus = "Unpatched";
+                        LoggingPatchStatusForeground = BodyLightBrush();
+                        break;
+                    default:
+                        LoggingPatchStatus = "";
+                        break;
+                }
+            }
+            catch
+            {
+                LoggingPatchStatus = "";
+            }
+        }
+
+        public void RefreshMultiInstanceStatus()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
+            {
+                MultiInstancePatchStatus = "N/A";
+                return;
+            }
+
+            try
+            {
+                switch (MultiInstancePatchHelper.GetPatchState(exePath))
+                {
+                    case MultiInstancePatchState.Patched:
+                        MultiInstancePatchStatus = "Patched";
+                        MultiInstancePatchStatusForeground = PatchedBrush();
+                        break;
+                    case MultiInstancePatchState.Unpatched:
+                        MultiInstancePatchStatus = "Unpatched";
+                        MultiInstancePatchStatusForeground = BodyLightBrush();
+                        break;
+                    default:
+                        MultiInstancePatchStatus = "";
+                        break;
+                }
+            }
+            catch
+            {
+                MultiInstancePatchStatus = "";
+            }
+        }
+
+        public void RefreshAmbiguousBypassStatus()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
+            {
+                AmbiguousBypassPatchStatus = "N/A";
+                return;
+            }
+
+            try
+            {
+                switch (AmbiguousBypassPatchHelper.GetPatchState(exePath))
+                {
+                    case AmbiguousBypassPatchState.Patched:
+                        AmbiguousBypassPatchStatus = "Patched";
+                        AmbiguousBypassPatchStatusForeground = PatchedBrush();
+                        break;
+                    case AmbiguousBypassPatchState.Unpatched:
+                        AmbiguousBypassPatchStatus = "Unpatched";
+                        AmbiguousBypassPatchStatusForeground = BodyLightBrush();
+                        break;
+                    default:
+                        AmbiguousBypassPatchStatus = "";
+                        break;
+                }
+            }
+            catch
+            {
+                AmbiguousBypassPatchStatus = "";
+            }
+        }
+
+        // ---- Logging ----
+
+        [RelayCommand]
+        private void PatchLogging()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Patched)
+                {
+                    LoggingPatchStatus = "Patched";
+                    LoggingPatchStatusForeground = PatchedBrush();
+                    return;
+                }
+
+                LoggingPatchHelper.ApplyPatch(exePath);
+                LoggingPatchStatus = "Patched";
+                LoggingPatchStatusForeground = PatchedBrush();
+                _dialogService.ShowMessage("Success", "Logging patch applied successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to apply logging patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void UnpatchLogging()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Unpatched)
+                {
+                    LoggingPatchStatus = "Unpatched";
+                    return;
+                }
+
+                LoggingPatchHelper.RemovePatch(exePath);
+                LoggingPatchStatus = "Unpatched";
+                LoggingPatchStatusForeground = BodyLightBrush();
+                _dialogService.ShowMessage("Success", "Logging patch removed successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to remove logging patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void ShowLoggingInfo()
+        {
+            _dialogService.ShowMessage("Enable Logging Information",
+                "Restores Mirror's Edge's disabled UE3 logging system.\n\n" +
+                "When patched, UnrealScript log() calls and native logging are written to a log file " +
+                "(and displayed in the log console window if the \"-LOG\" launch argument is used).\n\n" +
+                "By default, the log file is created at \"Logs\\Launch.log\" next to the executable. " +
+                "You can customise the log location using launch arguments:\n\n" +
+                "\"-LOG=mylog.txt\" — Write to a custom filename\n" +
+                "\"-ABSLOG=C:\\...\" — Write to an absolute path",
+                DialogMessageType.Information);
+        }
+
+        // ---- Multi-instance ----
+
+        [RelayCommand]
+        private void PatchMultiInstance()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Patched)
+                {
+                    MultiInstancePatchStatus = "Patched";
+                    MultiInstancePatchStatusForeground = PatchedBrush();
+                    return;
+                }
+
+                MultiInstancePatchHelper.ApplyPatch(exePath);
+                MultiInstancePatchStatus = "Patched";
+                MultiInstancePatchStatusForeground = PatchedBrush();
+                _dialogService.ShowMessage("Success", "Multi-instance patch applied successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to apply multi-instance patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void UnpatchMultiInstance()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Unpatched)
+                {
+                    MultiInstancePatchStatus = "Unpatched";
+                    return;
+                }
+
+                MultiInstancePatchHelper.RemovePatch(exePath);
+                MultiInstancePatchStatus = "Unpatched";
+                MultiInstancePatchStatusForeground = BodyLightBrush();
+                _dialogService.ShowMessage("Success", "Multi-instance patch removed successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to remove multi-instance patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void ShowMultiInstanceInfo()
+        {
+            _dialogService.ShowMessage("Multi-instance Information",
+                "Bypasses Mirror's Edge's single-instance restriction.\n\n" +
+                "This is useful for modders so that the editor can be kept open when launching the regular game instance.",
+                DialogMessageType.Information);
+        }
+
+        // ---- Ambiguous bypass ----
+
+        [RelayCommand]
+        private void PatchAmbiguousBypass()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Patched)
+                {
+                    AmbiguousBypassPatchStatus = "Patched";
+                    AmbiguousBypassPatchStatusForeground = PatchedBrush();
+                    return;
+                }
+
+                AmbiguousBypassPatchHelper.ApplyPatch(exePath);
+                AmbiguousBypassPatchStatus = "Patched";
+                AmbiguousBypassPatchStatusForeground = PatchedBrush();
+                _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to apply ambiguous bypass patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void UnpatchAmbiguousBypass()
+        {
+            string? exePath = RequireExePath();
+            if (exePath == null) return;
+
+            try
+            {
+                if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Unpatched)
+                {
+                    AmbiguousBypassPatchStatus = "Unpatched";
+                    return;
+                }
+
+                AmbiguousBypassPatchHelper.RemovePatch(exePath);
+                AmbiguousBypassPatchStatus = "Unpatched";
+                AmbiguousBypassPatchStatusForeground = BodyLightBrush();
+                _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed successfully.", DialogMessageType.Information);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to remove ambiguous bypass patch: {ex.Message}", DialogMessageType.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void ShowAmbiguousBypassInfo()
+        {
+            _dialogService.ShowMessage("Ambiguous Bypass Information",
+                "Suppresses the \"Ambiguous package name\" dialogs that block game startup.\n\n" +
+                "When multiple game files with the same name are present in the game directory, " +
+                "a blocking message box for each conflict is displayed when the game starts. " +
+                "With the patch applied, these dialogs are silently skipped.\n\n" +
+                "Warning: Bypassing this message is not intended for end users — this message appearing " +
+                "in the first place is a sign of a problem with your game's file setup. " +
+                "Only use this patch if you know what you're doing.",
+                DialogMessageType.Information);
+        }
+
+        private string? RequireExePath()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                _dialogService.ShowMessage("Error", "Please select a game directory first.", DialogMessageType.Error);
+                return null;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            if (!File.Exists(exePath))
+            {
+                _dialogService.ShowMessage("Error", $"Game executable not found at: {exePath}", DialogMessageType.Error);
+                return null;
+            }
+
+            return exePath;
+        }
+
+        private void SetUnlockedConfigsState(string status, System.Windows.Media.Brush foreground, bool isPatchEnabled, bool isUnpatchEnabled)
+        {
+            if (_session.IsProcessingGameDirectory)
+            {
+                return;
+            }
+
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                _unlockedConfigs.UnlockedConfigsStatus = status;
+                _unlockedConfigs.UnlockedConfigsStatusForeground = foreground;
+                _unlockedConfigs.IsPatchConfigsEnabled = isPatchEnabled;
+                _unlockedConfigs.IsUnpatchConfigsEnabled = isUnpatchEnabled;
+            });
+        }
+
+        public void RefreshUnlockedConfigs()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                return;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            if (!_fileService.FileExists(exePath))
+            {
+                SetUnlockedConfigsState("N/A (EXE not found)", System.Windows.Media.Brushes.Gray, false, false);
+                return;
+            }
+
+            try
+            {
+                ConfigUnlockState state = ConfigUnlockHelper.GetState(exePath);
+                switch (state)
+                {
+                    case ConfigUnlockState.Patched:
+                        SetUnlockedConfigsState("Patched", System.Windows.Media.Brushes.Green, true, true);
+                        break;
+                    case ConfigUnlockState.Unpatched:
+                        SetUnlockedConfigsState("Unpatched", System.Windows.Media.Brushes.Gray, true, true);
+                        break;
+                    case ConfigUnlockState.Mixed:
+                        SetUnlockedConfigsState("Partially Patched", System.Windows.Media.Brushes.DarkOrange, true, true);
+                        break;
+                    default:
+                        SetUnlockedConfigsState("Not Applicable", System.Windows.Media.Brushes.Gray, false, false);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                SetUnlockedConfigsState("Error reading EXE", System.Windows.Media.Brushes.Red, false, false);
+                _gameStatus.Status = $"Error checking config patch status: {ex.Message}";
+            }
+        }
+
+        [RelayCommand]
+        private Task PatchConfigsAsync() => ModifyExeConfigPatchAsync(unlock: true);
+
+        [RelayCommand]
+        private Task UnpatchConfigsAsync() => ModifyExeConfigPatchAsync(unlock: false);
+
+        private async Task ModifyExeConfigPatchAsync(bool unlock)
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                _dialogService.ShowMessage("Error", "Game directory not selected.", DialogMessageType.Error);
+                return;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            if (!_fileService.FileExists(exePath))
+            {
+                _dialogService.ShowMessage("Error", "MirrorsEdge.exe not found.", DialogMessageType.Error);
+                return;
+            }
+
+            ConfigUnlockState currentState;
+            try
+            {
+                currentState = ConfigUnlockHelper.GetState(exePath);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to read the executable state: {ex.Message}", DialogMessageType.Error);
+                return;
+            }
+
+            if (currentState == ConfigUnlockState.NotApplicable)
+            {
+                _dialogService.ShowMessage("Not Applicable", "Config patching is not applicable for this executable.", DialogMessageType.Warning);
+                return;
+            }
+
+            if (unlock && currentState == ConfigUnlockState.Patched)
+            {
+                _dialogService.ShowMessage("No Action Needed", "Configs are already patched.", DialogMessageType.Information);
+                return;
+            }
+
+            if (!unlock && currentState == ConfigUnlockState.Unpatched)
+            {
+                _dialogService.ShowMessage("No Action Needed", "Configs are already unpatched.", DialogMessageType.Information);
+                return;
+            }
+
+            _gameStatus.IsUiEnabled = false;
+            string actionText = unlock ? "Patching" : "Unpatching";
+            ShowProgress($"{actionText} configs...", true);
+
+            try
+            {
+                bool patchChanged = await Task.Run(() =>
+                {
+                    _session.Package?.Dispose();
+                    _session.TdGamePackage?.Dispose();
+                    _session.Package = null;
+                    _session.TdGamePackage = null;
+
+                    return unlock
+                        ? ConfigUnlockHelper.Unlock(exePath)
+                        : ConfigUnlockHelper.RestoreStock(exePath);
+                });
+
+                HideProgress();
+
+                if (patchChanged)
+                {
+                    RefreshUnlockedConfigs();
+                    string status = unlock ? "patched" : "unpatched";
+                    await _dialogService.ShowMessageAsync("Success", $"Successfully {status} unlocked configs.", DialogMessageType.Success);
+                }
+                else
+                {
+                    await _dialogService.ShowMessageAsync("No Action Needed", "The executable is already in the desired config-unlock state.", DialogMessageType.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                HideProgress();
+                await _dialogService.ShowMessageAsync("Error", $"An error occurred while patching the executable: {ex.Message}", DialogMessageType.Error);
+            }
+            finally
+            {
+                HideProgress();
+                _gameStatus.IsUiEnabled = true;
+            }
+        }
+
+        [RelayCommand]
+        private void ShowUnlockedConfigsInfo()
+        {
+            _dialogService.ShowMessage("Unlocked Configs Information",
+                "Applying this patch bypasses the \"corrupted config\" error message that prevents the game from launching when the game directory's config files have been modified " +
+                "(e.g. when removing the streak effects, adding custom maps, removing startup wait period, etc.).\n\nThis is essentially achieving what the MEMLA tool does, " +
+                "except it patches the executable directly.",
+                DialogMessageType.Information);
+        }
+
+        private void ShowProgress(string message, bool isIndeterminate)
+        {
+            _gameStatus.Status = message;
+            _downloadProgress.IsDownloadProgressVisible = true;
+            _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
+            if (!isIndeterminate)
+            {
+                _downloadProgress.DownloadProgressValue = 0;
+            }
+        }
+
+        private void HideProgress()
+        {
+            _downloadProgress.IsDownloadProgressVisible = false;
+            _downloadProgress.IsDownloadProgressIndeterminate = false;
+            _downloadProgress.DownloadProgressValue = 0;
+            _gameStatus.Status = "Ready.";
+        }
+    }
+}

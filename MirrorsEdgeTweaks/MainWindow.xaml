@@ -15,6 +15,7 @@
         Loaded="Window_Loaded"
         Icon="Icon.ico"
         ResizeMode="CanMinimize"
+        IsEnabled="{Binding GameStatus.IsUiEnabled}"
         WindowStartupLocation="CenterScreen">
 
     <materialDesign:DialogHost Identifier="RootDialog">
@@ -28,7 +29,7 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,10">
-            <Button Click="SelectGameDirectory_Click"
+            <Button Command="{Binding SelectGameDirectoryCommand}"
                     Padding="10,5"
                     DockPanel.Dock="Right"
                     Style="{StaticResource MaterialDesignOutlinedButton}">
@@ -43,8 +44,7 @@
                     BorderThickness="1"
                     Margin="0,0,10,0"
                     CornerRadius="4">
-                <TextBlock x:Name="GameDirectoryPathTextBlock"
-                           Text="No directory selected."
+                <TextBlock Text="{Binding GameStatus.GameDirectoryPath}"
                            VerticalAlignment="Center"
                            Padding="5"
                            TextTrimming="CharacterEllipsis"/>
@@ -57,8 +57,7 @@
                                          VerticalAlignment="Center"
                                          Margin="0,0,5,0"
                                          Opacity="0.7"/>
-                <TextBlock x:Name="GameVersionTextBlock"
-                           Text="Game Version: N/A"
+                <TextBlock Text="{Binding GameStatus.GameVersion}"
                            Opacity="0.7"/>
             </StackPanel>
             <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="16,0"/>
@@ -67,14 +66,14 @@
                                          VerticalAlignment="Center"
                                          Margin="0,0,5,0"
                                          Opacity="0.7"/>
-                <TextBlock x:Name="ConfigStatusTextBlock"
-                           Text="Documents Configs: N/A"
+                <TextBlock Text="{Binding GameStatus.ConfigStatus}"
+                           Foreground="{Binding GameStatus.ConfigStatusForeground}"
                            Opacity="0.7"/>
             </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="5,10,0,30">
-            <Button Click="LaunchGame_Click"
+            <Button Command="{Binding LaunchGameCommand}"
                     Style="{StaticResource MaterialDesignRaisedButton}"
                     Margin="0,0,10,0"
                     Height="28"
@@ -84,7 +83,7 @@
                     <TextBlock Text="Launch Game" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button Click="LaunchGameWithArgs_Click"
+            <Button Command="{Binding LaunchGameWithArgsCommand}"
                     Style="{StaticResource MaterialDesignOutlinedButton}"
                     Height="28"
                     Padding="8,4">
@@ -96,9 +95,10 @@
         </StackPanel>
 
         <Border Grid.Row="3" BorderBrush="LightGray" BorderThickness="0,2,0,0" Margin="0,0,0,0">
-            <TabControl x:Name="MainTabControl" Margin="0,0,0,10"
+            <TabControl Margin="0,0,0,10"
                     BorderThickness="0"
                     Padding="0"
+                    IsEnabled="{Binding GameStatus.IsMainTabEnabled}"
                     KeyboardNavigation.TabNavigation="None">
             <TabControl.Resources>
                 <Style TargetType="TabItem" BasedOn="{StaticResource MaterialDesignTabItem}">
@@ -134,7 +134,8 @@
                                 </Style.Resources>
                             </Style>
                         </ScrollViewer.Style>
-                        <StackPanel x:Name="GameTweaksGrid" TextElement.Foreground="Black" Margin="0,0,15,0" 
+                        <StackPanel TextElement.Foreground="Black" Margin="0,0,15,0" 
+                                    IsEnabled="{Binding GameStatus.IsGameTweaksEnabled}"
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
 
                             <!-- Mods Header -->
@@ -153,10 +154,10 @@
 
                                 <TextBlock Grid.Column="0" Text="TdGame Version:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,36,0"/>
-                                <ComboBox Grid.Column="1" x:Name="TdGameVersionComboBox"
+                                <ComboBox Grid.Column="1"
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="TdGameVersionComboBox_SelectionChanged">
+                                          SelectedIndex="{Binding TdGameVersion.SelectedVersionIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Original"/>
                                     <ComboBoxItem Content="TdGame Fix (by Keku)"/>
                                     <ComboBoxItem Content="Time Trials Timer Fix (by Nulaft)"/>
@@ -165,7 +166,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowTdGameVersionInfo_Click">
+                                        Command="{Binding Mods.ShowTdGameVersionInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -179,25 +180,25 @@
                                 <TextBlock Grid.Column="0" Text="Developer Console:" VerticalAlignment="Center"
                                            FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button x:Name="InstallConsoleButton" Content="Install"
-                                            Click="InstallConsole_Click"
+                                    <Button Content="Install"
+                                            Command="{Binding Mods.InstallConsoleCommand}"
                                             Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
-                                    <Button x:Name="UninstallConsoleButton" Content="Uninstall"
-                                            Click="UninstallConsole_Click"
+                                    <Button Content="Uninstall"
+                                            Command="{Binding Mods.UninstallConsoleCommand}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}"/>
                                     <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                             BorderBrush="{DynamicResource MaterialDesignDivider}"
                                             BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                             VerticalAlignment="Center">
-                                        <TextBlock x:Name="ConsoleStatus" Text="N/A" 
+                                        <TextBlock Text="{Binding Console.ConsoleStatus}" 
                                                    FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                   Foreground="{Binding Console.ConsoleStatusForeground}"/>
                                     </Border>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowConsoleInfo_Click">
+                                        Command="{Binding Mods.ShowConsoleInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -218,30 +219,30 @@
                                         <TextBlock Grid.Column="0" Text="Tweaks Scripts:" VerticalAlignment="Center"
                                                    FontWeight="Bold" MinWidth="129" Margin="0,0,10,0"/>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <Button x:Name="InstallTweaksScriptsButton" Content="Install"
-                                                    Click="InstallTweaksScripts_Click"
+                                            <Button Content="Install"
+                                                    Command="{Binding Mods.InstallTweaksScriptsCommand}"
                                                     Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
-                                            <Button x:Name="UninstallTweaksScriptsButton" Content="Uninstall"
-                                                    Click="UninstallTweaksScripts_Click"
+                                            <Button Content="Uninstall"
+                                                    Command="{Binding Mods.UninstallTweaksScriptsCommand}"
                                                     Style="{StaticResource MaterialDesignOutlinedButton}"/>
                                             <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                                                     BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                                     VerticalAlignment="Center">
-                                                <TextBlock x:Name="TweaksScriptsStatus" Text="N/A" 
+                                                <TextBlock Text="{Binding TweaksScripts.TweaksScriptsStatus}" 
                                                            FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                           Foreground="{Binding TweaksScripts.TweaksScriptsStatusForeground}"/>
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                                 ToolTip="Information"
                                                 Margin="5,0,0,0"
-                                                Click="ShowTweaksScriptsInfo_Click">
+                                                Command="{Binding Mods.ShowTweaksScriptsInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
                                         </Button>
                                     </Grid>
 
-                                    <StackPanel x:Name="TweaksScriptsUIInstallDependencyPanel" Margin="0,10,0,0">
+                                    <StackPanel Margin="0,10,0,0">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="179"/>
@@ -251,36 +252,36 @@
                                             <TextBlock Grid.Column="0" Text="Tweaks Scripts UI:" VerticalAlignment="Center"
                                                        FontWeight="Bold" MinWidth="129" Margin="0,0,10,0"/>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                                <Button x:Name="InstallTweaksScriptsUIButton" Content="Install"
-                                                        Click="InstallTweaksScriptsUI_Click"
-                                                        ToolTip="Install Tweaks Scripts first to enable this installer."
+                                                <Button Content="Install"
+                                                        Command="{Binding Mods.InstallTweaksScriptsUICommand}"
+                                                        IsEnabled="{Binding TweaksScripts.IsTweaksScriptsUIInstallEnabled}"
+                                                        ToolTip="{Binding TweaksScripts.TweaksScriptsUIInstallTooltip}"
                                                         ToolTipService.ShowOnDisabled="True"
                                                         Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,10,0"/>
-                                                <Button x:Name="UninstallTweaksScriptsUIButton" Content="Uninstall"
-                                                        Click="UninstallTweaksScriptsUI_Click"
+                                                <Button Content="Uninstall"
+                                                        Command="{Binding Mods.UninstallTweaksScriptsUICommand}"
                                                         Style="{StaticResource MaterialDesignOutlinedButton}"/>
                                                 <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                                                         BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                                         VerticalAlignment="Center">
-                                                    <TextBlock x:Name="TweaksScriptsUIStatus" Text="N/A" 
+                                                    <TextBlock Text="{Binding TweaksScripts.TweaksScriptsUIStatus}" 
                                                                FontSize="12" FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                               Foreground="{Binding TweaksScripts.TweaksScriptsUIStatusForeground}"/>
                                                 </Border>
                                             </StackPanel>
                                             <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                                     ToolTip="Information"
                                                     Margin="5,0,0,0"
-                                                    Click="ShowTweaksScriptsUIInfo_Click">
+                                                    Command="{Binding Mods.ShowTweaksScriptsUIInfoCommand}">
                                                 <materialDesign:PackIcon Kind="Information" />
                                             </Button>
                                         </Grid>
-                                        <TextBlock x:Name="TweaksScriptsUIRequiresScriptsText"
-                                                   Text="Install 'Tweaks Scripts' first to enable Tweaks Scripts UI installation."
+                                        <TextBlock Text="Install 'Tweaks Scripts' first to enable Tweaks Scripts UI installation."
                                                    Margin="0,6,0,0"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                   Visibility="Collapsed"/>
+                                                   Visibility="{Binding TweaksScripts.IsTweaksScriptsUIDependencyTextVisible, Converter={StaticResource BoolToVis}}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -303,25 +304,27 @@
                                 <TextBlock Grid.Column="0" Text="Unlocked Configs:" VerticalAlignment="Center"
                                            FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button x:Name="PatchConfigsButton" Content="Patch"
-                                            Click="PatchConfigs_Click"
+                                    <Button Content="Patch"
+                                            Command="{Binding Patches.PatchConfigsCommand}"
+                                            IsEnabled="{Binding UnlockedConfigs.IsPatchConfigsEnabled}"
                                             Style="{StaticResource MaterialDesignRaisedButton}" Width="70" Margin="0,0,10,0"/>
-                                    <Button x:Name="UnpatchConfigsButton" Content="Unpatch"
-                                            Click="UnpatchConfigs_Click"
+                                    <Button Content="Unpatch"
+                                            Command="{Binding Patches.UnpatchConfigsCommand}"
+                                            IsEnabled="{Binding UnlockedConfigs.IsUnpatchConfigsEnabled}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}" Width="87"/>
                                     <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                             BorderBrush="{DynamicResource MaterialDesignDivider}"
                                             BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                             VerticalAlignment="Center">
-                                    <TextBlock x:Name="UnlockedConfigsStatus" Text="N/A"
+                                    <TextBlock Text="{Binding UnlockedConfigs.UnlockedConfigsStatus}"
                                                    FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                   Foreground="{Binding UnlockedConfigs.UnlockedConfigsStatusForeground}"/>
                                     </Border>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowUnlockedConfigsInfo_Click">
+                                        Command="{Binding Patches.ShowUnlockedConfigsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -339,29 +342,29 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Launch Arguments:" VerticalAlignment="Center"
                                                FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
-                                    <TextBox x:Name="LaunchArgumentsTextBox"
-                                             Grid.Row="1"
+                                    <TextBox Grid.Row="1"
                                              Grid.Column="0"
                                              Grid.ColumnSpan="3"
                                              Margin="0,8,0,0"
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
+                                             Text="{Binding LaunchArguments.LaunchArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="Enter launch arguments"/>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
                                         <Button Content="Patch"
-                                                Click="ApplyLaunchArguments_Click"
+                                                Command="{Binding LaunchArguments.ApplyLaunchArgumentsCommand}"
                                                 Style="{StaticResource MaterialDesignRaisedButton}"
                                                 Width="70"
                                                 Margin="0,0,10,0"/>
                                         <Button Content="Unpatch"
-                                                Click="ResetLaunchArguments_Click"
+                                                Command="{Binding LaunchArguments.ResetLaunchArgumentsCommand}"
                                                 Style="{StaticResource MaterialDesignOutlinedButton}"
                                                 Width="87"/>
                                     </StackPanel>
                                     <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                             ToolTip="Information"
                                             Margin="5,0,0,0"
-                                            Click="ShowLaunchArgumentsInfo_Click">
+                                            Command="{Binding LaunchArguments.ShowLaunchArgumentsInfoCommand}">
                                         <materialDesign:PackIcon Kind="Information" />
                                     </Button>
                                 </Grid>
@@ -380,11 +383,10 @@
                                             CornerRadius="4"
                                             Padding="8,2"
                                             HorizontalAlignment="Left">
-                                        <TextBlock x:Name="LaunchArgumentsPatchStatusTextBlock"
-                                                   Text="N/A"
+                                        <TextBlock Text="{Binding LaunchArguments.PatchStatus}"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   Foreground="{Binding LaunchArguments.PatchStatusForeground}"
                                                    TextWrapping="Wrap"/>
                                     </Border>
                                 </Grid>
@@ -415,27 +417,26 @@
                                         <TextBlock Grid.Column="0" Text="Enable Logging:" VerticalAlignment="Center"
                                                    FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <Button x:Name="PatchLoggingButton" Content="Patch"
-                                                    Click="PatchLogging_Click"
+                                            <Button Content="Patch"
+                                                    Command="{Binding Patches.PatchLoggingCommand}"
                                                     Style="{StaticResource MaterialDesignRaisedButton}" Width="70" Margin="0,0,10,0"/>
-                                            <Button x:Name="UnpatchLoggingButton" Content="Unpatch"
-                                                    Click="UnpatchLogging_Click"
+                                            <Button Content="Unpatch"
+                                                    Command="{Binding Patches.UnpatchLoggingCommand}"
                                                     Style="{StaticResource MaterialDesignOutlinedButton}" Width="87"/>
                                             <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                                                     BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                                     VerticalAlignment="Center">
-                                                <TextBlock x:Name="LoggingPatchStatusTextBlock"
-                                                           Text="N/A"
+                                                <TextBlock Text="{Binding Patches.LoggingPatchStatus}"
                                                            FontSize="12"
                                                            FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                           Foreground="{Binding Patches.LoggingPatchStatusForeground}"/>
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                                 ToolTip="Information"
                                                 Margin="5,0,0,0"
-                                                Click="ShowLoggingInfo_Click">
+                                                Command="{Binding Patches.ShowLoggingInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
                                         </Button>
                                     </Grid>
@@ -450,27 +451,26 @@
                                         <TextBlock Grid.Column="0" Text="Multi-instance:" VerticalAlignment="Center"
                                                    FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <Button x:Name="PatchMultiInstanceButton" Content="Patch"
-                                                    Click="PatchMultiInstance_Click"
+                                            <Button Content="Patch"
+                                                    Command="{Binding Patches.PatchMultiInstanceCommand}"
                                                     Style="{StaticResource MaterialDesignRaisedButton}" Width="70" Margin="0,0,10,0"/>
-                                            <Button x:Name="UnpatchMultiInstanceButton" Content="Unpatch"
-                                                    Click="UnpatchMultiInstance_Click"
+                                            <Button Content="Unpatch"
+                                                    Command="{Binding Patches.UnpatchMultiInstanceCommand}"
                                                     Style="{StaticResource MaterialDesignOutlinedButton}" Width="87"/>
                                             <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                                                     BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                                     VerticalAlignment="Center">
-                                                <TextBlock x:Name="MultiInstancePatchStatusTextBlock"
-                                                           Text="N/A"
+                                                <TextBlock Text="{Binding Patches.MultiInstancePatchStatus}"
                                                            FontSize="12"
                                                            FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                           Foreground="{Binding Patches.MultiInstancePatchStatusForeground}"/>
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                                 ToolTip="Information"
                                                 Margin="5,0,0,0"
-                                                Click="ShowMultiInstanceInfo_Click">
+                                                Command="{Binding Patches.ShowMultiInstanceInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
                                         </Button>
                                     </Grid>
@@ -485,27 +485,26 @@
                                         <TextBlock Grid.Column="0" Text="Ambiguous Bypass:" VerticalAlignment="Center"
                                                    FontWeight="Bold" MinWidth="140" Margin="0,0,10,0"/>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <Button x:Name="PatchAmbiguousBypassButton" Content="Patch"
-                                                    Click="PatchAmbiguousBypass_Click"
+                                            <Button Content="Patch"
+                                                    Command="{Binding Patches.PatchAmbiguousBypassCommand}"
                                                     Style="{StaticResource MaterialDesignRaisedButton}" Width="70" Margin="0,0,10,0"/>
-                                            <Button x:Name="UnpatchAmbiguousBypassButton" Content="Unpatch"
-                                                    Click="UnpatchAmbiguousBypass_Click"
+                                            <Button Content="Unpatch"
+                                                    Command="{Binding Patches.UnpatchAmbiguousBypassCommand}"
                                                     Style="{StaticResource MaterialDesignOutlinedButton}" Width="87"/>
                                             <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                                                     BorderThickness="1" CornerRadius="4" Padding="8,2" Margin="10,0,0,0"
                                                     VerticalAlignment="Center">
-                                                <TextBlock x:Name="AmbiguousBypassPatchStatusTextBlock"
-                                                           Text="N/A"
+                                                <TextBlock Text="{Binding Patches.AmbiguousBypassPatchStatus}"
                                                            FontSize="12"
                                                            FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                           Foreground="{Binding Patches.AmbiguousBypassPatchStatusForeground}"/>
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                                 ToolTip="Information"
                                                 Margin="5,0,0,0"
-                                                Click="ShowAmbiguousBypassInfo_Click">
+                                                Command="{Binding Patches.ShowAmbiguousBypassInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
                                         </Button>
                                     </Grid>
@@ -531,11 +530,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Game Language:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,36,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="GameLanguageComboBox"
+                                <ComboBox Grid.Column="1"
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="GameLanguageComboBox_SelectionChanged">
+                                          SelectedIndex="{Binding Language.SelectedLanguageIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Čeština (CZE)" Foreground="Black"/>
                                     <ComboBoxItem Content="Deutsch (DEU)" Foreground="Black"/>
                                     <ComboBoxItem Content="English (INT)" Foreground="Black"/>
@@ -554,7 +553,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowGameLanguageInfo_Click">
+                                        Command="{Binding Language.ShowGameLanguageInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -568,11 +567,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Audio Backend:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,43,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="AudioBackendComboBox"
+                                <ComboBox Grid.Column="1"
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="AudioBackendComboBox_SelectionChanged">
+                                          SelectedIndex="{Binding Audio.SelectedAudioBackendIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="OpenAL (default)" Foreground="Black"/>
                                     <ComboBoxItem Content="OpenAL Soft (modern)" Foreground="Black"/>
                                     <ComboBoxItem Content="OpenAL Soft (HRTF)" Foreground="Black"/>
@@ -580,7 +579,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowAudioBackendInfo_Click">
+                                        Command="{Binding Audio.ShowAudioBackendInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -608,7 +607,7 @@
                                 </Style.Resources>
                             </Style>
                         </ScrollViewer.Style>
-                        <StackPanel x:Name="GraphicsTweaksGrid" TextElement.Foreground="Black" Margin="0,0,15,0" 
+                        <StackPanel TextElement.Foreground="Black" Margin="0,0,15,0" 
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
                             
                             <!-- Video Settings Header -->
@@ -640,14 +639,14 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,20,0">
                                             <TextBlock Text="Field of Vision (FOV)" FontWeight="Bold" Margin="0,0,0,10"/>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBox x:Name="NewFovValue" Width="80"
+                                                <TextBox Width="80"
                                                          Style="{StaticResource MaterialDesignTextBox}"
-                                                         TextChanged="NewFovValue_TextChanged"/>
+                                                         Text="{Binding Graphics.NewFovValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                                 <TextBlock Margin="10,0,0,0" VerticalAlignment="Center">
                                                     <Run Text="Current: "/>
-                                                    <Run x:Name="CurrentFovValue" Text="N/A" FontWeight="SemiBold"/>
+                                                    <Run Text="{Binding Graphics.CurrentFovValue, Mode=OneWay}" FontWeight="SemiBold"/>
                                                 </TextBlock>
-                                                <TextBlock x:Name="HorPlusStatus" Text=""
+                                                <TextBlock Text="{Binding Graphics.HorPlusStatus}"
                                                            Foreground="Gray" FontStyle="Italic"
                                                            VerticalAlignment="Center" Margin="8,0,0,0"/>
                                             </StackPanel>
@@ -656,7 +655,7 @@
                                         <StackPanel Grid.Column="2" Orientation="Horizontal"
                                                     VerticalAlignment="Top">
                                             <Button Content="Apply"
-                                                Click="ApplyChanges_Click"
+                                                Command="{Binding Graphics.ApplyFovCommand}"
                                                 Padding="20,10"
                                                 Height="38"
                                                 Style="{StaticResource MaterialDesignRaisedButton}"/>
@@ -664,19 +663,17 @@
                                                     ToolTip="Information"
                                                     Margin="5,0,0,0"
                                                     VerticalAlignment="Center"
-                                                    Click="ShowFOVInfo_Click">
+                                                    Command="{Binding Graphics.ShowFovInfoCommand}">
                                                 <materialDesign:PackIcon Kind="Information" />
                                             </Button>
                                         </StackPanel>
                                     </Grid>
 
                                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
-                                        <CheckBox x:Name="FovAgnosticSensCheckBox"
-                                                  Content="FOV-agnostic sensitivity"
-                                                  IsChecked="False"/>
-                                        <CheckBox x:Name="CompensatedClipCheckBox"
-                                                  Content="Compensated near clipping plane"
-                                                  IsChecked="True"
+                                        <CheckBox Content="FOV-agnostic sensitivity"
+                                                  IsChecked="{Binding Graphics.FovAgnosticSens, Mode=TwoWay}"/>
+                                        <CheckBox Content="Compensated near clipping plane"
+                                                  IsChecked="{Binding Graphics.CompensatedClip, Mode=TwoWay}"
                                                   Margin="20,0,0,0"/>
                                     </StackPanel>
                                 </Grid>
@@ -698,23 +695,25 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Resolution:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="ResolutionComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}" Margin="0,0,0,0"
-                                          SelectionChanged="ResolutionComboBox_SelectionChanged"/>
+                                          ItemsSource="{Binding Graphics.Resolutions}"
+                                          DisplayMemberPath="DisplayText"
+                                          SelectedItem="{Binding Graphics.SelectedResolution, Mode=TwoWay}"/>
                                 <Border Grid.Column="2" Background="{DynamicResource MaterialDesignCardBackground}"
                                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                                         BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="10,0,0,0"
                                         VerticalAlignment="Center">
-                                    <TextBlock x:Name="HighResFixStatus" Text="High-Res Fix N/A" 
+                                    <TextBlock Text="{Binding Graphics.HighResFixStatus}" 
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                               Foreground="{Binding Graphics.HighResFixStatusForeground}"/>
                                 </Border>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
                                         VerticalAlignment="Center"
-                                        Click="ShowHighResFixInfo_Click">
+                                        Command="{Binding Graphics.ShowHighResFixInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -730,16 +729,16 @@
                                 <TextBlock Grid.Column="0" Text="Render Resolution:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
                                 <Slider x:Name="RenderResolutionSlider" Grid.Column="1" 
-                                        Minimum="25" Maximum="200" Value="100" 
+                                        Minimum="25" Maximum="200" 
                                         TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center"
-                                        ValueChanged="RenderResolutionSlider_ValueChanged"/>
-                                <TextBlock x:Name="RenderResolutionValue" Grid.Column="2" 
-                                           Text="100%" VerticalAlignment="Center" Margin="10,0,0,0" MinWidth="45"/>
+                                        Value="{Binding Graphics.RenderResolutionPercent, Mode=TwoWay}"/>
+                                <TextBlock Grid.Column="2" 
+                                           Text="{Binding Graphics.RenderResolutionPercent, StringFormat={}{0:F0}%}" VerticalAlignment="Center" Margin="10,0,0,0" MinWidth="45"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowRenderResolutionInfo_Click">
+                                        Command="{Binding Graphics.ShowRenderResolutionInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -753,10 +752,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="VSync:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="VSyncComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="VSyncComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.VSync.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -764,7 +763,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowVSyncInfo_Click">
+                                        Command="{Binding Graphics.ShowVSyncInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -780,34 +779,35 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="FPS Limit:" VerticalAlignment="Center"
                                                FontWeight="Bold" Margin="0,0,20,0"/>
-                                    <TextBox x:Name="FPSLimitTextBox" Grid.Column="1" 
+                                    <TextBox Grid.Column="1" 
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
+                                             Text="{Binding Graphics.FpsLimitInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              materialDesign:HintAssist.Hint="1-2000"/>
                                     <Border Grid.Column="2" Background="{DynamicResource MaterialDesignCardBackground}"
                                             BorderBrush="{DynamicResource MaterialDesignDivider}"
                                             BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="10,0,0,0"
                                             VerticalAlignment="Center">
-                                        <TextBlock x:Name="FPSLimitStatus" Text="N/A" 
+                                        <TextBlock Text="{Binding Graphics.FpsLimitStatus}" 
                                                    FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                   Foreground="{Binding Graphics.FpsLimitStatusForeground}"/>
                                     </Border>
                                     <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                             ToolTip="Information"
                                             Margin="5,0,0,0"
                                             VerticalAlignment="Center"
-                                            Click="ShowFPSLimitInfo_Click">
+                                            Command="{Binding Graphics.ShowFpsLimitInfoCommand}">
                                         <materialDesign:PackIcon Kind="Information" />
                                     </Button>
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Margin="190,0,0,10">
                                     <Button Content="Apply" 
                                             Style="{StaticResource MaterialDesignRaisedButton}"
-                                            Click="ApplyFPSLimit_Click"
+                                            Command="{Binding Graphics.ApplyFpsLimitCommand}"
                                             Margin="0,0,10,0"/>
                                     <Button Content="Remove Limit" 
                                             Style="{StaticResource MaterialDesignOutlinedButton}"
-                                            Click="RemoveFPSLimit_Click"/>
+                                            Command="{Binding Graphics.RemoveFpsLimitCommand}"/>
                                 </StackPanel>
                             </StackPanel>
 
@@ -820,10 +820,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Anti-Aliasing:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="AntiAliasingComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="AntiAliasingComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.AntiAliasingIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
@@ -835,7 +835,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowAntiAliasingInfo_Click">
+                                        Command="{Binding Graphics.ShowAntiAliasingInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -849,10 +849,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="PhysX:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="PhysXComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="PhysXComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.PhysX.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -860,7 +860,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowPhysXInfo_Click">
+                                        Command="{Binding Graphics.ShowPhysXInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -875,17 +875,18 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="PhysX FPS:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <TextBox x:Name="PhysXFPSTextBox" Grid.Column="1" 
+                                <TextBox Grid.Column="1" 
                                          VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"/>
+                                         Style="{StaticResource MaterialDesignTextBox}"
+                                         Text="{Binding Graphics.PhysXFpsInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                 <Button Grid.Column="2" Content="Apply"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
                                         Margin="10,0,0,0"
-                                        Click="ApplyPhysXFPS_Click"/>
+                                        Command="{Binding Graphics.ApplyPhysXFpsCommand}"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowPhysXFPSInfo_Click">
+                                        Command="{Binding Graphics.ShowPhysXFpsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -910,12 +911,12 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Texture Detail:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="TextureDetailComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="TextureDetailComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.TextureDetailIndex, Mode=TwoWay}"
 >
-                                    <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="Collapsed"/>
+                                    <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="{Binding Graphics.IsTextureDetailCustomVisible, Converter={StaticResource BoolToVis}}"/>
                                     <ComboBoxItem Content="Lowest"/>
                                     <ComboBoxItem Content="Low"/>
                                     <ComboBoxItem Content="Medium"/>
@@ -925,7 +926,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowTextureDetailInfo_Click">
+                                        Command="{Binding Graphics.ShowTextureDetailInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -939,11 +940,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Graphics Quality:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="GraphicsQualityComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="GraphicsQualityComboBox_SelectionChanged">
-                                    <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="Collapsed"/>
+                                          SelectedIndex="{Binding Graphics.GraphicsQualityIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Custom" IsEnabled="False" Visibility="{Binding Graphics.IsGraphicsQualityCustomVisible, Converter={StaticResource BoolToVis}}"/>
                                     <ComboBoxItem Content="Lowest"/>
                                     <ComboBoxItem Content="Low"/>
                                     <ComboBoxItem Content="Medium"/>
@@ -953,7 +954,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowGraphicsQualityInfo_Click">
+                                        Command="{Binding Graphics.ShowGraphicsQualityInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -978,10 +979,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Anisotropic Filtering:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="AnisotropicFilteringComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="AnisotropicFilteringComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.Anisotropic.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
@@ -992,7 +993,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowAnisotropicFilteringInfo_Click">
+                                        Command="{Binding Graphics.ShowAnisotropicFilteringInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1006,10 +1007,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Static Decals:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="StaticDecalsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="StaticDecalsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.StaticDecals.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1017,7 +1018,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowStaticDecalsInfo_Click">
+                                        Command="{Binding Graphics.ShowStaticDecalsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1031,10 +1032,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Dynamic Decals:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="DynamicDecalsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="DynamicDecalsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.DynamicDecals.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1042,7 +1043,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowDynamicDecalsInfo_Click">
+                                        Command="{Binding Graphics.ShowDynamicDecalsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1056,10 +1057,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Radial Blur:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="RadialBlurComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="RadialBlurComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.RadialBlur.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1067,7 +1068,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowRadialBlurInfo_Click">
+                                        Command="{Binding Graphics.ShowRadialBlurInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1081,10 +1082,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Streak Effect:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="StreakEffectComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="StreakEffectComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.StreakEffectIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1092,7 +1093,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowStreakEffectInfo_Click">
+                                        Command="{Binding Graphics.ShowStreakEffectInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1106,10 +1107,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Bloom &amp; DoF:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="BloomDoFComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="BloomDoFComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.BloomDoF.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1117,7 +1118,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowBloomDoFInfo_Click">
+                                        Command="{Binding Graphics.ShowBloomDoFInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1131,10 +1132,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Lens Flare:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="LensFlareComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="LensFlareComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.LensFlare.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1142,7 +1143,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowLensFlareInfo_Click">
+                                        Command="{Binding Graphics.ShowLensFlareInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1156,10 +1157,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Dynamic Lights:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="DynamicLightsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="DynamicLightsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.DynamicLights.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1167,7 +1168,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowDynamicLightsInfo_Click">
+                                        Command="{Binding Graphics.ShowDynamicLightsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1181,10 +1182,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Dynamic Shadows:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="DynamicShadowsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="DynamicShadowsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.DynamicShadows.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1192,7 +1193,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowDynamicShadowsInfo_Click">
+                                        Command="{Binding Graphics.ShowDynamicShadowsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1206,10 +1207,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="HQ Dynamic Shadows:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="HQDynamicShadowsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="HQDynamicShadowsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.HqDynamicShadows.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1217,7 +1218,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowHQDynamicShadowsInfo_Click">
+                                        Command="{Binding Graphics.ShowHqDynamicShadowsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1231,10 +1232,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Lightmaps:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="LightmapsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="LightmapsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.Lightmaps.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1242,7 +1243,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowLightmapsInfo_Click">
+                                        Command="{Binding Graphics.ShowLightmapsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1256,10 +1257,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Sun Haze:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="SunHazeComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="SunHazeComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.SunHaze.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1267,7 +1268,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowSunHazeInfo_Click">
+                                        Command="{Binding Graphics.ShowSunHazeInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1281,10 +1282,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Tone Mapping:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="ToneMappingComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="ToneMappingComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.ToneMapping.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
@@ -1292,7 +1293,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowToneMappingInfo_Click">
+                                        Command="{Binding Graphics.ShowToneMappingInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1306,10 +1307,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Texture Management:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox x:Name="TextureManagementComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectionChanged="TextureManagementComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Graphics.TextureManagement.Index, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Modern"/>
                                     <ComboBoxItem Content="Default"/>
@@ -1317,7 +1318,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowTextureManagementInfo_Click">
+                                        Command="{Binding Graphics.ShowTextureManagementInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1340,19 +1341,20 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Minimum LOD:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <TextBox x:Name="MinLODTextBox" Grid.Column="1" 
+                                <TextBox Grid.Column="1" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
+                                         Text="{Binding Graphics.MinLodText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          materialDesign:HintAssist.Hint="1 - 4096"
                                          Margin="0,0,10,0"/>
                                 <Button Grid.Column="2" Content="Apply" 
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Click="ApplyMinLOD_Click"
+                                        Command="{Binding Graphics.ApplyMinLodCommand}"
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Click="ShowMinLODInfo_Click">
+                                        Command="{Binding Graphics.ShowMinLodInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1366,19 +1368,20 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Maximum LOD:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <TextBox x:Name="MaxLODTextBox" Grid.Column="1" 
+                                <TextBox Grid.Column="1" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
+                                         Text="{Binding Graphics.MaxLodText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          materialDesign:HintAssist.Hint="1 - 4096"
                                          Margin="0,0,10,0"/>
                                 <Button Grid.Column="2" Content="Apply" 
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Click="ApplyMaxLOD_Click"
+                                        Command="{Binding Graphics.ApplyMaxLodCommand}"
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Click="ShowMaxLODInfo_Click">
+                                        Command="{Binding Graphics.ShowMaxLodInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1392,19 +1395,20 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="LOD Bias:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0"/>
-                                <TextBox x:Name="LODBiasTextBox" Grid.Column="1" 
+                                <TextBox Grid.Column="1" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
+                                         Text="{Binding Graphics.LodBiasText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          materialDesign:HintAssist.Hint="0 - 12"
                                          Margin="0,0,10,0"/>
                                 <Button Grid.Column="2" Content="Apply" 
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Click="ApplyLODBias_Click"
+                                        Command="{Binding Graphics.ApplyLodBiasCommand}"
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Click="ShowLODBiasInfo_Click">
+                                        Command="{Binding Graphics.ShowLodBiasInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1448,11 +1452,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Mouse Smoothing:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox x:Name="MouseSmoothingComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="MouseSmoothingComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Input.MouseSmoothingIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
@@ -1460,7 +1464,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowMouseSmoothingInfo_Click">
+                                        Command="{Binding Input.ShowMouseSmoothingInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1473,11 +1477,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Uniform Sensitivity:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox x:Name="UniformSensitivityComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="UniformSensitivityComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Input.UniformSensitivityIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
@@ -1485,7 +1489,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowUniformSensitivityInfo_Click">
+                                        Command="{Binding Input.ShowUniformSensitivityInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1499,14 +1503,14 @@
                                 <TextBlock Grid.Column="0" Text="cm/360° Converter:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBox x:Name="DpiTextBox" 
+                                    <TextBox                                             Text="{Binding Input.Dpi, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Width="64" 
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
                                              materialDesign:HintAssist.Hint="DPI"
                                              Foreground="Black"
                                              Margin="0,0,10,0"/>
-                                    <TextBox x:Name="Cm360TextBox" 
+                                    <TextBox                                             Text="{Binding Input.Cm360, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Width="64" 
                                              VerticalAlignment="Center"
                                              Style="{StaticResource MaterialDesignTextBox}"
@@ -1517,17 +1521,17 @@
                                             Style="{StaticResource MaterialDesignRaisedButton}"
                                             VerticalAlignment="Center"
                                             Margin="0,0,10,0"
-                                            Click="ApplyCm360_Click"/>
+                                            Command="{Binding Input.ApplyCm360Command}"/>
                                     <Button Content="Reset" 
                                             Style="{StaticResource MaterialDesignOutlinedButton}"
                                             VerticalAlignment="Center"
                                             Margin="0,0,0,0"
-                                            Click="ResetCm360_Click"/>
+                                            Command="{Binding Input.ResetCm360Command}"/>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowCm360Info_Click">
+                                        Command="{Binding Input.ShowCm360InfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1540,11 +1544,11 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Gamepad Buttons:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox x:Name="GamepadButtonsComboBox" Grid.Column="1" 
+                                <ComboBox Grid.Column="1" 
                                           VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="GamepadButtonsComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Input.GamepadButtonsIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Xbox" Foreground="Black"/>
                                     <ComboBoxItem Content="PS3" Foreground="Black"/>
@@ -1552,7 +1556,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowGamepadButtonsInfo_Click">
+                                        Command="{Binding Input.ShowGamepadButtonsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1576,7 +1580,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Restart Level:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="RestartLevelKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="RestartLevelKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.RestartLevel.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1589,7 +1593,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowRestartLevelKeybindInfo_Click">
+                                        Command="{Binding Keybinds.RestartLevel.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1603,7 +1607,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Load Last Checkpoint:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LoadLastCheckpointKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="LoadLastCheckpointKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LoadLastCheckpoint.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1616,7 +1620,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowLoadLastCheckpointKeybindInfo_Click">
+                                        Command="{Binding Keybinds.LoadLastCheckpoint.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1630,7 +1634,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Restart Time Trial:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="RestartTimeTrialKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="RestartTimeTrialKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.RestartTimeTrial.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1643,7 +1647,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowRestartTimeTrialKeybindInfo_Click">
+                                        Command="{Binding Keybinds.RestartTimeTrial.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1657,7 +1661,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Reset Reaction Time:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ResetReactionTimeKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ResetReactionTimeKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ResetReactionTime.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1670,7 +1674,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowResetReactionTimeKeybindInfo_Click">
+                                        Command="{Binding Keybinds.ResetReactionTime.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1684,7 +1688,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="God Mode:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="GodModeKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="GodModeKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.GodMode.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1697,7 +1701,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowGodModeKeybindInfo_Click">
+                                        Command="{Binding Keybinds.GodMode.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1711,7 +1715,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kill Bots:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="KillBotsKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="KillBotsKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.KillBots.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1724,7 +1728,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowKillBotsKeybindInfo_Click">
+                                        Command="{Binding Keybinds.KillBots.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1738,7 +1742,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Third Person:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ThirdPersonKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ThirdPersonKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ThirdPerson.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1751,7 +1755,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowThirdPersonKeybindInfo_Click">
+                                        Command="{Binding Keybinds.ThirdPerson.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1765,7 +1769,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Toggle HUD:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ToggleHUDKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ToggleHUDKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ToggleHUD.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1778,7 +1782,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowToggleHUDKeybindInfo_Click">
+                                        Command="{Binding Keybinds.ToggleHUD.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1792,7 +1796,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="FPS Indicator:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="FPSIndicatorKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="FPSIndicatorKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.FPSIndicator.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1805,7 +1809,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowFPSIndicatorKeybindInfo_Click">
+                                        Command="{Binding Keybinds.FPSIndicator.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1819,7 +1823,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Level Stats:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LevelStatsKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="LevelStatsKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LevelStats.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1832,7 +1836,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowLevelStatsKeybindInfo_Click">
+                                        Command="{Binding Keybinds.LevelStats.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1846,7 +1850,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Triggers &amp; Volumes:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="TriggersVolumesKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="TriggersVolumesKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.TriggersVolumes.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1859,7 +1863,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowTriggersVolumesKeybindInfo_Click">
+                                        Command="{Binding Keybinds.TriggersVolumes.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1873,7 +1877,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Show Collision:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ShowCollisionKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ShowCollisionKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ShowCollision.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1886,7 +1890,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowShowCollisionKeybindInfo_Click">
+                                        Command="{Binding Keybinds.ShowCollision.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1910,7 +1914,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Noclip:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="NoclipKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="NoclipKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.Noclip.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1923,7 +1927,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowNoclipKeybindInfo_Click">
+                                        Command="{Binding Keybinds.Noclip.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1937,7 +1941,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Save State:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="SaveStateKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="SaveStateKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.SaveState.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1950,7 +1954,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowSaveStateKeybindInfo_Click">
+                                        Command="{Binding Keybinds.SaveState.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1964,7 +1968,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Load Saved State:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LoadSavedStateKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="LoadSavedStateKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LoadSavedState.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -1977,7 +1981,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowLoadSavedStateKeybindInfo_Click">
+                                        Command="{Binding Keybinds.LoadSavedState.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1991,7 +1995,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Save Timer Location:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="SaveTimerLocationKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="SaveTimerLocationKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.SaveTimerLocation.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -2004,7 +2008,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowSaveTimerLocationKeybindInfo_Click">
+                                        Command="{Binding Keybinds.SaveTimerLocation.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2018,7 +2022,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Delete Viewed Actor:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="DeleteViewedActorKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="DeleteViewedActorKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.DeleteViewedActor.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -2031,7 +2035,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowDeleteViewedActorKeybindInfo_Click">
+                                        Command="{Binding Keybinds.DeleteViewedActor.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2054,7 +2058,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Scroll Down Macro Key:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ScrollDownMacroKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ScrollDownMacroKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ScrollDownMacro.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -2067,7 +2071,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowScrollDownMacroKeyInfo_Click">
+                                        Command="{Binding Keybinds.ScrollDownMacro.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2081,7 +2085,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Scroll Up Macro Key:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ScrollUpMacroKeyTextBox" Grid.Column="1" 
+                                <TextBox x:Name="ScrollUpMacroKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ScrollUpMacro.DisplayKey, Mode=OneWay}" 
                                          VerticalAlignment="Center"
                                          Style="{StaticResource MaterialDesignTextBox}"
                                          Foreground="Black"
@@ -2094,7 +2098,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowScrollUpMacroKeyInfo_Click">
+                                        Command="{Binding Keybinds.ScrollUpMacro.ShowInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2118,11 +2122,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Intro Video:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="IntroVideoComboBox"
-                                          VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="IntroVideoComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Init.IntroVideoIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
@@ -2130,7 +2133,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowIntroVideoInfo_Click">
+                                        Command="{Binding Init.ShowIntroVideoInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2144,11 +2147,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Main Menu Delay:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="MainMenuDelayComboBox"
-                                          VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="MainMenuDelayComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Init.MainMenuDelayIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
@@ -2156,7 +2158,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowMainMenuDelayInfo_Click">
+                                        Command="{Binding Init.ShowMainMenuDelayInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2170,11 +2172,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Time Trial Countdown:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="TimeTrialCountdownComboBox"
-                                          VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="TimeTrialCountdownComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Init.TimeTrialCountdownIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="4 seconds (default)" Foreground="Black"/>
                                     <ComboBoxItem Content="3 seconds ('Ready' message starts sooner)" Foreground="Black"/>
@@ -2184,7 +2185,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowTimeTrialCountdownInfo_Click">
+                                        Command="{Binding Init.ShowTimeTrialCountdownInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2198,11 +2199,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Skip Online Check:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="SkipOnlineCheckComboBox"
-                                          VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="SkipOnlineCheckComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding Init.SkipOnlineIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
@@ -2210,7 +2210,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowSkipOnlineCheckInfo_Click">
+                                        Command="{Binding Init.ShowSkipOnlineCheckInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2233,11 +2233,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Cinematic Faith Model:" VerticalAlignment="Center"
                                            FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" x:Name="CinematicFaithComboBox"
-                                          VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
                                           Style="{StaticResource MaterialDesignComboBox}"
                                           Foreground="Black"
-                                          SelectionChanged="CinematicFaithComboBox_SelectionChanged"
+                                          SelectedIndex="{Binding CommunityMods.CinematicFaithIndex, Mode=TwoWay}"
 >
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
@@ -2245,7 +2244,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Click="ShowCinematicFaithInfo_Click">
+                                        Command="{Binding CommunityMods.ShowCinematicFaithInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -2258,15 +2257,14 @@
 
         <StatusBar Grid.Row="4" BorderThickness="0">
             <StatusBarItem VerticalAlignment="Center">
-                <TextBlock x:Name="StatusTextBlock"
-                           Text="Ready. Please select your Mirror's Edge game directory."
+                <TextBlock Text="{Binding GameStatus.Status}"
                            VerticalAlignment="Center"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right" VerticalAlignment="Center">
-                <ProgressBar x:Name="DownloadProgressBar"
-                             IsIndeterminate="True"
+                <ProgressBar Value="{Binding DownloadProgress.DownloadProgressValue}"
+                             IsIndeterminate="{Binding DownloadProgress.IsDownloadProgressIndeterminate}"
                              Width="150" Height="12"
-                             Visibility="Collapsed"
+                             Visibility="{Binding DownloadProgress.IsDownloadProgressVisible, Converter={StaticResource BoolToVis}}"
                              VerticalAlignment="Center"/>
             </StatusBarItem>
         </StatusBar>
