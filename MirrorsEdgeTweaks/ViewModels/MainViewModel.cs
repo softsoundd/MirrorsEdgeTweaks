@@ -180,23 +180,21 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 GameStatus.Status = "Refreshing status indicators...";
                 CheckForConfigFiles();
-                Graphics.InitializeResolutions();
+                await Graphics.InitializeResolutionsAsync();
                 Graphics.LoadFromIni();
-                Graphics.RefreshPhysXFps();
                 CommunityMods.RefreshCinematicFaith();
-                Graphics.RefreshFpsLimit();
-                Mods.RefreshTweaksScriptsUIStatus();
                 Input.RefreshMouseSmoothing();
-                Input.RefreshUniformSensitivity();
-                Input.RefreshGamepadButtons();
                 Keybinds.LoadCustomKeybinds();
                 Keybinds.LoadMacroKeybinds();
                 Init.RefreshIntroVideo();
                 Init.RefreshMainMenuDelay();
                 Init.RefreshTimeTrialCountdown();
-                Init.RefreshSkipOnlineCheck();
                 Language.Refresh();
                 Audio.RefreshAudioBackendSetting();
+                await Graphics.RefreshPhysXFpsAsync();
+                await Input.RefreshUniformSensitivityAsync();
+                await Input.RefreshGamepadButtonsAsync();
+                await Init.RefreshSkipOnlineCheckAsync();
                 loadSucceeded = true;
             }
             catch (Exception ex)
@@ -205,17 +203,21 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             finally
             {
+                Session.IsProcessingGameDirectory = false;
+
+                try { await RefreshStartupStatusIndicatorsAsync(); }
+                catch { }
+
                 DownloadProgress.IsDownloadProgressVisible = false;
                 DownloadProgress.IsDownloadProgressIndeterminate = false;
 
-                GameStatus.IsUiEnabled = true;
-                Session.IsProcessingGameDirectory = false;
-                RefreshStartupStatusIndicators();
                 if (loadSucceeded)
                 {
                     GameStatus.Status = "Ready.";
                 }
 
+                // Everything is loaded and refreshed - activate the whole UI at once
+                GameStatus.IsUiEnabled = true;
                 GameStatus.IsMainTabEnabled = true;
             }
         }
@@ -267,6 +269,23 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        private async Task RefreshStartupStatusIndicatorsAsync()
+        {
+            await DisplayGameVersionAsync();
+            CheckForConfigFiles();
+            _gameData.UpdateConsoleStatus();
+            Mods.RefreshTweaksScriptsStatus();
+            Mods.RefreshTweaksScriptsUIStatus();
+            await Patches.RefreshUnlockedConfigsAsync();
+            await Graphics.RefreshHighResFixAsync();
+            Graphics.RefreshFpsLimit();
+
+            if (Session.Package != null && Session.TdGamePackage != null)
+            {
+                await RefreshStatusDisplaysAsync();
+            }
+        }
+
         // Post-reload fan-out: runs the feature-VM refreshes after a package (re)load. Subscribed to
         // IGameDataService.PackagesReloaded so the service need not depend on the feature view models.
         private void OnPackagesReloaded()
@@ -307,6 +326,26 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
 
                 Graphics.RefreshEnginePatchState();
+            }
+            catch
+            {
+            }
+        }
+
+        private async Task RefreshStatusDisplaysAsync()
+        {
+            try
+            {
+                var tdGamePath = Session.Config.TdGamePackagePath;
+                if (tdGamePath != null && File.Exists(tdGamePath))
+                {
+                    var tdState = await Task.Run(() => TdGamePatcher.DetectState(tdGamePath));
+                    Graphics.CompensatedClip = tdState.ClipApplied;
+                    Graphics.FovAgnosticSens = tdState.SensApplied;
+                    Init.SetSkipOnlineFromState(tdState.OnlineSkipApplied);
+                }
+
+                await Graphics.RefreshEnginePatchStateAsync();
             }
             catch
             {
@@ -355,6 +394,18 @@ namespace MirrorsEdgeTweaks.ViewModels
             Patches.RefreshLoggingStatus();
             Patches.RefreshMultiInstanceStatus();
             Patches.RefreshAmbiguousBypassStatus();
+        }
+
+        private async Task DisplayGameVersionAsync()
+        {
+            var gameDir = Session.Config.GameDirectoryPath ?? string.Empty;
+            var gameVersion = await Task.Run(() => GameVersionHelper.GetGameVersion(gameDir));
+            GameStatus.GameVersion = gameVersion.DisplayText;
+
+            await LaunchArguments.RefreshPatchStatusAsync();
+            await Patches.RefreshLoggingStatusAsync();
+            await Patches.RefreshMultiInstanceStatusAsync();
+            await Patches.RefreshAmbiguousBypassStatusAsync();
         }
 
         // ---- Settings persistence ----
@@ -520,6 +571,95 @@ namespace MirrorsEdgeTweaks.ViewModels
             field = value;
             OnPropertyChanged(propertyName);
             return true;
+        }
+    }
+
+    public abstract class BusyViewModel : ObservableObject
+    {
+        protected readonly GameStatusViewModel _gameStatus;
+        protected readonly DownloadProgressViewModel _downloadProgress;
+        private bool _isBusy;
+        protected bool IsBusy => _isBusy;
+
+        protected BusyViewModel(GameStatusViewModel gameStatus, DownloadProgressViewModel downloadProgress)
+        {
+            _gameStatus = gameStatus;
+            _downloadProgress = downloadProgress;
+        }
+
+        protected static void Dispatch(Action action)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess()) action();
+            else dispatcher.Invoke(action);
+        }
+
+        protected static void Post(Action action)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess()) action();
+            else dispatcher.InvokeAsync(action);
+        }
+
+        protected void ShowProgress(string message, bool isIndeterminate)
+        {
+            Dispatch(() =>
+            {
+                _gameStatus.Status = message;
+                _downloadProgress.IsDownloadProgressVisible = true;
+                _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
+                if (!isIndeterminate)
+                {
+                    _downloadProgress.DownloadProgressValue = 0;
+                }
+            });
+        }
+
+        protected void HideProgress(string readyMessage = "Ready.")
+        {
+            Dispatch(() =>
+            {
+                _downloadProgress.IsDownloadProgressVisible = false;
+                _downloadProgress.IsDownloadProgressIndeterminate = false;
+                _downloadProgress.DownloadProgressValue = 0;
+                _gameStatus.Status = readyMessage;
+            });
+        }
+
+        protected async Task<bool> RunBusyAsync(string status, Action work, bool indeterminate = true, string completedStatus = "Ready.")
+        {
+            if (_isBusy) return false;
+            _isBusy = true;
+            ShowProgress(status, indeterminate);
+            try
+            {
+                await Task.Run(work);
+                return true;
+            }
+            finally
+            {
+                HideProgress(completedStatus);
+                _isBusy = false;
+            }
+        }
+
+        protected Action<double, string?> CreateThrottledProgressReporter(int minIntervalMs = 75)
+        {
+            long lastTick = 0;
+            return (value, status) =>
+            {
+                long now = Environment.TickCount64;
+                if (now - lastTick < minIntervalMs) return;
+                lastTick = now;
+                Post(() =>
+                {
+                    _downloadProgress.DownloadProgressValue = value;
+                    if (status != null)
+                    {
+                        _gameStatus.Status = status;
+                    }
+                });
+            };
         }
     }
 

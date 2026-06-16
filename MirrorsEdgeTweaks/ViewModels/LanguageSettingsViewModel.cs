@@ -10,7 +10,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // View model for the Game Language setting: detects the configured language, and on change
     // updates the Windows registry + TdEngine.ini and downloads/extracts the matching language
     // pack (reapplying the high-res UI fix afterwards).
-    public partial class LanguageSettingsViewModel : ObservableObject
+    public partial class LanguageSettingsViewModel : BusyViewModel
     {
         private const long SteamMirrorsEdgeExeSize = 31946072;
 
@@ -34,8 +34,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private readonly IDialogService _dialogService;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
         private readonly GraphicsTweaksViewModel _graphics;
 
         private bool _isLoading;
@@ -48,11 +46,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             GraphicsTweaksViewModel graphics)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
             _graphics = graphics;
         }
 
@@ -398,6 +395,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             var totalRead = 0L;
                             var buffer = new byte[8192];
                             var isMoreToRead = true;
+                            var report = CreateThrottledProgressReporter();
 
                             await dispatcher.InvokeAsync(() =>
                             {
@@ -423,11 +421,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                                     if (canReportProgress)
                                     {
                                         var progressPercentage = (double)totalRead / totalBytes * 100;
-                                        await dispatcher.InvokeAsync(() =>
-                                        {
-                                            _downloadProgress.DownloadProgressValue = progressPercentage;
-                                            _gameStatus.Status = $"Downloading language files... {progressPercentage:F0}%";
-                                        });
+                                        report(progressPercentage, $"Downloading language files... {progressPercentage:F0}%");
                                     }
                                 }
                             }

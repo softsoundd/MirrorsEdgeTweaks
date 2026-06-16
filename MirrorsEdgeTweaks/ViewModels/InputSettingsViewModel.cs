@@ -10,14 +10,12 @@ namespace MirrorsEdgeTweaks.ViewModels
     // View model for the "Input Settings" section of the Other Tweaks tab: mouse smoothing,
     // uniform sensitivity (TdGame.u byte-patch), the cm/360 sensitivity converter, and the gamepad
     // button-prompt swap. Package byte-patching is delegated to the helper layer.
-    public partial class InputSettingsViewModel : ObservableObject
+    public partial class InputSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IDecompressionService _decompressionService;
         private readonly IAppSettingsService _settings;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
 
         private bool _isLoading;
 
@@ -34,13 +32,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _decompressionService = decompressionService;
             _settings = settings;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
         }
 
         private static string TdInputIniPath => Path.Combine(
@@ -53,25 +50,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _isLoading = true;
             try { action(); }
             finally { _isLoading = previous; }
-        }
-
-        private void ShowProgress(string message, bool isIndeterminate)
-        {
-            _gameStatus.Status = message;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
-            if (!isIndeterminate)
-            {
-                _downloadProgress.DownloadProgressValue = 0;
-            }
-        }
-
-        private void HideProgress()
-        {
-            _downloadProgress.IsDownloadProgressVisible = false;
-            _downloadProgress.IsDownloadProgressIndeterminate = false;
-            _downloadProgress.DownloadProgressValue = 0;
-            _gameStatus.Status = "Ready.";
         }
 
         // ---- Mouse smoothing ----
@@ -244,6 +222,14 @@ namespace MirrorsEdgeTweaks.ViewModels
                 SetSilently(() => UniformSensitivityIndex = enabled.Value ? 0 : 1);
         }
 
+        public async Task RefreshUniformSensitivityAsync()
+        {
+            var path = _session.Config.TdGamePackagePath;
+            bool? enabled = await Task.Run(() => UniformSensitivityPatcher.ReadIsEnabled(path));
+            if (enabled.HasValue)
+                SetSilently(() => UniformSensitivityIndex = enabled.Value ? 0 : 1);
+        }
+
         // Used by the TdGame version-swap snapshot capture (TdGameVersionViewModel).
         public float? GetUniformSensitivityTargetValue() => UniformSensitivityIndex switch
         {
@@ -266,7 +252,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         // ---- cm/360 converter ----
 
         [RelayCommand]
-        private void ApplyCm360()
+        private async Task ApplyCm360()
         {
             string tdInputIniPath = TdInputIniPath;
 
@@ -295,11 +281,14 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 double calculatedValue = (360 * 2.54) / (cm360 * dpi * 0.1538);
 
-                ApplySensitivityMultiplier(tdInputIniPath, calculatedValue);
-
                 _session.Config.Dpi = Dpi;
                 _session.Config.Cm360 = Cm360;
-                _settings.Save();
+
+                await RunBusyAsync("Applying sensitivity settings...", () =>
+                {
+                    ApplySensitivityMultiplier(tdInputIniPath, calculatedValue);
+                    _settings.Save();
+                });
 
                 _dialogService.ShowMessage("Success",
                     $"Sensitivity multiplier set to {calculatedValue:F6}\n\n" +
@@ -497,6 +486,13 @@ namespace MirrorsEdgeTweaks.ViewModels
         public void RefreshGamepadButtons()
         {
             bool? isPs3 = GamepadButtonPatcher.ReadIsPs3(_session.Config.GameDirectoryPath);
+            SetSilently(() => GamepadButtonsIndex = isPs3 == true ? 1 : 0);
+        }
+
+        public async Task RefreshGamepadButtonsAsync()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            bool? isPs3 = await Task.Run(() => GamepadButtonPatcher.ReadIsPs3(gameDir));
             SetSilently(() => GamepadButtonsIndex = isPs3 == true ? 1 : 0);
         }
 

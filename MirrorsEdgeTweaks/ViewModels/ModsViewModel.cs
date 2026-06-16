@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
@@ -12,7 +11,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // Tweaks Scripts and Tweaks Scripts UI). Owns the section's informational dialog commands and the
     // developer-console install/uninstall commands. Per-feature status text lives in the shared
     // status view models.
-    public partial class ModsViewModel : ObservableObject
+    public partial class ModsViewModel : BusyViewModel
     {
         private const string ConsoleDownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeConsole.zip";
 
@@ -21,8 +20,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IFileService _fileService;
         private readonly IGameDataService _gameData;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
         private readonly TweaksScriptsViewModel _tweaksScripts;
 
         public ModsViewModel(
@@ -34,14 +31,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             TweaksScriptsViewModel tweaksScripts)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _packageService = packageService;
             _fileService = fileService;
             _gameData = gameData;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
             _tweaksScripts = tweaksScripts;
         }
 
@@ -170,25 +166,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        private void ShowProgress(string message, bool isIndeterminate)
-        {
-            _gameStatus.Status = message;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
-            if (!isIndeterminate)
-            {
-                _downloadProgress.DownloadProgressValue = 0;
-            }
-        }
-
-        private void HideProgress()
-        {
-            _downloadProgress.IsDownloadProgressVisible = false;
-            _downloadProgress.IsDownloadProgressIndeterminate = false;
-            _downloadProgress.DownloadProgressValue = 0;
-            _gameStatus.Status = "Ready.";
-        }
-
         [RelayCommand]
         private async Task InstallTweaksScriptsAsync()
         {
@@ -230,17 +207,14 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 var totalBytesRead = 0L;
                                 var buffer = new byte[8192];
                                 int bytesRead;
+                                var report = CreateThrottledProgressReporter();
                                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                                 {
                                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                                     totalBytesRead += bytesRead;
                                     var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
 
-                                    dispatcher.Invoke(() =>
-                                    {
-                                        _downloadProgress.DownloadProgressValue = progress;
-                                        _gameStatus.Status = $"Downloading Tweaks Scripts... {progress}%";
-                                    });
+                                    report(progress, $"Downloading Tweaks Scripts... {progress}%");
                                 }
                             }
                             else
@@ -495,6 +469,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             var buffer = new byte[8192];
                             long totalRead = 0;
                             int bytesRead;
+                            var report = CreateThrottledProgressReporter();
 
                             while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                             {
@@ -504,8 +479,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 if (totalBytes.HasValue)
                                 {
                                     double progress = (double)totalRead / totalBytes.Value * 100;
-                                    _downloadProgress.DownloadProgressValue = progress;
-                                    _gameStatus.Status = $"Downloading Tweaks Scripts UI... {progress:F0}%";
+                                    report(progress, $"Downloading Tweaks Scripts UI... {progress:F0}%");
                                 }
                             }
                         }
@@ -514,8 +488,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                     _gameStatus.Status = "Extracting Tweaks Scripts UI...";
                     _downloadProgress.IsDownloadProgressIndeterminate = true;
 
-                    ZipFile.ExtractToDirectory(tempZipPath, publishedPath, true);
-                    File.Delete(tempZipPath);
+                    await Task.Run(() =>
+                    {
+                        ZipFile.ExtractToDirectory(tempZipPath, publishedPath, true);
+                        File.Delete(tempZipPath);
+                    });
 
                     HideProgress();
 
@@ -548,7 +525,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void UninstallTweaksScriptsUI()
+        private async Task UninstallTweaksScriptsUI()
         {
             try
             {
@@ -563,15 +540,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                     Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_Custom_Races.upk")
                 };
 
-                int deletedCount = 0;
-                foreach (string file in filesToDelete)
+                int deletedCount = await Task.Run(() =>
                 {
-                    if (File.Exists(file))
+                    int count = 0;
+                    foreach (string file in filesToDelete)
                     {
-                        File.Delete(file);
-                        deletedCount++;
+                        if (File.Exists(file))
+                        {
+                            File.Delete(file);
+                            count++;
+                        }
                     }
-                }
+                    return count;
+                });
 
                 if (deletedCount == 0)
                 {
@@ -655,17 +636,14 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 var totalBytesRead = 0L;
                                 var buffer = new byte[8192];
                                 int bytesRead;
+                                var report = CreateThrottledProgressReporter();
                                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                                 {
                                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                                     totalBytesRead += bytesRead;
                                     var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
 
-                                    dispatcher.Invoke(() =>
-                                    {
-                                        _downloadProgress.DownloadProgressValue = progress;
-                                        _gameStatus.Status = $"Downloading console... {progress}%";
-                                    });
+                                    report(progress, $"Downloading console... {progress}%");
                                 }
                             }
                         }

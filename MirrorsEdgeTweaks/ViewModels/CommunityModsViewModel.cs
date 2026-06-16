@@ -11,15 +11,13 @@ namespace MirrorsEdgeTweaks.ViewModels
     // View model for the "Community Mods" section of the Other Tweaks tab. Currently hosts the
     // Cinematic Faith Model (by Keku) install/uninstall, which downloads and extracts the relevant
     // model package and detects the installed variant by file size.
-    public partial class CommunityModsViewModel : ObservableObject
+    public partial class CommunityModsViewModel : BusyViewModel
     {
         private const string OriginalModelUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/FaithModelOriginal.zip";
         private const string CinematicModelUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/FaithModelCinematic.zip";
 
         private readonly IDialogService _dialogService;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
 
         private bool _isLoading;
 
@@ -30,11 +28,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
         }
 
         partial void OnCinematicFaithIndexChanged(int value) => _ = OnCinematicFaithChangedAsync(value);
@@ -110,6 +107,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             var buffer = new byte[8192];
                             long totalRead = 0;
                             int bytesRead;
+                            var report = CreateThrottledProgressReporter();
 
                             while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                             {
@@ -119,8 +117,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 if (totalBytes.HasValue)
                                 {
                                     double progress = (double)totalRead / totalBytes.Value * 100;
-                                    _downloadProgress.DownloadProgressValue = progress;
-                                    _gameStatus.Status = $"Downloading Cinematic Faith Model files... {progress:F0}%";
+                                    report(progress, $"Downloading Cinematic Faith Model files... {progress:F0}%");
                                 }
                             }
                         }

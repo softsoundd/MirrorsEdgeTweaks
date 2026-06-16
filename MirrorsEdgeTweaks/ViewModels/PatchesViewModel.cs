@@ -8,13 +8,11 @@ namespace MirrorsEdgeTweaks.ViewModels
 {
     // View model for the "Patches" section of the Game Tweaks tab. Owns the Unlocked Configs
     // patch/unpatch commands and status refresh, plus the section's informational dialogs.
-    public partial class PatchesViewModel : ObservableObject
+    public partial class PatchesViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
         [ObservableProperty] private string _loggingPatchStatus = "N/A";
@@ -31,12 +29,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             UnlockedConfigsViewModel unlockedConfigs)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
             _unlockedConfigs = unlockedConfigs;
 
             LoggingPatchStatusForeground = BodyLightBrush();
@@ -75,26 +72,38 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try
+            try { ApplyLoggingStatus(LoggingPatchHelper.GetPatchState(exePath)); }
+            catch { LoggingPatchStatus = ""; }
+        }
+
+        public async Task RefreshLoggingStatusAsync()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
             {
-                switch (LoggingPatchHelper.GetPatchState(exePath))
-                {
-                    case LoggingPatchState.Patched:
-                        LoggingPatchStatus = "Patched";
-                        LoggingPatchStatusForeground = PatchedBrush();
-                        break;
-                    case LoggingPatchState.Unpatched:
-                        LoggingPatchStatus = "Unpatched";
-                        LoggingPatchStatusForeground = BodyLightBrush();
-                        break;
-                    default:
-                        LoggingPatchStatus = "";
-                        break;
-                }
+                LoggingPatchStatus = "N/A";
+                return;
             }
-            catch
+
+            try { ApplyLoggingStatus(await Task.Run(() => LoggingPatchHelper.GetPatchState(exePath))); }
+            catch { LoggingPatchStatus = ""; }
+        }
+
+        private void ApplyLoggingStatus(LoggingPatchState state)
+        {
+            switch (state)
             {
-                LoggingPatchStatus = "";
+                case LoggingPatchState.Patched:
+                    LoggingPatchStatus = "Patched";
+                    LoggingPatchStatusForeground = PatchedBrush();
+                    break;
+                case LoggingPatchState.Unpatched:
+                    LoggingPatchStatus = "Unpatched";
+                    LoggingPatchStatusForeground = BodyLightBrush();
+                    break;
+                default:
+                    LoggingPatchStatus = "";
+                    break;
             }
         }
 
@@ -107,26 +116,38 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try
+            try { ApplyMultiInstanceStatus(MultiInstancePatchHelper.GetPatchState(exePath)); }
+            catch { MultiInstancePatchStatus = ""; }
+        }
+
+        public async Task RefreshMultiInstanceStatusAsync()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
             {
-                switch (MultiInstancePatchHelper.GetPatchState(exePath))
-                {
-                    case MultiInstancePatchState.Patched:
-                        MultiInstancePatchStatus = "Patched";
-                        MultiInstancePatchStatusForeground = PatchedBrush();
-                        break;
-                    case MultiInstancePatchState.Unpatched:
-                        MultiInstancePatchStatus = "Unpatched";
-                        MultiInstancePatchStatusForeground = BodyLightBrush();
-                        break;
-                    default:
-                        MultiInstancePatchStatus = "";
-                        break;
-                }
+                MultiInstancePatchStatus = "N/A";
+                return;
             }
-            catch
+
+            try { ApplyMultiInstanceStatus(await Task.Run(() => MultiInstancePatchHelper.GetPatchState(exePath))); }
+            catch { MultiInstancePatchStatus = ""; }
+        }
+
+        private void ApplyMultiInstanceStatus(MultiInstancePatchState state)
+        {
+            switch (state)
             {
-                MultiInstancePatchStatus = "";
+                case MultiInstancePatchState.Patched:
+                    MultiInstancePatchStatus = "Patched";
+                    MultiInstancePatchStatusForeground = PatchedBrush();
+                    break;
+                case MultiInstancePatchState.Unpatched:
+                    MultiInstancePatchStatus = "Unpatched";
+                    MultiInstancePatchStatusForeground = BodyLightBrush();
+                    break;
+                default:
+                    MultiInstancePatchStatus = "";
+                    break;
             }
         }
 
@@ -139,50 +160,70 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try
+            try { ApplyAmbiguousBypassStatus(AmbiguousBypassPatchHelper.GetPatchState(exePath)); }
+            catch { AmbiguousBypassPatchStatus = ""; }
+        }
+
+        public async Task RefreshAmbiguousBypassStatusAsync()
+        {
+            string? exePath = GetExePathIfPresent();
+            if (exePath == null)
             {
-                switch (AmbiguousBypassPatchHelper.GetPatchState(exePath))
-                {
-                    case AmbiguousBypassPatchState.Patched:
-                        AmbiguousBypassPatchStatus = "Patched";
-                        AmbiguousBypassPatchStatusForeground = PatchedBrush();
-                        break;
-                    case AmbiguousBypassPatchState.Unpatched:
-                        AmbiguousBypassPatchStatus = "Unpatched";
-                        AmbiguousBypassPatchStatusForeground = BodyLightBrush();
-                        break;
-                    default:
-                        AmbiguousBypassPatchStatus = "";
-                        break;
-                }
+                AmbiguousBypassPatchStatus = "N/A";
+                return;
             }
-            catch
+
+            try { ApplyAmbiguousBypassStatus(await Task.Run(() => AmbiguousBypassPatchHelper.GetPatchState(exePath))); }
+            catch { AmbiguousBypassPatchStatus = ""; }
+        }
+
+        private void ApplyAmbiguousBypassStatus(AmbiguousBypassPatchState state)
+        {
+            switch (state)
             {
-                AmbiguousBypassPatchStatus = "";
+                case AmbiguousBypassPatchState.Patched:
+                    AmbiguousBypassPatchStatus = "Patched";
+                    AmbiguousBypassPatchStatusForeground = PatchedBrush();
+                    break;
+                case AmbiguousBypassPatchState.Unpatched:
+                    AmbiguousBypassPatchStatus = "Unpatched";
+                    AmbiguousBypassPatchStatusForeground = BodyLightBrush();
+                    break;
+                default:
+                    AmbiguousBypassPatchStatus = "";
+                    break;
             }
         }
 
         // ---- Logging ----
 
         [RelayCommand]
-        private void PatchLogging()
+        private async Task PatchLogging()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Patched)
+                bool alreadyPatched = false;
+                bool ran = await RunBusyAsync("Applying logging patch...", () =>
                 {
-                    LoggingPatchStatus = "Patched";
-                    LoggingPatchStatusForeground = PatchedBrush();
-                    return;
-                }
+                    if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Patched)
+                    {
+                        alreadyPatched = true;
+                        return;
+                    }
 
-                LoggingPatchHelper.ApplyPatch(exePath);
+                    LoggingPatchHelper.ApplyPatch(exePath);
+                });
+                if (!ran) return;
+
                 LoggingPatchStatus = "Patched";
                 LoggingPatchStatusForeground = PatchedBrush();
-                _dialogService.ShowMessage("Success", "Logging patch applied successfully.", DialogMessageType.Information);
+                if (!alreadyPatched)
+                {
+                    _dialogService.ShowMessage("Success", "Logging patch applied successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -191,23 +232,32 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void UnpatchLogging()
+        private async Task UnpatchLogging()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Unpatched)
+                bool alreadyUnpatched = false;
+                bool ran = await RunBusyAsync("Removing logging patch...", () =>
                 {
-                    LoggingPatchStatus = "Unpatched";
-                    return;
-                }
+                    if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Unpatched)
+                    {
+                        alreadyUnpatched = true;
+                        return;
+                    }
 
-                LoggingPatchHelper.RemovePatch(exePath);
+                    LoggingPatchHelper.RemovePatch(exePath);
+                });
+                if (!ran) return;
+
                 LoggingPatchStatus = "Unpatched";
-                LoggingPatchStatusForeground = BodyLightBrush();
-                _dialogService.ShowMessage("Success", "Logging patch removed successfully.", DialogMessageType.Information);
+                if (!alreadyUnpatched)
+                {
+                    LoggingPatchStatusForeground = BodyLightBrush();
+                    _dialogService.ShowMessage("Success", "Logging patch removed successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -232,24 +282,32 @@ namespace MirrorsEdgeTweaks.ViewModels
         // ---- Multi-instance ----
 
         [RelayCommand]
-        private void PatchMultiInstance()
+        private async Task PatchMultiInstance()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Patched)
+                bool alreadyPatched = false;
+                bool ran = await RunBusyAsync("Applying multi-instance patch...", () =>
                 {
-                    MultiInstancePatchStatus = "Patched";
-                    MultiInstancePatchStatusForeground = PatchedBrush();
-                    return;
-                }
+                    if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Patched)
+                    {
+                        alreadyPatched = true;
+                        return;
+                    }
 
-                MultiInstancePatchHelper.ApplyPatch(exePath);
+                    MultiInstancePatchHelper.ApplyPatch(exePath);
+                });
+                if (!ran) return;
+
                 MultiInstancePatchStatus = "Patched";
                 MultiInstancePatchStatusForeground = PatchedBrush();
-                _dialogService.ShowMessage("Success", "Multi-instance patch applied successfully.", DialogMessageType.Information);
+                if (!alreadyPatched)
+                {
+                    _dialogService.ShowMessage("Success", "Multi-instance patch applied successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -258,23 +316,32 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void UnpatchMultiInstance()
+        private async Task UnpatchMultiInstance()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Unpatched)
+                bool alreadyUnpatched = false;
+                bool ran = await RunBusyAsync("Removing multi-instance patch...", () =>
                 {
-                    MultiInstancePatchStatus = "Unpatched";
-                    return;
-                }
+                    if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Unpatched)
+                    {
+                        alreadyUnpatched = true;
+                        return;
+                    }
 
-                MultiInstancePatchHelper.RemovePatch(exePath);
+                    MultiInstancePatchHelper.RemovePatch(exePath);
+                });
+                if (!ran) return;
+
                 MultiInstancePatchStatus = "Unpatched";
-                MultiInstancePatchStatusForeground = BodyLightBrush();
-                _dialogService.ShowMessage("Success", "Multi-instance patch removed successfully.", DialogMessageType.Information);
+                if (!alreadyUnpatched)
+                {
+                    MultiInstancePatchStatusForeground = BodyLightBrush();
+                    _dialogService.ShowMessage("Success", "Multi-instance patch removed successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -294,24 +361,32 @@ namespace MirrorsEdgeTweaks.ViewModels
         // ---- Ambiguous bypass ----
 
         [RelayCommand]
-        private void PatchAmbiguousBypass()
+        private async Task PatchAmbiguousBypass()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Patched)
+                bool alreadyPatched = false;
+                bool ran = await RunBusyAsync("Applying ambiguous bypass patch...", () =>
                 {
-                    AmbiguousBypassPatchStatus = "Patched";
-                    AmbiguousBypassPatchStatusForeground = PatchedBrush();
-                    return;
-                }
+                    if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Patched)
+                    {
+                        alreadyPatched = true;
+                        return;
+                    }
 
-                AmbiguousBypassPatchHelper.ApplyPatch(exePath);
+                    AmbiguousBypassPatchHelper.ApplyPatch(exePath);
+                });
+                if (!ran) return;
+
                 AmbiguousBypassPatchStatus = "Patched";
                 AmbiguousBypassPatchStatusForeground = PatchedBrush();
-                _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied successfully.", DialogMessageType.Information);
+                if (!alreadyPatched)
+                {
+                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -320,23 +395,32 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void UnpatchAmbiguousBypass()
+        private async Task UnpatchAmbiguousBypass()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Unpatched)
+                bool alreadyUnpatched = false;
+                bool ran = await RunBusyAsync("Removing ambiguous bypass patch...", () =>
                 {
-                    AmbiguousBypassPatchStatus = "Unpatched";
-                    return;
-                }
+                    if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Unpatched)
+                    {
+                        alreadyUnpatched = true;
+                        return;
+                    }
 
-                AmbiguousBypassPatchHelper.RemovePatch(exePath);
+                    AmbiguousBypassPatchHelper.RemovePatch(exePath);
+                });
+                if (!ran) return;
+
                 AmbiguousBypassPatchStatus = "Unpatched";
-                AmbiguousBypassPatchStatusForeground = BodyLightBrush();
-                _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed successfully.", DialogMessageType.Information);
+                if (!alreadyUnpatched)
+                {
+                    AmbiguousBypassPatchStatusForeground = BodyLightBrush();
+                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed successfully.", DialogMessageType.Information);
+                }
             }
             catch (Exception ex)
             {
@@ -408,29 +492,53 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try
-            {
-                ConfigUnlockState state = ConfigUnlockHelper.GetState(exePath);
-                switch (state)
-                {
-                    case ConfigUnlockState.Patched:
-                        SetUnlockedConfigsState("Patched", System.Windows.Media.Brushes.Green, true, true);
-                        break;
-                    case ConfigUnlockState.Unpatched:
-                        SetUnlockedConfigsState("Unpatched", System.Windows.Media.Brushes.Gray, true, true);
-                        break;
-                    case ConfigUnlockState.Mixed:
-                        SetUnlockedConfigsState("Partially Patched", System.Windows.Media.Brushes.DarkOrange, true, true);
-                        break;
-                    default:
-                        SetUnlockedConfigsState("Not Applicable", System.Windows.Media.Brushes.Gray, false, false);
-                        break;
-                }
-            }
+            try { ApplyUnlockedConfigsState(ConfigUnlockHelper.GetState(exePath)); }
             catch (Exception ex)
             {
                 SetUnlockedConfigsState("Error reading EXE", System.Windows.Media.Brushes.Red, false, false);
                 _gameStatus.Status = $"Error checking config patch status: {ex.Message}";
+            }
+        }
+
+        public async Task RefreshUnlockedConfigsAsync()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                return;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            if (!_fileService.FileExists(exePath))
+            {
+                SetUnlockedConfigsState("N/A (EXE not found)", System.Windows.Media.Brushes.Gray, false, false);
+                return;
+            }
+
+            try { ApplyUnlockedConfigsState(await Task.Run(() => ConfigUnlockHelper.GetState(exePath))); }
+            catch (Exception ex)
+            {
+                SetUnlockedConfigsState("Error reading EXE", System.Windows.Media.Brushes.Red, false, false);
+                _gameStatus.Status = $"Error checking config patch status: {ex.Message}";
+            }
+        }
+
+        private void ApplyUnlockedConfigsState(ConfigUnlockState state)
+        {
+            switch (state)
+            {
+                case ConfigUnlockState.Patched:
+                    SetUnlockedConfigsState("Patched", System.Windows.Media.Brushes.Green, true, true);
+                    break;
+                case ConfigUnlockState.Unpatched:
+                    SetUnlockedConfigsState("Unpatched", System.Windows.Media.Brushes.Gray, true, true);
+                    break;
+                case ConfigUnlockState.Mixed:
+                    SetUnlockedConfigsState("Partially Patched", System.Windows.Media.Brushes.DarkOrange, true, true);
+                    break;
+                default:
+                    SetUnlockedConfigsState("Not Applicable", System.Windows.Media.Brushes.Gray, false, false);
+                    break;
             }
         }
 
@@ -536,25 +644,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "(e.g. when removing the streak effects, adding custom maps, removing startup wait period, etc.).\n\nThis is essentially achieving what the MEMLA tool does, " +
                 "except it patches the executable directly.",
                 DialogMessageType.Information);
-        }
-
-        private void ShowProgress(string message, bool isIndeterminate)
-        {
-            _gameStatus.Status = message;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
-            if (!isIndeterminate)
-            {
-                _downloadProgress.DownloadProgressValue = 0;
-            }
-        }
-
-        private void HideProgress()
-        {
-            _downloadProgress.IsDownloadProgressVisible = false;
-            _downloadProgress.IsDownloadProgressIndeterminate = false;
-            _downloadProgress.DownloadProgressValue = 0;
-            _gameStatus.Status = "Ready.";
         }
     }
 }

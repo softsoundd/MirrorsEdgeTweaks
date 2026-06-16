@@ -1,6 +1,7 @@
 ﻿<Application x:Class="MirrorsEdgeTweaks.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
     <Application.Resources>
         <ResourceDictionary>
@@ -14,17 +15,16 @@
 
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-            <!-- Theme brushes -->
-            <SolidColorBrush x:Key="PrimaryHueMidBrush" Color="#f44336" />
-            <SolidColorBrush x:Key="PrimaryHueMidForegroundBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="PrimaryHueDarkBrush" Color="#d32f2f" />
-            <SolidColorBrush x:Key="PrimaryHueDarkForegroundBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="PrimaryHueLightBrush" Color="#e57373" />
-            <SolidColorBrush x:Key="PrimaryHueLightForegroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="PrimaryHueMidBrush" Color="#f44336" po:Freeze="True" />
+            <SolidColorBrush x:Key="PrimaryHueMidForegroundBrush" Color="#FFFFFF" po:Freeze="True" />
+            <SolidColorBrush x:Key="PrimaryHueDarkBrush" Color="#d32f2f" po:Freeze="True" />
+            <SolidColorBrush x:Key="PrimaryHueDarkForegroundBrush" Color="#FFFFFF" po:Freeze="True" />
+            <SolidColorBrush x:Key="PrimaryHueLightBrush" Color="#e57373" po:Freeze="True" />
+            <SolidColorBrush x:Key="PrimaryHueLightForegroundBrush" Color="#FFFFFF" po:Freeze="True" />
 
             <Color x:Key="MaterialDesign.Primary.Foreground">#FFFFFF</Color>
             <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Foreground"
-                             Color="{StaticResource MaterialDesign.Primary.Foreground}" />
+                             Color="{StaticResource MaterialDesign.Primary.Foreground}" po:Freeze="True" />
 
             <Style TargetType="ScrollBar" x:Key="ModernScrollBar">
                 <Setter Property="Width" Value="8"/>
@@ -93,6 +93,28 @@
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
+            </Style>
+
+            <Style x:Key="FadeOverlayRectStyle" TargetType="Rectangle">
+                <Setter Property="Opacity" Value="0"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                        <DataTrigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.EnterActions>
+                        <DataTrigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </DataTrigger.ExitActions>
+                    </DataTrigger>
+                </Style.Triggers>
             </Style>
 
         </ResourceDictionary>

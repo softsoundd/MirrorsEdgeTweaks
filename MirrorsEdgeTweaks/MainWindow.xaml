@@ -123,7 +123,9 @@
                 </TabItem.Header>
 
                 <Border Background="White" Padding="20">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    <Grid>
+                    <ScrollViewer x:Name="GameTweaksScrollViewer"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   behaviors:SmoothScrollBehavior.SmoothScroll="True"
                                   behaviors:SmoothScrollBehavior.FadeEdges="True"
                                   Focusable="False">
@@ -585,6 +587,34 @@
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>
+                    <Grid IsHitTestVisible="False" Margin="0,0,15,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="5*"/>
+                            <RowDefinition Height="90*"/>
+                            <RowDefinition Height="5*"/>
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=GameTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowTopFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="White" Offset="0"/>
+                                    <GradientStop Color="Transparent" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle Grid.Row="2"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=GameTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowBottomFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="Transparent" Offset="0"/>
+                                    <GradientStop Color="White" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                    </Grid>
+                    </Grid>
                 </Border>
             </TabItem>
 
@@ -596,7 +626,9 @@
                     </StackPanel>
                 </TabItem.Header>
                 <Border Background="White" Padding="20">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    <Grid>
+                    <ScrollViewer x:Name="GraphicsTweaksScrollViewer"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   behaviors:SmoothScrollBehavior.SmoothScroll="True"
                                   behaviors:SmoothScrollBehavior.FadeEdges="True"
                                   Focusable="False">
@@ -1414,6 +1446,34 @@
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>
+                    <Grid IsHitTestVisible="False" Margin="0,0,15,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="5*"/>
+                            <RowDefinition Height="90*"/>
+                            <RowDefinition Height="5*"/>
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=GraphicsTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowTopFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="White" Offset="0"/>
+                                    <GradientStop Color="Transparent" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle Grid.Row="2"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=GraphicsTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowBottomFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="Transparent" Offset="0"/>
+                                    <GradientStop Color="White" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                    </Grid>
+                    </Grid>
                 </Border>
             </TabItem>
 
@@ -1425,7 +1485,9 @@
                     </StackPanel>
                 </TabItem.Header>
                 <Border Background="White" Padding="20">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                    <Grid>
+                    <ScrollViewer x:Name="OtherTweaksScrollViewer"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   behaviors:SmoothScrollBehavior.SmoothScroll="True"
                                   behaviors:SmoothScrollBehavior.FadeEdges="True"
                                   Focusable="False">
@@ -2250,6 +2312,34 @@
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>
+                    <Grid IsHitTestVisible="False" Margin="0,0,15,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="5*"/>
+                            <RowDefinition Height="90*"/>
+                            <RowDefinition Height="5*"/>
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=OtherTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowTopFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="White" Offset="0"/>
+                                    <GradientStop Color="Transparent" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle Grid.Row="2"
+                                   Style="{StaticResource FadeOverlayRectStyle}"
+                                   Tag="{Binding ElementName=OtherTweaksScrollViewer, Path=(behaviors:SmoothScrollBehavior.ShowBottomFade)}">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="Transparent" Offset="0"/>
+                                    <GradientStop Color="White" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                    </Grid>
+                    </Grid>
                 </Border>
             </TabItem>
         </TabControl>

@@ -12,7 +12,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // the executable command-line-unlock patch status, and the apply / reset / info commands. The
     // entered text is mirrored into GameSession.Config so it is persisted alongside the other
     // settings via IAppSettingsService.
-    public partial class LaunchArgumentsViewModel : ObservableObject
+    public partial class LaunchArgumentsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
@@ -27,7 +27,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             IDialogService dialogService,
             IFileService fileService,
             IAppSettingsService settings,
-            GameSession session)
+            GameSession session,
+            GameStatusViewModel gameStatus,
+            DownloadProgressViewModel downloadProgress)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
@@ -88,6 +91,55 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        public async Task RefreshPatchStatusAsync()
+        {
+            if (_session.IsProcessingGameDirectory)
+            {
+                return;
+            }
+
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                SetPatchStatus("N/A (No game directory selected)", Brushes.Gray);
+                return;
+            }
+
+            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
+            if (!_fileService.FileExists(exePath))
+            {
+                SetPatchStatus("N/A (EXE not found)", Brushes.Gray);
+                return;
+            }
+
+            try
+            {
+                (CommandLineUnlockMode unlockMode, bool isUnlocked) = await Task.Run(() =>
+                {
+                    CommandLineUnlockMode mode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                    bool unlocked = mode == CommandLineUnlockMode.PersistentFilePatch && CommandLineUnlockHelper.IsUnlocked(exePath);
+                    return (mode, unlocked);
+                });
+
+                switch (unlockMode)
+                {
+                    case CommandLineUnlockMode.PersistentFilePatch:
+                        SetPatchStatus(
+                            isUnlocked ? "Patched - Command line arguments are unlocked" : "Unpatched - Command line arguments are locked",
+                            isUnlocked ? Brushes.Green : Brushes.Gray);
+                        break;
+
+                    default:
+                        SetPatchStatus("Unsupported executable", Brushes.Red);
+                        break;
+                }
+            }
+            catch
+            {
+                SetPatchStatus("Error reading executable", Brushes.Red);
+            }
+        }
+
         // Sets a transient "checking" patch status while the game directory is loading.
         public void SetChecking() => SetPatchStatus("Checking executable...", Brushes.Gray);
 
@@ -105,7 +157,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void ResetLaunchArguments()
+        private async Task ResetLaunchArguments()
         {
             try
             {
@@ -123,13 +175,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                     return;
                 }
 
-                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
-                bool patchWasRemoved = unlockMode == CommandLineUnlockMode.PersistentFilePatch &&
-                    CommandLineUnlockHelper.RestoreStock(exePath);
+                CommandLineUnlockMode unlockMode = CommandLineUnlockMode.Unsupported;
+                bool patchWasRemoved = false;
+
+                await RunBusyAsync("Resetting launch arguments...", () =>
+                {
+                    unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                    patchWasRemoved = unlockMode == CommandLineUnlockMode.PersistentFilePatch &&
+                        CommandLineUnlockHelper.RestoreStock(exePath);
+                });
 
                 LaunchArguments = string.Empty;
                 _settings.Save();
-                RefreshPatchStatus();
+                await RefreshPatchStatusAsync();
 
                 string message = unlockMode switch
                 {
@@ -157,7 +215,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void ApplyLaunchArguments()
+        private async Task ApplyLaunchArguments()
         {
             try
             {
@@ -176,20 +234,32 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
 
                 string launchArguments = (LaunchArguments ?? string.Empty).Trim();
-                CommandLineUnlockMode unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+
+                CommandLineUnlockMode unlockMode = CommandLineUnlockMode.Unsupported;
                 bool patchWasApplied = false;
 
-                string unlockMessage = unlockMode switch
+                // The unlock patch reads and rewrites the (large) executable; run it off the UI thread.
+                await RunBusyAsync("Applying launch arguments...", () =>
                 {
-                    CommandLineUnlockMode.PersistentFilePatch => (patchWasApplied = CommandLineUnlockHelper.Unlock(exePath))
-                        ? "Command line arguments are now unlocked in the executable."
-                        : "Command line arguments are already unlocked in the executable.",
-                    _ => throw new InvalidOperationException("This executable version does not support command line unlocking.")
-                };
+                    unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);
+                    if (unlockMode == CommandLineUnlockMode.PersistentFilePatch)
+                    {
+                        patchWasApplied = CommandLineUnlockHelper.Unlock(exePath);
+                    }
+                });
+
+                if (unlockMode != CommandLineUnlockMode.PersistentFilePatch)
+                {
+                    throw new InvalidOperationException("This executable version does not support command line unlocking.");
+                }
+
+                string unlockMessage = patchWasApplied
+                    ? "Command line arguments are now unlocked in the executable."
+                    : "Command line arguments are already unlocked in the executable.";
 
                 LaunchArguments = launchArguments;
                 _settings.Save();
-                RefreshPatchStatus();
+                await RefreshPatchStatusAsync();
 
                 string argumentsMessage = string.IsNullOrEmpty(launchArguments)
                     ? "No launch arguments were saved. You can add them later, or add them to your game library's launch options/other shortcuts."

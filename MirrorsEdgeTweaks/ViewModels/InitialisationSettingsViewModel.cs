@@ -515,6 +515,23 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        public async Task RefreshSkipOnlineCheckAsync()
+        {
+            try
+            {
+                var tdGamePath = _session.Config.TdGamePackagePath;
+                if (tdGamePath == null || !File.Exists(tdGamePath))
+                    return;
+
+                var tdState = await Task.Run(() => TdGamePatcher.DetectState(tdGamePath));
+                SetSilently(() => SkipOnlineIndex = tdState.OnlineSkipApplied ? 1 : 0);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load skip online check setting: {ex.Message}");
+            }
+        }
+
         [RelayCommand]
         private void ShowSkipOnlineCheckInfo()
         {

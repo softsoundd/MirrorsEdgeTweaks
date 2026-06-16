@@ -12,7 +12,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // "touchpoint" settings (FOV, uniform sensitivity, compensated clip, online skip, gamepad
     // prompts, exec-flag keybinds, high-res UI fix) that depend on TdGame.u and must survive a
     // version swap. Snapshot values are sourced from the Input / Keybinds / Graphics view models.
-    public partial class TdGameVersionViewModel : ObservableObject
+    public partial class TdGameVersionViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IDecompressionService _decompressionService;
@@ -20,8 +20,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameDataService _gameData;
         private readonly IPackageService _packageService;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
         private readonly InputSettingsViewModel _input;
         private readonly KeybindsViewModel _keybinds;
         private readonly GraphicsTweaksViewModel _graphics;
@@ -42,6 +40,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             InputSettingsViewModel input,
             KeybindsViewModel keybinds,
             GraphicsTweaksViewModel graphics)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _decompressionService = decompressionService;
@@ -49,8 +48,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameData = gameData;
             _packageService = packageService;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
             _input = input;
             _keybinds = keybinds;
             _graphics = graphics;
@@ -165,13 +162,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 var totalBytesRead = 0L;
                                 var buffer = new byte[8192];
                                 int bytesRead;
+                                var report = CreateThrottledProgressReporter();
                                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                                 {
                                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                                     totalBytesRead += bytesRead;
                                     var progressPercentage = (int)((double)totalBytesRead / totalBytes.Value * 100);
-                                    _downloadProgress.DownloadProgressValue = progressPercentage;
-                                    _gameStatus.Status = $"Downloading... {progressPercentage}%";
+                                    report(progressPercentage, $"Downloading... {progressPercentage}%");
                                 }
                             }
                             else
@@ -187,13 +184,16 @@ namespace MirrorsEdgeTweaks.ViewModels
                     _gameStatus.Status = "Extracting...";
                     _downloadProgress.DownloadProgressValue = 100;
 
-                    ZipFile.ExtractToDirectory(tempZipPath, config.GameDirectoryPath, true);
-
-                    _gameStatus.Status = "Decompressing new package...";
                     string tdGamePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
-                    _decompressionService.RunDecompressor(tdGamePackagePath);
+                    string extractDir = config.GameDirectoryPath;
 
-                    File.Delete(tempZipPath);
+                    await Task.Run(() =>
+                    {
+                        ZipFile.ExtractToDirectory(tempZipPath, extractDir, true);
+                        Post(() => _gameStatus.Status = "Decompressing new package...");
+                        _decompressionService.RunDecompressor(tdGamePackagePath);
+                        File.Delete(tempZipPath);
+                    });
                 }
 
                 installSucceeded = true;

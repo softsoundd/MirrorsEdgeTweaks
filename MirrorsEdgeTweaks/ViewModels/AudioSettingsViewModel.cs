@@ -10,13 +10,11 @@ namespace MirrorsEdgeTweaks.ViewModels
     // View model for the Audio Settings section: selecting the OpenAL audio backend
     // (default / OpenAL Soft / OpenAL Soft + HRTF), which downloads the relevant files and
     // updates TdEngine.ini.
-    public partial class AudioSettingsViewModel : ObservableObject
+    public partial class AudioSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
 
         private bool _isLoading;
 
@@ -29,12 +27,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
         }
 
         public void RefreshAudioBackendSetting()
@@ -248,6 +245,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         var totalRead = 0L;
                         var buffer = new byte[8192];
                         var isMoreToRead = true;
+                        var report = CreateThrottledProgressReporter();
 
                         await dispatcher.InvokeAsync(() =>
                         {
@@ -273,11 +271,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                                 if (canReportProgress)
                                 {
                                     var progressPercentage = (double)totalRead / totalBytes * 100;
-                                    await dispatcher.InvokeAsync(() =>
-                                    {
-                                        _downloadProgress.DownloadProgressValue = progressPercentage;
-                                        _gameStatus.Status = $"Downloading audio backend files... {progressPercentage:F0}%";
-                                    });
+                                    report(progressPercentage, $"Downloading audio backend files... {progressPercentage:F0}%");
                                 }
                             }
                         }

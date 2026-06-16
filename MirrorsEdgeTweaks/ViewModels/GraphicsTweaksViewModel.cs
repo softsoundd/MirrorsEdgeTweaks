@@ -15,7 +15,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // Individual Settings toggles and LOD settings. A single _isLoading guard ensures programmatic
     // loads and error-reverts never re-trigger an apply. The near-identical Enabled/Disabled combos
     // are collapsed into a collection of GraphicsOption sharing one handler body.
-    public partial class GraphicsTweaksViewModel : ObservableObject
+    public partial class GraphicsTweaksViewModel : BusyViewModel
     {
         private static readonly string[] AnisoLevels = { "Off", "2x", "4x", "8x", "16x" };
         private static readonly string[] AaLevels = { "Off", "2x", "4x", "8x", "8xQ", "16xQ" };
@@ -26,8 +26,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameDataService _gameData;
         private readonly IAppSettingsService _settings;
         private readonly GameSession _session;
-        private readonly GameStatusViewModel _gameStatus;
-        private readonly DownloadProgressViewModel _downloadProgress;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
         // Re-entrancy guard. While true, programmatic property changes (ini load, preset refresh,
@@ -105,6 +103,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             UnlockedConfigsViewModel unlockedConfigs)
+            : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _graphics = graphics;
@@ -112,8 +111,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameData = gameData;
             _settings = settings;
             _session = session;
-            _gameStatus = gameStatus;
-            _downloadProgress = downloadProgress;
             _unlockedConfigs = unlockedConfigs;
 
             VSync = new GraphicsOption((o, v) => ApplyStandard(o, v, "VSync", () => _graphics.ApplyVSync(IniPath!, v == 0)));
@@ -143,38 +140,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _isLoading = true;
             try { action(); }
             finally { _isLoading = previous; }
-        }
-
-        private static void Dispatch(Action action)
-        {
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
-            if (dispatcher.CheckAccess()) action();
-            else dispatcher.Invoke(action);
-        }
-
-        private void ShowProgress(string message, bool isIndeterminate)
-        {
-            Dispatch(() =>
-            {
-                _gameStatus.Status = message;
-                _downloadProgress.IsDownloadProgressVisible = true;
-                _downloadProgress.IsDownloadProgressIndeterminate = isIndeterminate;
-                if (!isIndeterminate)
-                {
-                    _downloadProgress.DownloadProgressValue = 0;
-                }
-            });
-        }
-
-        private void HideProgress()
-        {
-            Dispatch(() =>
-            {
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-                _downloadProgress.DownloadProgressValue = 0;
-                _gameStatus.Status = "Ready.";
-            });
         }
 
         private bool EnsureIniExists(Action revert)
@@ -681,9 +646,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                         await Task.Run(async () =>
                         {
                             if (userWantsUIScaling)
-                                await _uiScaling.ApplyUIScalingAsync(selectedResolution.Width, selectedResolution.Height, gameDir, HideProgress);
+                                await _uiScaling.ApplyUIScalingAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
                             else
-                                await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, HideProgress);
+                                await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
                         });
                     }
                 }
@@ -695,7 +660,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                         await Task.Run(async () =>
                         {
-                            await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, HideProgress);
+                            await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
                         });
                     }
                 }
@@ -865,6 +830,32 @@ namespace MirrorsEdgeTweaks.ViewModels
             HighResFixStatusForeground = Brushes.Gray;
         }
 
+        // Reads the (expensive, Engine.u-loading) UI-scaling state off the UI thread, then applies it
+        // on the UI thread so the status-bar progress bar keeps animating during startup.
+        public async Task RefreshHighResFixAsync()
+        {
+            var res = SelectedResolution;
+            if (res == null)
+            {
+                HighResFixStatus = "High-Res Fix N/A";
+                HighResFixStatusForeground = Brushes.Gray;
+                return;
+            }
+
+            bool isCurrentlyActive = false;
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (!string.IsNullOrEmpty(gameDir))
+            {
+                isCurrentlyActive = await Task.Run(() =>
+                {
+                    try { return _uiScaling.IsUIScalingActive(gameDir); }
+                    catch { return false; }
+                });
+            }
+
+            UpdateHighResFixStatus(res.Width, isCurrentlyActive);
+        }
+
         // Reapplies (or rolls back to defaults) the high-res UI scaling fix for the active
         // resolution. Called by flows that overwrite game files on disk (language pack and TdGame
         // version installs) so the fix is not lost.
@@ -959,6 +950,46 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        // Builds the (bound) resolution list on the UI thread, then reads the expensive Engine.u-based
+        // UI-scaling state off the UI thread so the indeterminate progress bar keeps animating.
+        public async Task InitializeResolutionsAsync()
+        {
+            ResolutionHelper.Resolution? selected = null;
+            SetSilently(() =>
+            {
+                Resolutions.Clear();
+                foreach (var resolution in ResolutionHelper.GetAvailableResolutions())
+                    Resolutions.Add(resolution);
+
+                ResolutionHelper.Resolution? match = null;
+                var current = GetCurrentResolutionFromConfig();
+                if (current != null)
+                    match = Resolutions.FirstOrDefault(r => r.Width == current.Width && r.Height == current.Height);
+
+                if (match == null && Resolutions.Count > 0)
+                    match = Resolutions[0];
+
+                SelectedResolution = match;
+                selected = match;
+            });
+
+            if (selected != null)
+            {
+                bool isCurrentlyActive = false;
+                var gameDir = _session.Config.GameDirectoryPath;
+                if (!string.IsNullOrEmpty(gameDir))
+                {
+                    isCurrentlyActive = await Task.Run(() =>
+                    {
+                        try { return _uiScaling.IsUIScalingActive(gameDir); }
+                        catch { return false; }
+                    });
+                }
+
+                UpdateHighResFixStatus(selected.Width, isCurrentlyActive);
+            }
+        }
+
         private ResolutionHelper.Resolution? GetCurrentResolutionFromConfig()
         {
             try
@@ -1001,7 +1032,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         // ---- FPS limit ----
 
         [RelayCommand]
-        private void ApplyFpsLimit()
+        private async Task ApplyFpsLimit()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -1035,9 +1066,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
+            string ini = IniPath!;
             try
             {
-                _graphics.ApplyFPSLimit(IniPath, value);
+                await RunBusyAsync("Applying FPS limit...", () => _graphics.ApplyFPSLimit(ini, value));
                 RefreshFpsLimit();
                 _dialogService.ShowMessage("Success", $"FPS limit set to {value} FPS.", DialogMessageType.Success);
             }
@@ -1048,7 +1080,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void RemoveFpsLimit()
+        private async Task RemoveFpsLimit()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -1056,9 +1088,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
+            string ini = IniPath!;
             try
             {
-                _graphics.RemoveFPSLimit(IniPath);
+                await RunBusyAsync("Removing FPS limit...", () => _graphics.RemoveFPSLimit(ini));
                 RefreshFpsLimit();
                 _dialogService.ShowMessage("Success", "FPS limit removed.", DialogMessageType.Success);
             }
@@ -1172,10 +1205,20 @@ namespace MirrorsEdgeTweaks.ViewModels
                 PhysXFpsInput = fps.Value.ToString();
         }
 
+        // Reads the PhysX timing value off the UI thread, then applies it on the UI thread so the
+        // status-bar progress bar keeps animating during startup.
+        public async Task RefreshPhysXFpsAsync()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            int? fps = await Task.Run(() => PhysXTimingPatcher.Read(gameDir));
+            if (fps.HasValue)
+                PhysXFpsInput = fps.Value.ToString();
+        }
+
         // ---- LOD ----
 
         [RelayCommand]
-        private void ApplyMinLod()
+        private async Task ApplyMinLod()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -1187,9 +1230,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!ValidateLod(input, 1, 4096, out int value))
                 return;
 
+            string ini = IniPath!;
             try
             {
-                _graphics.ApplyMinLOD(IniPath, value);
+                await RunBusyAsync("Applying minimum LOD...", () => _graphics.ApplyMinLOD(ini, value));
                 RefreshPresetIndicators();
                 _dialogService.ShowMessage("Success", $"Minimum LOD set to {value}.", DialogMessageType.Success);
             }
@@ -1200,7 +1244,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void ApplyMaxLod()
+        private async Task ApplyMaxLod()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -1212,9 +1256,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!ValidateLod(input, 1, 4096, out int value))
                 return;
 
+            string ini = IniPath!;
             try
             {
-                _graphics.ApplyMaxLOD(IniPath, value);
+                await RunBusyAsync("Applying maximum LOD...", () => _graphics.ApplyMaxLOD(ini, value));
                 RefreshPresetIndicators();
                 _dialogService.ShowMessage("Success", $"Maximum LOD set to {value}.", DialogMessageType.Success);
             }
@@ -1225,7 +1270,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void ApplyLodBias()
+        private async Task ApplyLodBias()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -1237,9 +1282,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!ValidateLod(input, -1, 12, out int value, isBias: true))
                 return;
 
+            string ini = IniPath!;
             try
             {
-                _graphics.ApplyLODBias(IniPath, value);
+                await RunBusyAsync("Applying LOD bias...", () => _graphics.ApplyLODBias(ini, value));
                 RefreshPresetIndicators();
                 _dialogService.ShowMessage("Success", $"LOD bias set to {value}.", DialogMessageType.Success);
             }
@@ -1429,6 +1475,25 @@ namespace MirrorsEdgeTweaks.ViewModels
                 catch { }
             }
 
+            RefreshScalingStatus();
+        }
+
+        // Reads the (expensive, Engine.u-loading) dynamic-FOV-scaling patch state off the UI thread,
+        // then applies it on the UI thread so the status-bar progress bar keeps animating.
+        public async Task RefreshEnginePatchStateAsync()
+        {
+            bool applied = false;
+            var enginePath = _session.Config.EnginePackagePath;
+            if (enginePath != null && File.Exists(enginePath))
+            {
+                applied = await Task.Run(() =>
+                {
+                    try { return EnginePatcher.DetectState(enginePath) == EnginePatchState.FullyPatched; }
+                    catch { return false; }
+                });
+            }
+
+            _enginePatchesApplied = applied;
             RefreshScalingStatus();
         }
 

@@ -15,53 +15,6 @@ namespace MirrorsEdgeTweaks.Behaviors
         private const double LerpPerFrame = 0.18;
         private const double ReferenceFps = 60.0;
 
-        private static readonly LinearGradientBrush FadeBottomBrush;
-        private static readonly LinearGradientBrush FadeTopBrush;
-        private static readonly LinearGradientBrush FadeBothBrush;
-
-        static SmoothScrollBehavior()
-        {
-            FadeBottomBrush = new LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0, 0),
-                EndPoint = new System.Windows.Point(0, 1),
-                GradientStops = new GradientStopCollection
-                {
-                    new GradientStop(Colors.Black, 0),
-                    new GradientStop(Colors.Black, 0.95),
-                    new GradientStop(Colors.Transparent, 1)
-                }
-            };
-            FadeBottomBrush.Freeze();
-
-            FadeTopBrush = new LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0, 0),
-                EndPoint = new System.Windows.Point(0, 1),
-                GradientStops = new GradientStopCollection
-                {
-                    new GradientStop(Colors.Transparent, 0),
-                    new GradientStop(Colors.Black, 0.05),
-                    new GradientStop(Colors.Black, 1)
-                }
-            };
-            FadeTopBrush.Freeze();
-
-            FadeBothBrush = new LinearGradientBrush
-            {
-                StartPoint = new System.Windows.Point(0, 0),
-                EndPoint = new System.Windows.Point(0, 1),
-                GradientStops = new GradientStopCollection
-                {
-                    new GradientStop(Colors.Transparent, 0),
-                    new GradientStop(Colors.Black, 0.05),
-                    new GradientStop(Colors.Black, 0.95),
-                    new GradientStop(Colors.Transparent, 1)
-                }
-            };
-            FadeBothBrush.Freeze();
-        }
-
         public static readonly DependencyProperty SmoothScrollProperty =
             DependencyProperty.RegisterAttached(
                 "SmoothScroll",
@@ -96,6 +49,19 @@ namespace MirrorsEdgeTweaks.Behaviors
             obj.SetValue(FadeEdgesProperty, value);
         }
 
+        public static readonly DependencyProperty ShowTopFadeProperty =
+            DependencyProperty.RegisterAttached(
+                "ShowTopFade", typeof(bool), typeof(SmoothScrollBehavior), new PropertyMetadata(false));
+
+        public static readonly DependencyProperty ShowBottomFadeProperty =
+            DependencyProperty.RegisterAttached(
+                "ShowBottomFade", typeof(bool), typeof(SmoothScrollBehavior), new PropertyMetadata(false));
+
+        public static bool GetShowTopFade(DependencyObject obj) => (bool)obj.GetValue(ShowTopFadeProperty);
+        public static void SetShowTopFade(DependencyObject obj, bool value) => obj.SetValue(ShowTopFadeProperty, value);
+        public static bool GetShowBottomFade(DependencyObject obj) => (bool)obj.GetValue(ShowBottomFadeProperty);
+        public static void SetShowBottomFade(DependencyObject obj, bool value) => obj.SetValue(ShowBottomFadeProperty, value);
+
         private static void OnFadeEdgesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is ScrollViewer scrollViewer)
@@ -110,6 +76,11 @@ namespace MirrorsEdgeTweaks.Behaviors
                     scrollViewer.ScrollChanged += ScrollViewer_ScrollChangedForFade;
                     scrollViewer.SizeChanged += ScrollViewer_SizeChanged;
                 }
+                else
+                {
+                    SetShowTopFade(scrollViewer, false);
+                    SetShowBottomFade(scrollViewer, false);
+                }
             }
         }
 
@@ -117,7 +88,7 @@ namespace MirrorsEdgeTweaks.Behaviors
         {
             if (sender is ScrollViewer scrollViewer)
             {
-                UpdateOpacityMask(scrollViewer);
+                UpdateFade(scrollViewer);
             }
         }
 
@@ -125,7 +96,7 @@ namespace MirrorsEdgeTweaks.Behaviors
         {
             if (sender is ScrollViewer scrollViewer)
             {
-                UpdateOpacityMask(scrollViewer);
+                UpdateFade(scrollViewer);
             }
         }
 
@@ -133,29 +104,24 @@ namespace MirrorsEdgeTweaks.Behaviors
         {
             if (sender is ScrollViewer scrollViewer)
             {
-                UpdateOpacityMask(scrollViewer);
+                UpdateFade(scrollViewer);
             }
         }
 
-        private static void UpdateOpacityMask(ScrollViewer scrollViewer)
+        private static void UpdateFade(ScrollViewer scrollViewer)
         {
             if (scrollViewer.ScrollableHeight == 0)
             {
-                scrollViewer.OpacityMask = null;
+                SetShowTopFade(scrollViewer, false);
+                SetShowBottomFade(scrollViewer, false);
                 return;
             }
 
             bool atTop = scrollViewer.VerticalOffset <= 0.1;
             bool atBottom = scrollViewer.VerticalOffset >= scrollViewer.ScrollableHeight - 0.1;
 
-            if (atTop && atBottom)
-                scrollViewer.OpacityMask = null;
-            else if (atTop)
-                scrollViewer.OpacityMask = FadeBottomBrush;
-            else if (atBottom)
-                scrollViewer.OpacityMask = FadeTopBrush;
-            else
-                scrollViewer.OpacityMask = FadeBothBrush;
+            SetShowTopFade(scrollViewer, !atTop);
+            SetShowBottomFade(scrollViewer, !atBottom);
         }
 
         private static void OnSmoothScrollChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
