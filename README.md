@@ -74,10 +74,14 @@ dotnet build --configuration Release
 
 ## Acknowledgments
 
+### Third party software / libraries
+- **[UELib](https://github.com/EliotVU/Unreal-Library)** by Eliot van Uytfanghe (EliotVU) - Used for Unreal Engine package reading. Distributed under the [MIT License](https://opensource.org/license/mit)
+- **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Used to upgrade the game's audio processing system. Distributed under the [GNU LGPL v2.1](https://gnu.org)
+
+### Inspiration and thanks
 - EA DICE for creating Mirror's Edge
 - The Mirror's Edge community for your continued support and encouragement
-- [UELib](https://github.com/EliotVU/Unreal-Library) for Unreal Engine package reading
-- [UE Viewer](https://github.com/gildor2/UEViewer) for inspiring the Unreal Engine package decompression behavior ported into this tool
+- **[UE Viewer](https://github.com/gildor2/UEViewer)** by Konstantin Nosov (Gildor) - Conceptual inspiration for Unreal Engine package decompression
 
 ## Changelog
 
