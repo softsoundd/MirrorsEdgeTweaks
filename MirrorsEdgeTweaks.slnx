@@ -4,6 +4,6 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="MirrorsEdgeTweaks.Tests/MirrorsEdgeTweaks.Tests.csproj" />
   <Project Path="MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj" />
+  <Project Path="MirrorsEdgeTweaks.Tests/MirrorsEdgeTweaks.Tests.csproj" />
 </Solution>
