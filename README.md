@@ -5,6 +5,7 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ![Version](https://img.shields.io/badge/version-4.4.2-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)
 
 <img width="1280" height="720" alt="MET" src="https://github.com/user-attachments/assets/3c072b76-7266-4468-bda7-922386558c7c" />
 
@@ -75,8 +76,14 @@ dotnet build --configuration Release
 ## Acknowledgments
 
 ### Third party software / libraries
-- **[UELib](https://github.com/EliotVU/Unreal-Library)** by Eliot van Uytfanghe (EliotVU) - Used for Unreal Engine package reading. Distributed under the [MIT License](https://opensource.org/license/mit)
-- **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Used to upgrade the game's audio processing system. Distributed under the [GNU LGPL v2.0](https://gnu.org)
+- **[UELib](https://github.com/EliotVU/Unreal-Library)** by Eliot van Uytfanghe (EliotVU) - Unreal Engine package reading
+- **[NativeSharpLzo](https://github.com/BigBang1112/NativeSharpLzo)** by BigBang1112 - Unreal Engine package decompression (wraps [LZO](http://www.oberhumer.com/opensource/lzo/) by Markus F. X. J. Oberhumer)
+- **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Audio backend upgrade
+- **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** by the .NET Foundation - MVVM framework
+- **[Microsoft.Xaml.Behaviors.Wpf](https://github.com/microsoft/XamlBehaviorsWpf)** by Microsoft - XAML behaviors for WPF
+- **[MaterialDesignThemes](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)** by James Willock - UI theming and controls
+
+Licensing details for each component are listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md).
 
 ### Inspiration and thanks
 - EA DICE for creating Mirror's Edge
