@@ -10,7 +10,8 @@ namespace MirrorsEdgeTweaks.Helpers
         private const int PageSize = 0x1000;
         private const uint SectionChars = 0xE0000020;
         private static readonly byte[] SectionName = Encoding.ASCII.GetBytes(".cave\0\0\0");
-        private static readonly HashSet<string> KnownTags = new() { "gog", "steam", "retail", "dlc" };
+        private static readonly HashSet<string> KnownTags =
+            new() { "gog", "steam", "retail", "retold", "dlc", "ea" };
 
         private byte[] _peData = Array.Empty<byte>();
         private uint _imageBase;
@@ -36,6 +37,9 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private bool _forceTextPadding;
 
+        private bool _reuse;
+        private int _reuseCursor;
+
         private readonly List<(int SectionOffset, byte[] Data)> _pending = new();
 
         private CaveSection() { }
@@ -57,11 +61,56 @@ namespace MirrorsEdgeTweaks.Helpers
         public uint Alloc(int size, int align = 4)
         {
             EnsureSection();
+            // a patch reapplying over its own existing block allocates from a private
+            // cursor inside that block without touching the shared watermark so it overwrites
+            // only its own region and never a co-resident patch's
+            if (_reuse)
+            {
+                int roff = (_reuseCursor + align - 1) & ~(align - 1);
+                int rend = roff + size;
+                if (rend > _watermark)
+                    throw new InvalidOperationException(
+                        $"Reuse allocation (end {rend}) exceeds the existing cave block (watermark {_watermark}).");
+                _reuseCursor = rend;
+                return (uint)(_sectionVa + roff);
+            }
+
             int off = (_watermark + align - 1) & ~(align - 1);
             int end = off + size;
             GrowIfNeeded(end);
             _watermark = end;
             return (uint)(_sectionVa + off);
+        }
+
+        // Frees a patch's cave block but ONLY when that block is the topmost allocation
+        // i.e. its end equals the watermark, so nothing else was allocated above it.
+        // The exact equality test is fail-safe so if another patch sits above
+        // (or the footprint is off) it returns the data unchanged rather than risk zeroing a
+        // co-resident patch's region
+        public static byte[] ReclaimIfTopmost(byte[] peData, string versionTag, bool forceTextPadding,
+            uint caveBaseVa, int footprintSize)
+        {
+            var cave = Open(peData, versionTag, forceTextPadding);
+            int baseOff = (int)(caveBaseVa - cave.SectionVa);
+            if (baseOff >= InitialAlloc && baseOff + footprintSize == cave.CurrentWatermark)
+            {
+                cave.RewindTo(baseOff);
+                return cave.Finalize();
+            }
+            return peData;
+        }
+
+        // Lay subsequent Alloc calls over an existing block starting at `offset` (section relative)
+        // instead of appending at the watermark. A patch that reapplies its own deterministic cave
+        // calls this with its prior base so it rewrites in place
+        public void ReuseFrom(int offset)
+        {
+            EnsureSection();
+            if (offset < InitialAlloc || offset > _watermark)
+                throw new InvalidOperationException(
+                    $"ReuseFrom offset {offset} outside [{InitialAlloc}..{_watermark}].");
+            _reuse = true;
+            _reuseCursor = offset;
         }
 
         public void Write(uint va, byte[] data)
@@ -94,6 +143,30 @@ namespace MirrorsEdgeTweaks.Helpers
                 EnsureSection();
                 return _sectionVa;
             }
+        }
+
+        // Section-relative offset of the next allocation (i.e. the current high-water mark).
+        public int CurrentWatermark
+        {
+            get
+            {
+                EnsureSection();
+                return _watermark;
+            }
+        }
+
+        // Frees cave space down to `offset` (section-relative) zero filling the reclaimed range so a
+        // reapplied patch reuses the same region instead of growing the cave. A patch that owns the
+        // top of the cave calls this with its own base before reallocating
+        public void RewindTo(int offset)
+        {
+            EnsureSection();
+            if (offset < InitialAlloc || offset > _watermark)
+                throw new InvalidOperationException(
+                    $"RewindTo offset {offset} outside [{InitialAlloc}..{_watermark}].");
+            if (offset == _watermark) return;
+            _pending.Add((offset, new byte[_watermark - offset]));
+            _watermark = offset;
         }
 
         private void ParsePe()
@@ -255,7 +328,9 @@ namespace MirrorsEdgeTweaks.Helpers
             {
                 if (off + 12 > d.Length) continue;
                 uint wm = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(off, 4));
-                if (wm <= HeaderSize || wm >= textEnd - textRaw) continue;
+                // wm == HeaderSize is a reclaimed but empty cave - it must still be refound so
+                // the next apply reuses this location instead of walking forward past the leftover header
+                if (wm < HeaderSize || wm >= textEnd - textRaw) continue;
 
                 byte[] tagBytes = new byte[8];
                 Buffer.BlockCopy(d, off + 4, tagBytes, 0, 8);

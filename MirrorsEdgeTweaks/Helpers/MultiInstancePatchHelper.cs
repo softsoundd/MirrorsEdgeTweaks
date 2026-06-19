@@ -1,4 +1,3 @@
-using MirrorsEdgeTweaks.Services;
 using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
@@ -57,18 +56,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new InvalidOperationException("Unrecognized executable -- cannot detect game version.");
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
-            if (isOoa)
-            {
-                string? dlfPath = OoaService.FindLicensePath(data);
-                if (dlfPath == null)
-                    throw new OoaLicenseNotFoundException(OoaService.GetExpectedLicensePath(data));
-                ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                OoaService.StripAuthenticode(data);
-                ooaCtx = OoaService.DecryptSections(data, ooaKey);
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
             var addrs = VersionAddressTable.Load(version);
             if (!addrs.InlinePatches.TryGetValue(PatchKey, out var patch))
@@ -88,11 +76,7 @@ namespace MirrorsEdgeTweaks.Helpers
             Buffer.BlockCopy(patch.NewBytes, 0, data, offset, patch.NewBytes.Length);
 
             if (isOoa)
-            {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx!);
-                OoaService.ReencryptSections(data, ooaKey!, ooaCtx!);
-                data = OoaService.TruncateOverlay(data, ooaCtx!);
-            }
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
@@ -105,19 +89,10 @@ namespace MirrorsEdgeTweaks.Helpers
             if (version == null) return;
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
+            PatchUtility.OoaSession? ooa = null;
             if (isOoa)
             {
-                try
-                {
-                    string? dlfPath = OoaService.FindLicensePath(data);
-                    if (dlfPath == null) return;
-                    ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                    OoaService.StripAuthenticode(data);
-                    ooaCtx = OoaService.DecryptSections(data, ooaKey);
-                }
+                try { ooa = PatchUtility.BeginOoa(data); }
                 catch { return; }
             }
 
@@ -137,12 +112,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
             Buffer.BlockCopy(patch.OldBytes, 0, data, offset, patch.OldBytes.Length);
 
-            if (isOoa && ooaCtx != null && ooaKey != null)
-            {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx);
-                OoaService.ReencryptSections(data, ooaKey, ooaCtx);
-                data = OoaService.TruncateOverlay(data, ooaCtx);
-            }
+            if (isOoa && ooa != null)
+                data = PatchUtility.FinishOoa(data, ooa);
 
             PatchUtility.WritePreservingAttributes(exePath, data);
         }

@@ -1592,7 +1592,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "• Enables dynamic FOV scaling so the game automatically applies HOR+ correction at aspect ratios wider than 16:9, and VERT+ at narrower ratios.\n\n" +
                 "• Compensates cutscene zoom rates, vertigo effects, and unzoom timing to work correctly and consistently at any FOV and aspect ratio.\n\n" +
                 "Selecting a resolution with a horizontal pixel count greater than 1920 will also prompt you with the option to fix the blurry in-game text and other UI fixes. " +
-                "Please be aware that this solution partially works at the moment — while blurriness is fixed, subtitles, lists, timer HUD, and loading screen text will appear smaller as you increase the resolution.",
+                "Once applied, this fix remains dynamic and further in-game resolution adjustments will self-apply the high-res fix.",
                 DialogMessageType.Information);
         }
 

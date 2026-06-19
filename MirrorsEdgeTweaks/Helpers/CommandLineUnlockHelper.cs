@@ -108,7 +108,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     return false;
                 }
 
-                WriteAllBytesPreservingAttributes(exePath, buffer);
+                PatchUtility.WritePreservingAttributes(exePath, buffer);
                 return true;
             }
 
@@ -123,16 +123,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private static bool PatchOoaExecutable(string exePath, byte[] buffer, bool unlock)
         {
-            string? dlfPath = OoaService.FindLicensePath(buffer);
-            if (dlfPath == null)
-            {
-                throw new OoaLicenseNotFoundException(
-                    OoaService.GetExpectedLicensePath(buffer));
-            }
-
-            byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-            OoaService.StripAuthenticode(buffer);
-            OoaContext ctx = OoaService.DecryptSections(buffer, key);
+            PatchUtility.OoaSession session = PatchUtility.BeginOoa(buffer);
 
             ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
             if (!TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
@@ -151,10 +142,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 return false;
             }
 
-            OoaService.UpdateEncBlockCrcs(buffer, ctx);
-            OoaService.ReencryptSections(buffer, key, ctx);
-            byte[] output = OoaService.TruncateOverlay(buffer, ctx);
-            WriteAllBytesPreservingAttributes(exePath, output);
+            byte[] output = PatchUtility.FinishOoa(buffer, session);
+            PatchUtility.WritePreservingAttributes(exePath, output);
             return true;
         }
 
@@ -437,28 +426,6 @@ namespace MirrorsEdgeTweaks.Helpers
         private static void WriteUInt32(byte[] buffer, int offset, uint value)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset, 4), value);
-        }
-
-        private static void WriteAllBytesPreservingAttributes(string path, byte[] content)
-        {
-            FileAttributes attributes = File.GetAttributes(path);
-            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-            if (wasReadOnly)
-            {
-                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
-            }
-
-            try
-            {
-                File.WriteAllBytes(path, content);
-            }
-            finally
-            {
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(path, attributes);
-                }
-            }
         }
 
         private static ReadOnlySpan<byte> ReadSpan(byte[] buffer, int offset, int length)

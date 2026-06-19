@@ -54,14 +54,17 @@ namespace MirrorsEdgeTweaks.Services
             };
         }
 
-        // Returns the negative object reference of an import
-        public static int FindImportObjRef(UnrealPackage package, string name, string? className = null)
+        // Returns the negative object reference of an import. outerName disambiguates same-named
+        // properties on different classes (e.g. Texture2D.SizeX vs HUD.SizeX vs Canvas.SizeX).
+        public static int FindImportObjRef(UnrealPackage package, string name, string? className = null,
+            string? outerName = null)
         {
             for (int i = 0; i < package.Imports.Count; i++)
             {
                 var imp = package.Imports[i];
                 if (imp.ObjectName?.ToString() != name) continue;
                 if (className != null && imp.ClassName?.ToString() != className) continue;
+                if (outerName != null && imp.Outer?.ObjectName?.ToString() != outerName) continue;
                 return -(i + 1);
             }
             return 0;
@@ -92,6 +95,16 @@ namespace MirrorsEdgeTweaks.Services
             return package.Objects.FirstOrDefault(o => (int)o.PackageIndex > 0
                 && o.Name?.ToString() == name
                 && o.Outer?.Name?.ToString() == outerName);
+        }
+
+        // Three-level match - disambiguates e.g. PlayerController.ConsoleCommand.ReturnValue from
+        // other ConsoleCommand.ReturnValue properties belonging to different classes.
+        public static UObject? FindExportObject(UnrealPackage package, string name, string outerName, string grandOuterName)
+        {
+            return package.Objects.FirstOrDefault(o => (int)o.PackageIndex > 0
+                && o.Name?.ToString() == name
+                && o.Outer?.Name?.ToString() == outerName
+                && o.Outer?.Outer?.Name?.ToString() == grandOuterName);
         }
 
         public static int ObjRef(UObject? o) => o == null ? 0 : (int)o.PackageIndex;

@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.IO;
 
 namespace MirrorsEdgeTweaks.Services
@@ -32,7 +33,7 @@ namespace MirrorsEdgeTweaks.Services
             if (data[site] != JNE)
                 throw new InvalidOperationException($"Unexpected byte 0x{data[site]:X2} at patch site (expected JNE 0x75)");
             data[site] = JMP;
-            File.WriteAllBytes(exePath, data);
+            PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
         public static void Remove(string exePath)
@@ -45,7 +46,7 @@ namespace MirrorsEdgeTweaks.Services
             if (data[site] != JMP)
                 throw new InvalidOperationException($"Unexpected byte 0x{data[site]:X2} at patch site (expected JMP 0xEB)");
             data[site] = JNE;
-            File.WriteAllBytes(exePath, data);
+            PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
         public static void Reconcile(string exePath)
@@ -60,7 +61,7 @@ namespace MirrorsEdgeTweaks.Services
                     throw new InvalidOperationException(
                         $"Unexpected byte 0x{data[site]:X2} at patch site (expected JNE 0x75)");
                 data[site] = JMP;
-                File.WriteAllBytes(exePath, data);
+                PatchUtility.WritePreservingAttributes(exePath, data);
                 return;
             }
 
@@ -73,14 +74,7 @@ namespace MirrorsEdgeTweaks.Services
                 throw new InvalidOperationException(
                     "Cannot find render target patch site in executable.");
 
-            string? dlfPath = OoaService.FindLicensePath(data);
-            if (dlfPath == null)
-                throw new OoaLicenseNotFoundException(
-                    OoaService.GetExpectedLicensePath(data));
-
-            byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-            OoaService.StripAuthenticode(data);
-            OoaContext ctx = OoaService.DecryptSections(data, key);
+            PatchUtility.OoaSession session = PatchUtility.BeginOoa(data);
 
             int site = FindPatchSite(data);
             if (site == -1)
@@ -97,10 +91,8 @@ namespace MirrorsEdgeTweaks.Services
                     $"EA executable (expected JNE 0x75).");
 
             data[site] = JMP;
-            OoaService.UpdateEncBlockCrcs(data, ctx);
-            OoaService.ReencryptSections(data, key, ctx);
-            byte[] output = OoaService.TruncateOverlay(data, ctx);
-            File.WriteAllBytes(exePath, output);
+            byte[] output = PatchUtility.FinishOoa(data, session);
+            PatchUtility.WritePreservingAttributes(exePath, output);
         }
 
         // Private

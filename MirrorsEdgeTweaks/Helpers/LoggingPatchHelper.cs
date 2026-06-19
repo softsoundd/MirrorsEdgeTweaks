@@ -1,4 +1,3 @@
-using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.IO;
 using System.Text;
@@ -23,6 +22,17 @@ namespace MirrorsEdgeTweaks.Helpers
         };
 
         private static readonly string[] LazySymbols = { "Logf", "GLog", "GFileManager", "FmtPercentS" };
+
+        // Cave block sizes (must match the cave.Alloc calls in ApplyFullMode/ApplyAppInitMode). Used to
+        // compute the reclaim footprint on Remove. FullMode: [p1][data][p2]; AppInitMode: [data][init?][cave]
+        private const int CaveDataSize = 0x40;                 // BuildCaveDataFull
+        private const int FullP1Size = 64;
+        private const int FullP2Size = 192;
+        private const int AiDataSize = 4 + CaveDataSize;       // archive ptr + string data
+        private const int AiBlockSize = 256;                   // init and unified cave blocks
+        private const int FullModeFootprint = FullP1Size + CaveDataSize + FullP2Size;
+        private const int AiFootprintWithInit = AiDataSize + AiBlockSize + AiBlockSize;
+        private const int AiFootprintNoInit = AiDataSize + AiBlockSize;
 
         public static LoggingPatchState GetPatchState(string exePath)
         {
@@ -78,18 +88,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new InvalidOperationException("Unrecognized executable -- cannot detect game version.");
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
-            if (isOoa)
-            {
-                string? dlfPath = OoaService.FindLicensePath(data);
-                if (dlfPath == null)
-                    throw new OoaLicenseNotFoundException(OoaService.GetExpectedLicensePath(data));
-                ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                OoaService.StripAuthenticode(data);
-                ooaCtx = OoaService.DecryptSections(data, ooaKey);
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
             var addrs = VersionAddressTable.Load(version);
             if (addrs.Symbols.Count == 0)
@@ -128,11 +127,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 data = ApplyAppInitMode(data, cave, sym, execHookVa, execReturnVa);
 
             if (isOoa)
-            {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx!);
-                OoaService.ReencryptSections(data, ooaKey!, ooaCtx!);
-                data = OoaService.TruncateOverlay(data, ooaCtx!);
-            }
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             WritePreservingAttributes(exePath, data);
         }
@@ -145,19 +140,10 @@ namespace MirrorsEdgeTweaks.Helpers
             if (version == null) return;
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
+            PatchUtility.OoaSession? ooa = null;
             if (isOoa)
             {
-                try
-                {
-                    string? dlfPath = OoaService.FindLicensePath(data);
-                    if (dlfPath == null) return;
-                    ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                    OoaService.StripAuthenticode(data);
-                    ooaCtx = OoaService.DecryptSections(data, ooaKey);
-                }
+                try { ooa = PatchUtility.BeginOoa(data); }
                 catch { return; }
             }
 
@@ -168,47 +154,114 @@ namespace MirrorsEdgeTweaks.Helpers
             if (!addrs.Hooks.TryGetValue("execLog", out var execDef))
                 return;
 
-            RestoreHook(data, execDef);
+            bool fullMode = addrs.Hooks.ContainsKey("preInit_fileLog");
 
-            if (addrs.Hooks.TryGetValue("preInit_fileLog", out var preInitDef))
+            // execLog's detour target is the cave base (FullMode) or AiDataSize above it (AppInitMode).
+            // capture it before restoring the hook
+            uint? execTarget = FindDetourTarget(data, execDef);
+
+            RestoreHook(data, execDef);
+            if (fullMode && addrs.Hooks.TryGetValue("preInit_fileLog", out var preInitDef))
                 RestoreHook(data, preInitDef);
 
-            if (isOoa && ooaCtx != null && ooaKey != null)
+            uint? caveBase = null;
+            int footprint = 0;
+            if (fullMode)
             {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx);
-                OoaService.ReencryptSections(data, ooaKey, ooaCtx);
-                data = OoaService.TruncateOverlay(data, ooaCtx);
+                if (execTarget != null) { caveBase = execTarget; footprint = FullModeFootprint; }
             }
+            else
+            {
+                // AppInitMode: restore the dynamically located app-init hook (its saved original bytes
+                // are recovered from the init cave block). The cave's data block sits AiDataSize below
+                // the lowest detour (the app-init init block or the unified cave if no app-init hook).
+                // If the hook is present but unrecoverable skip the reclaim so we never zero a region a
+                // live detour still jumps to
+                AppInitRestore st = RestoreAppInit(data, addrs.Symbols, out uint initVa);
+                if (st != AppInitRestore.Unrestored && execTarget != null)
+                {
+                    uint lowest = st == AppInitRestore.Restored ? initVa : execTarget.Value;
+                    caveBase = lowest - AiDataSize;
+                    footprint = st == AppInitRestore.Restored ? AiFootprintWithInit : AiFootprintNoInit;
+                }
+            }
+
+            if (caveBase != null)
+                data = CaveSection.ReclaimIfTopmost(data, version, isOoa, caveBase.Value, footprint);
+
+            if (isOoa && ooa != null)
+                data = PatchUtility.FinishOoa(data, ooa);
 
             WritePreservingAttributes(exePath, data);
         }
 
-        private static void RestoreHook(byte[] data, HookDefinition hdef)
-        {
-            int hookFoff = -1;
+        private enum AppInitRestore { NotPresent, Restored, Unrestored }
 
-            try
+        // Restores the AppInitMode app-init hook. Its original 5 bytes were replayed in the init cave
+        // block right before that block's single E9 return jump (back to site+5) so we locate that E9
+        // by its return target and copy the preceding 5 bytes back over the detour. Returns whether the
+        // hook was absent, restored or present but unrecoverable; `initVa` (the init block) is set when
+        // the hook is present for the caller's cave-base calculation.
+        private static AppInitRestore RestoreAppInit(byte[] data, Dictionary<string, uint> sym, out uint initVa)
+        {
+            initVa = 0;
+            uint? siteVa = FindAppInitSite(data, sym);
+            if (siteVa == null) return AppInitRestore.NotPresent;
+
+            int site = (int)(siteVa.Value - ImageBase);
+            if (site < 0 || site + 5 > data.Length || data[site] != 0xE9)
+                return AppInitRestore.NotPresent;
+
+            initVa = siteVa.Value + 5u + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(site + 1, 4));
+            int initOff = (int)(initVa - ImageBase);
+            if (initOff < 0 || initOff >= data.Length) return AppInitRestore.Unrestored;
+            uint returnTarget = siteVa.Value + 5u;
+
+            int scanEnd = Math.Min(initOff + AiBlockSize, data.Length - 5);
+            for (int i = initOff; i <= scanEnd; i++)
             {
-                uint hookVa = VersionAddressTable.ResolveHook(data, hdef);
-                hookFoff = (int)(hookVa - ImageBase);
-            }
-            catch
-            {
-                int startOff = (int)(hdef.ScanStart - ImageBase);
-                int scanEnd = startOff + hdef.ScanSize - hdef.Size;
-                if (startOff >= 0 && scanEnd + hdef.Size <= data.Length)
+                if (data[i] != 0xE9) continue;
+                uint tgt = ImageBase + (uint)i + 5u + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(i + 1, 4));
+                if (tgt == returnTarget && i - 5 >= initOff)
                 {
-                    for (int i = startOff; i <= scanEnd; i++)
-                    {
-                        if (data[i] == 0xE9 && data[i + 5] == 0x90)
-                        {
-                            hookFoff = i;
-                            break;
-                        }
-                    }
+                    Buffer.BlockCopy(data, i - 5, data, site, 5);
+                    return AppInitRestore.Restored;
                 }
             }
+            return AppInitRestore.Unrestored;
+        }
 
+        // Detour target (VA) at a hook site or null if the site isn't detoured
+        private static uint? FindDetourTarget(byte[] data, HookDefinition hdef)
+        {
+            int foff = FindHookSiteOff(data, hdef);
+            if (foff < 0 || foff + 5 > data.Length || data[foff] != 0xE9) return null;
+            return ImageBase + (uint)foff + 5u + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(foff + 1, 4));
+        }
+
+        // Hook site file offset, whether unpatched (find the original pattern) or patched (find the
+        // E9 + NOP-pad detour in the scan window)
+        private static int FindHookSiteOff(byte[] data, HookDefinition hdef)
+        {
+            try { return (int)(VersionAddressTable.ResolveHook(data, hdef) - ImageBase); }
+            catch { }
+
+            int start = (int)(hdef.ScanStart - ImageBase);
+            int end = start + hdef.ScanSize - hdef.Size;
+            for (int i = Math.Max(0, start); i <= end && i + hdef.Size <= data.Length; i++)
+            {
+                if (data[i] != 0xE9) continue;
+                bool nops = true;
+                for (int k = 5; k < hdef.Size; k++)
+                    if (data[i + k] != 0x90) { nops = false; break; }
+                if (nops) return i;
+            }
+            return -1;
+        }
+
+        private static void RestoreHook(byte[] data, HookDefinition hdef)
+        {
+            int hookFoff = FindHookSiteOff(data, hdef);
             if (hookFoff < 0 || hookFoff + hdef.Size > data.Length)
                 return;
 
@@ -227,7 +280,7 @@ namespace MirrorsEdgeTweaks.Helpers
             var preInitDef = hooks["preInit_fileLog"];
             uint fileReturnVa = preInitVa + (uint)preInitDef.ReturnOffset;
 
-            uint p1Va = cave.Alloc(64);
+            uint p1Va = cave.Alloc(FullP1Size);
             byte[] p1 = BuildCavePatch1(p1Va, sym, execReturnVa);
             cave.Write(p1Va, p1);
 
@@ -235,7 +288,7 @@ namespace MirrorsEdgeTweaks.Helpers
             uint dVa = cave.Alloc(strData.Length, align: 4);
             cave.Write(dVa, strData);
 
-            uint p2Va = cave.Alloc(192);
+            uint p2Va = cave.Alloc(FullP2Size);
             byte[] p2 = BuildCavePatch2(p2Va, sym, fileReturnVa,
                 dVa, dVa + 0x0C, dVa + 0x20, preInitDef.Pattern);
             cave.Write(p2Va, p2);
@@ -260,8 +313,7 @@ namespace MirrorsEdgeTweaks.Helpers
             uint filenameBufVa = sym.GetValueOrDefault("FOutputDeviceFile.Filename");
 
             byte[] strData = BuildCaveDataFull();
-            int dataSize = 4 + strData.Length;
-            uint dataVa = cave.Alloc(dataSize, align: 4);
+            uint dataVa = cave.Alloc(AiDataSize, align: 4);
             uint archivePtrVa = dataVa;
             uint strVa = dataVa + 4;
             cave.Write(strVa, strData);
@@ -279,13 +331,13 @@ namespace MirrorsEdgeTweaks.Helpers
                 Buffer.BlockCopy(data, hookOff, overwritten, 0, 5);
                 uint initReturnVa = appInitHookVa.Value + 5;
 
-                uint initVa = cave.Alloc(256);
+                uint initVa = cave.Alloc(AiBlockSize);
                 byte[] initCode = BuildCaveInit(initVa, sym, initReturnVa,
                     archivePtrVa, defaultFilenameVa, overwritten,
                     fileArchiveVa, logKeyVa, abslogKeyVa, filenameBufVa);
                 cave.Write(initVa, initCode);
 
-                uint caveVa = cave.Alloc(256);
+                uint caveVa = cave.Alloc(AiBlockSize);
                 byte[] caveCode = BuildCaveUnified(caveVa, sym, execReturnVa,
                     archivePtrVa, defaultFilenameVa, fileArchiveVa);
                 cave.Write(caveVa, caveCode);
@@ -303,7 +355,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             else
             {
-                uint caveVa = cave.Alloc(256);
+                uint caveVa = cave.Alloc(AiBlockSize);
                 byte[] caveCode = BuildCaveUnified(caveVa, sym, execReturnVa,
                     archivePtrVa, defaultFilenameVa, fileArchiveVa);
                 cave.Write(caveVa, caveCode);
@@ -329,18 +381,17 @@ namespace MirrorsEdgeTweaks.Helpers
             int startOff = (int)(scanStart - ImageBase);
             if (startOff < 0 || startOff + scanSize > data.Length) return null;
 
-            byte[] pat = { 0x56, 0xFF, 0xD2, 0x68 };
+            // push esi; call edx; then the site instruction: push imm32 (0x68, unpatched) or the E9
+            // detour (patched) -  matching both lets Remove locate the site after it has been hooked
+            byte[] pat = { 0x56, 0xFF, 0xD2 };
             int idx = 0;
             while (idx <= scanSize - 8)
             {
                 int pos = -1;
-                for (int i = startOff + idx; i <= startOff + scanSize - pat.Length; i++)
+                for (int i = startOff + idx; i <= startOff + scanSize - 4; i++)
                 {
-                    bool match = true;
-                    for (int j = 0; j < pat.Length; j++)
-                    {
-                        if (data[i + j] != pat[j]) { match = false; break; }
-                    }
+                    bool match = data[i] == pat[0] && data[i + 1] == pat[1] && data[i + 2] == pat[2]
+                                 && (data[i + 3] == 0x68 || data[i + 3] == 0xE9);
                     if (match) { pos = i; break; }
                 }
                 if (pos < 0) break;
@@ -367,7 +418,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        private static byte[] BuildCavePatch1(uint baseVa, Dictionary<string, uint> sym, uint returnVa)
+        internal static byte[] BuildCavePatch1(uint baseVa, Dictionary<string, uint> sym, uint returnVa)
         {
             var code = new List<byte>();
             void Add(params byte[] b) => code.AddRange(b);
@@ -399,7 +450,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCavePatch2(uint baseVa, Dictionary<string, uint> sym,
+        internal static byte[] BuildCavePatch2(uint baseVa, Dictionary<string, uint> sym,
             uint returnVa, uint dataLogKey, uint dataAbslogKey, uint dataDefault,
             byte[] overwrittenBytes)
         {
@@ -489,7 +540,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCaveInit(uint baseVa, Dictionary<string, uint> sym,
+        internal static byte[] BuildCaveInit(uint baseVa, Dictionary<string, uint> sym,
             uint returnVa, uint archivePtrVa, uint defaultFilenameVa,
             byte[] overwrittenBytes, uint fileArchiveVa,
             uint logKeyVa, uint abslogKeyVa, uint filenameBufVa)
@@ -509,7 +560,8 @@ namespace MirrorsEdgeTweaks.Helpers
             // Fast path - already initialised
             Add(0x83, 0x3D); AddU32(archivePtrVa); Add(0x00);
             int jneDone = code.Count;
-            Add(0x75, 0x00);
+            // rel32 jne: with Parse + FileArchive present the init body exceeds the +127 reach of a rel8.
+            Add(0x0F, 0x85, 0x00, 0x00, 0x00, 0x00);
 
             Add(0x50);         // push eax
             Add(0x51);         // push ecx
@@ -588,14 +640,16 @@ namespace MirrorsEdgeTweaks.Helpers
             Add(0x58); // pop eax
 
             int done = code.Count;
-            code[jneDone + 1] = (byte)(done - (jneDone + 2));
+            byte[] doneRel = new byte[4];
+            BinaryPrimitives.WriteInt32LittleEndian(doneRel, done - (jneDone + 6));
+            for (int i = 0; i < 4; i++) code[jneDone + 2 + i] = doneRel[i];
             code.AddRange(overwrittenBytes);
             EmitJmpNear(returnVa);
 
             return code.ToArray();
         }
 
-        private static byte[] BuildCaveUnified(uint baseVa, Dictionary<string, uint> sym,
+        internal static byte[] BuildCaveUnified(uint baseVa, Dictionary<string, uint> sym,
             uint returnVa, uint archivePtrVa, uint filenameVa, uint fileArchiveVa)
         {
             var code = new List<byte>();
@@ -680,7 +734,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCaveDataFull()
+        internal static byte[] BuildCaveDataFull()
         {
             var data = new byte[0x40];
             byte[] log = Encoding.Unicode.GetBytes("LOG=\0");
@@ -692,7 +746,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return data;
         }
 
-        private static byte[] BuildHookJmp(uint hookVa, uint targetVa, int totalSize)
+        internal static byte[] BuildHookJmp(uint hookVa, uint targetVa, int totalSize)
         {
             byte[] hook = new byte[totalSize];
             hook[0] = 0xE9;

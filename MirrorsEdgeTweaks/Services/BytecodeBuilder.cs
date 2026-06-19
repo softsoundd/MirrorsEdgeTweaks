@@ -41,6 +41,16 @@ namespace MirrorsEdgeTweaks.Services
         public const byte OP_FMAX = 0xF5;
         public const byte OP_SKIP = 0x18;
 
+        public const byte OP_EAT_RETURN_VALUE = 0x0E;
+        public const byte OP_STR_CONST = 0x1F;
+        public const byte OP_PRIMITIVE_CAST = 0x38;
+        public const byte NATIVE_CONCAT_STRSTR = 0x70;
+
+        public const byte CAST_INT_TO_FLOAT = 0x3F;
+        public const byte CAST_FLOAT_TO_INT = 0x44;
+        public const byte CAST_INT_TO_STRING = 0x53;
+        public const byte CAST_FLOAT_TO_STRING = 0x55;
+
         public const float REF_AR = 16.0f / 9.0f;
         public static readonly double K_DEG_TO_HALFRAD = Math.PI / 360.0;
         public static readonly double K_HALFRAD_TO_DEG = 360.0 / Math.PI;
@@ -546,6 +556,178 @@ namespace MirrorsEdgeTweaks.Services
 
         // TdGame.u online skip signature: Not_PreBool + BoolVar + InstVar (never appears in unpatched StartConnection).
         public static readonly byte[] OnlineSkipSignature = new byte[] { OP_NOT_PRE_BOOL, OP_BOOL_VAR, OP_INST_VAR };
+
+        // High-res UI dynamic blob builders
+
+        // EX_StringConst: opcode + ANSI bytes + null terminator.
+        public static byte[] StrConst(string s)
+        {
+            byte[] ascii = System.Text.Encoding.ASCII.GetBytes(s);
+            var b = new byte[2 + ascii.Length];
+            b[0] = OP_STR_CONST;
+            Buffer.BlockCopy(ascii, 0, b, 1, ascii.Length);
+            b[b.Length - 1] = 0x00;
+            return b;
+        }
+
+        // EX_PrimitiveCast: opcode + cast byte + inner expression (no EndFunctionParms).
+        public static byte[] PrimitiveCast(byte castToken, byte[] inner)
+        {
+            return Concat(new byte[] { OP_PRIMITIVE_CAST, castToken }, inner);
+        }
+
+        // FName token operand: name index + number (8 bytes).
+        public static byte[] FName(int nameIndex)
+        {
+            return Concat(I32(nameIndex), I32(0));
+        }
+
+        // String concatenation operator: A $ B  ->  native(0x70) <A> <B> EndFP.
+        public static byte[] ConcatStr(byte[] a, byte[] b)
+        {
+            return Concat(new byte[] { NATIVE_CONCAT_STRSTR }, a, b, EndFP());
+        }
+
+        // objExpr.VirtualFunction(singleArg) wrapped in a context access.
+        // propType 0 matches stock compiler output for a function-call context.
+        public static byte[] ContextCall(byte[] objExpr, int funcNameIndex, byte[] singleArg)
+        {
+            byte[] inner = Concat(VirtualFunc(FName(funcNameIndex)), singleArg, EndFP());
+            return Context(objExpr, (ushort)inner.Length, 0, inner);
+        }
+
+        // self.VirtualFunction(singleArg) (no context).
+        public static byte[] SelfCall(int funcNameIndex, byte[] singleArg)
+        {
+            return Concat(VirtualFunc(FName(funcNameIndex)), singleArg, EndFP());
+        }
+
+        // EX_EatReturnValue: discards the return value of a value-returning call used as a statement.
+        public static byte[] EatReturnValue(int returnValueRef)
+        {
+            return Concat(new byte[] { OP_EAT_RETURN_VALUE }, I32(returnValueRef));
+        }
+
+        // StructMember access: 0x35 <prop ref> <struct ref> <isCopy> <isMod> <inner>.
+        public static byte[] StructMember(int propertyRef, int structRef, byte[] inner)
+        {
+            return Concat(new byte[] { OP_STRUCT_MEMBER }, I32(propertyRef), I32(structRef),
+                new byte[] { 0x00, 0x00 }, inner);
+        }
+
+        // The three "set" commands, each wrapped by `wrap` into a ConsoleCommand call.
+        // restest = int( FMax(1080, width * 0.5625 + 0.5) )   (0.5625 == 9/16; +0.5 rounds to nearest)
+        // scale   = FMin(height, width*0.5625) / FMin(width*0.5625, 1080)
+        // Denominator = the font page height the lie selects (1080 page once width >= 1920, else the
+        // smaller page matching the render). Numerator = the visible height = the smaller of the window
+        // height and the 16:9-locked render height (width*0.5625): wider-than-16:9 is bounded by the
+        // window, taller-than-16:9 by the (shorter) render. So scale sizes UI text for the visible area
+        // at every aspect: 2560x720 -> 0.667, 1920x1440 -> 1.0, and 16:9 reduces to the old behaviour.
+        // restest is the 16:9-equivalent height derived from WIDTH, not the literal viewport height.
+        // The engine's font scale is HeightTest / ResolutionTestTable[closest] with HeightTest =
+        // Viewport->GetSizeY(); under ME's 16:9-locked rendering that height tracks width*0.5625, so
+        // matching it keeps GetScalingFactor ~= 1.0 (crisp). Using the literal height makes
+        // GetScalingFactor magnify the page (blurry) on wide / non-16:9 modes (e.g. 2560x1080).
+        // widthFloatExpr / heightFloatExpr must each evaluate to a float.
+        static byte[] BuildHighResCommands(byte[] widthFloatExpr, byte[] heightFloatExpr,
+            Func<byte[], byte[]> wrap)
+        {
+            byte[] mul = Concat(new byte[] { OP_MULTIPLY_FF }, widthFloatExpr, FloatConst(0.5625f), EndFP());
+            byte[] rounded = Concat(new byte[] { OP_ADD_FF }, mul, FloatConst(0.5f), EndFP());
+            byte[] restestFloat = Concat(new byte[] { OP_FMAX }, FloatConst(1080.0f), rounded, EndFP());
+            byte[] restestStr = PrimitiveCast(CAST_INT_TO_STRING,
+                PrimitiveCast(CAST_FLOAT_TO_INT, restestFloat));
+            byte[] restestCmd = ConcatStr(
+                ConcatStr(StrConst("set MultiFont ResolutionTestTable (480,720,"), restestStr),
+                StrConst(")"));
+
+            byte[] ScaleExpr()
+            {
+                byte[] renderH = Concat(new byte[] { OP_MULTIPLY_FF }, widthFloatExpr, FloatConst(0.5625f), EndFP());
+                byte[] num = Concat(new byte[] { OP_FMIN }, heightFloatExpr, renderH, EndFP());
+                byte[] denom = Concat(new byte[] { OP_FMIN }, renderH, FloatConst(1080.0f), EndFP());
+                byte[] scaleFloat = Concat(new byte[] { OP_DIVIDE_FF }, num, denom, EndFP());
+                return PrimitiveCast(CAST_FLOAT_TO_STRING, scaleFloat);
+            }
+
+            byte[] scaleCmd = ConcatStr(ConcatStr(ConcatStr(ConcatStr(
+                StrConst("set UIStyle_Text Scale (X="), ScaleExpr()),
+                StrConst(",Y=")), ScaleExpr()),
+                StrConst(")"));
+
+            return Concat(
+                wrap(restestCmd),
+                wrap(scaleCmd),
+                wrap(StrConst("set TdUIScene bRefreshWidgetStyles true")));
+        }
+
+        // Blob for HUD.PreCalcValues: PlayerOwner.ConsoleCommand(...) x3.
+        // SizeX/SizeY are HUD float instance vars (recalculated just before this blob).
+        // PlayerController.ConsoleCommand returns a string, so each discarded statement must be
+        // wrapped in EatReturnValue (consoleReturnValueRef = ConsoleCommand.ReturnValue) or the VM
+        // mishandles the return value and crashes.
+        public static byte[] BuildHighResApplyBlob(int playerOwnerRef, int consoleCmdNameIdx,
+            int consoleReturnValueRef, int hudSizeXRef, int hudSizeYRef)
+        {
+            byte[] po = InstVar(playerOwnerRef);
+            byte[] eat = EatReturnValue(consoleReturnValueRef);
+            return BuildHighResCommands(InstVar(hudSizeXRef), InstVar(hudSizeYRef),
+                arg => Concat(eat, ContextCall(po, consoleCmdNameIdx, arg)));
+        }
+
+        // Blob for TdUIScene_VideoSettingsPC.ApplyVideoSettings (after SetScreenResolution):
+        // self.ConsoleCommand(...) x3, computing from the int width/height expressions just applied.
+        public static byte[] BuildHighResApplyBlobSelfCall(int consoleCmdNameIdx,
+            byte[] widthIntExpr, byte[] heightIntExpr)
+        {
+            byte[] widthF = PrimitiveCast(CAST_INT_TO_FLOAT, widthIntExpr);
+            byte[] heightF = PrimitiveCast(CAST_INT_TO_FLOAT, heightIntExpr);
+            return BuildHighResCommands(widthF, heightF, arg => SelfCall(consoleCmdNameIdx, arg));
+        }
+
+        // Idempotency marker - the unique StrConst literal emitted by BuildHighResApplyBlob.
+        public static readonly byte[] HighResSignature = StrConst("set MultiFont ResolutionTestTable (480,720,");
+
+        // Crosshair dynamic scaling (TdSPHUD.DrawLivingHUD)
+
+        // Inserted at the start of DrawLivingHUD: for each crosshair texture member,
+        //   Texture.SizeX = Texture.SizeY = int( base * FMax(1.0, HUD.SizeY / 1080) )
+        // The crosshair draws DrawColorizedTile(tex, SizeX, SizeY, 0,0, SizeX, SizeY), so the UV
+        // (UL/SizeX) self-cancels - growing SizeX just scales the centered draw (matches the old
+        // static fix, made dynamic). base = each texture's stock pixel size.
+        public static byte[] BuildCrosshairBlob(
+            (int textureRef, int baseSize)[] crosshairs, int texSizeXRef, int texSizeYRef, int hudSizeYRef)
+        {
+            byte[] Value(int baseSize)
+            {
+                byte[] div = Concat(new byte[] { OP_DIVIDE_FF }, InstVar(hudSizeYRef), FloatConst(1080.0f), EndFP());
+                byte[] fmax = Concat(new byte[] { OP_FMAX }, FloatConst(1.0f), div, EndFP());
+                byte[] mul = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(baseSize), fmax, EndFP());
+                return PrimitiveCast(CAST_FLOAT_TO_INT, mul);
+            }
+            byte[] Assign(int textureRef, int sizeRef, int baseSize)
+            {
+                byte[] sizeMember = InstVar(sizeRef);
+                byte[] target = Context(InstVar(textureRef), (ushort)sizeMember.Length, 4, sizeMember);
+                return Concat(new byte[] { OP_LET }, target, Value(baseSize));
+            }
+            var parts = new List<byte[]>();
+            foreach (var (tref, bsize) in crosshairs)
+            {
+                parts.Add(Assign(tref, texSizeXRef, bsize));
+                parts.Add(Assign(tref, texSizeYRef, bsize));
+            }
+            return Concat(parts.ToArray());
+        }
+
+        // Idempotency marker - Let + Context targeting the first crosshair's SizeX (a unique assignment
+        // the stock DrawLivingHUD never makes).
+        public static byte[] BuildCrosshairSignature(int firstTextureRef, int texSizeXRef)
+        {
+            byte[] sizeMember = InstVar(texSizeXRef);
+            byte[] target = Context(InstVar(firstTextureRef), (ushort)sizeMember.Length, 4, sizeMember);
+            return Concat(new byte[] { OP_LET }, target);
+        }
 
         // Utility
 

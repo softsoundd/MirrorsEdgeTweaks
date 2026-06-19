@@ -1,4 +1,3 @@
-using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.IO;
 
@@ -14,6 +13,11 @@ namespace MirrorsEdgeTweaks.Helpers
     public static class SupersamplePatchHelper
     {
         private const uint ImageBase = 0x00400000;
+
+        // Sum of the five cave.Alloc sizes in ApplyPatch (all 4-aligned, so no inter-block padding).
+        // Used to reclaim the cave on Remove only when it is the topmost allocation. Keep in sync with
+        // the Alloc calls in ApplyPatch.
+        private const int CaveFootprint = 44 + 160 + 68 + 52 + 56;
 
         private static readonly string[] RequiredSymbols =
         {
@@ -111,18 +115,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new InvalidOperationException("Unrecognized executable -- cannot detect game version.");
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
-            if (isOoa)
-            {
-                string? dlfPath = OoaService.FindLicensePath(data);
-                if (dlfPath == null)
-                    throw new OoaLicenseNotFoundException(OoaService.GetExpectedLicensePath(data));
-                ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                OoaService.StripAuthenticode(data);
-                ooaCtx = OoaService.DecryptSections(data, ooaKey);
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
             var addrs = VersionAddressTable.Load(version);
             if (addrs.Symbols.Count == 0)
@@ -166,11 +159,7 @@ namespace MirrorsEdgeTweaks.Helpers
             ApplyHookPatches(data, addrs, c1Va, c2Va, c4Va, c5Va);
 
             if (isOoa)
-            {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx!);
-                OoaService.ReencryptSections(data, ooaKey!, ooaCtx!);
-                data = OoaService.TruncateOverlay(data, ooaCtx!);
-            }
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             WritePreservingAttributes(exePath, data);
         }
@@ -183,25 +172,18 @@ namespace MirrorsEdgeTweaks.Helpers
             if (version == null) return;
 
             bool isOoa = version == "ea";
-            OoaContext? ooaCtx = null;
-            byte[]? ooaKey = null;
-
+            PatchUtility.OoaSession? ooa = null;
             if (isOoa)
             {
-                try
-                {
-                    string? dlfPath = OoaService.FindLicensePath(data);
-                    if (dlfPath == null) return;
-                    ooaKey = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                    OoaService.StripAuthenticode(data);
-                    ooaCtx = OoaService.DecryptSections(data, ooaKey);
-                }
+                try { ooa = PatchUtility.BeginOoa(data); }
                 catch { return; }
             }
 
             var addrs = VersionAddressTable.Load(version);
             var state = GetPatchStateFromData(data, addrs);
             if (state != SupersamplePatchState.Patched) return;
+
+            uint? caveBase = null;
 
             foreach (string name in InlinePatchNames)
             {
@@ -220,25 +202,28 @@ namespace MirrorsEdgeTweaks.Helpers
             foreach (string hookName in HookNames)
             {
                 var hdef = addrs.Hooks[hookName];
-                uint hookVa;
-                try { hookVa = VersionAddressTable.ResolveHook(data, hdef); }
-                catch { continue; }
+                int foff = FindHookSite(data, hdef);
+                if (foff < 0 || foff + hdef.Size > data.Length || data[foff] != 0xE9)
+                    continue;
 
-                int foff = (int)(hookVa - ImageBase);
-                if (data[foff] == 0xE9)
-                {
-                    Buffer.BlockCopy(hdef.Pattern, 0, data, foff, hdef.Pattern.Length);
-                    for (int i = hdef.Pattern.Length; i < hdef.Size; i++)
-                        data[foff + i] = 0x90;
-                }
+                // scaleViewport detours to the lowest cave block, so its target is the cave base.
+                // Capture it before restoring the hook (which overwrites the E9 + relative offset).
+                if (hookName == "scaleViewport_centering")
+                    caveBase = ImageBase + (uint)foff + 5u
+                        + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(foff + 1, 4));
+
+                Buffer.BlockCopy(hdef.Pattern, 0, data, foff, hdef.Pattern.Length);
+                for (int i = hdef.Pattern.Length; i < hdef.Size; i++)
+                    data[foff + i] = 0x90;
             }
 
-            if (isOoa && ooaCtx != null && ooaKey != null)
-            {
-                OoaService.UpdateEncBlockCrcs(data, ooaCtx);
-                OoaService.ReencryptSections(data, ooaKey, ooaCtx);
-                data = OoaService.TruncateOverlay(data, ooaCtx);
-            }
+            // Reclaim the cave so a later enable reuses the space instead of growing it (topmost-guarded;
+            // a no-op if another patch was allocated above this one).
+            if (caveBase != null)
+                data = CaveSection.ReclaimIfTopmost(data, version, isOoa, caveBase.Value, CaveFootprint);
+
+            if (isOoa && ooa != null)
+                data = PatchUtility.FinishOoa(data, ooa);
 
             WritePreservingAttributes(exePath, data);
         }
@@ -316,7 +301,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        private static byte[] BuildCave1()
+        internal static byte[] BuildCave1()
         {
             return new byte[]
             {
@@ -344,7 +329,7 @@ namespace MirrorsEdgeTweaks.Helpers
             };
         }
 
-        private static byte[] BuildCave2(Dictionary<string, uint> sym)
+        internal static byte[] BuildCave2(Dictionary<string, uint> sym)
         {
             uint SP = sym["GSystemSettings.ScreenPercentage"];
             uint C001 = sym["Const_001f"];
@@ -395,7 +380,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCave3(uint baseVa, Dictionary<string, uint> sym)
+        internal static byte[] BuildCave3(uint baseVa, Dictionary<string, uint> sym)
         {
             uint SP = sym["GSystemSettings.ScreenPercentage"];
             uint C001 = sym["Const_001f"];
@@ -432,7 +417,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCave4(uint baseVa, Dictionary<string, uint> sym, uint hookVa)
+        internal static byte[] BuildCave4(uint baseVa, Dictionary<string, uint> sym, uint hookVa)
         {
             uint GS = sym["GSystemSettings"];
             uint NU = sym["NeedsUpscale"];
@@ -474,7 +459,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        private static byte[] BuildCave5(uint baseVa, Dictionary<string, uint> sym, uint hookVa)
+        internal static byte[] BuildCave5(uint baseVa, Dictionary<string, uint> sym, uint hookVa)
         {
             uint GS = sym["GSystemSettings"];
             uint NU = sym["NeedsUpscale"];
@@ -516,6 +501,28 @@ namespace MirrorsEdgeTweaks.Helpers
             Add(0xE9); code.AddRange(MachineCodeBuilder.Rel32Bytes(baseVa + 48, skipVa));
 
             return code.ToArray();
+        }
+
+        // Locates a hook site whether the binary is unpatched (find the original pattern) or already
+        // patched (the pattern is gone; find the E9 + NOP-padded detour in the same scan window). Needed
+        // so Remove restores detoured hooks - ResolveHook alone fails on a patched site. Returns the file
+        // offset, or -1 if not found.
+        private static int FindHookSite(byte[] data, HookDefinition hdef)
+        {
+            try { return (int)(VersionAddressTable.ResolveHook(data, hdef) - ImageBase); }
+            catch { }
+
+            int start = (int)(hdef.ScanStart - ImageBase);
+            int end = start + hdef.ScanSize - hdef.Size;
+            for (int i = Math.Max(0, start); i <= end && i + hdef.Size <= data.Length; i++)
+            {
+                if (data[i] != 0xE9) continue;
+                bool allNops = true;
+                for (int k = 5; k < hdef.Size; k++)
+                    if (data[i + k] != 0x90) { allNops = false; break; }
+                if (allNops) return i;
+            }
+            return -1;
         }
 
         private static void DecryptOoaInPlace(byte[] data) => PatchUtility.DecryptOoaInPlace(data);

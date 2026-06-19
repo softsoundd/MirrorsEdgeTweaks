@@ -14,6 +14,7 @@ namespace MirrorsEdgeTweaks.Helpers
             ["58de3df21f40e9953e00be92f7749097832bad02e5b657d8485cdb61f360a3dd"] = "gog",
             ["a0f653b63b299d5d3899b8b4fa6e4d47eeb390bf26b1f020710482eabfe297f0"] = "steam",
             ["c6692e71956e2ce86c93b11816c9280ba72e771403a9261a6a516f3aa1c7b568"] = "retail",
+            ["29112fbef50b49dd60685c2d80876d31c80030cfbac92e30e3ba86a45c70f394"] = "retold",
             ["4d5ecc40887a9a324fa80c8fdc7a13e0e7afb8da090c0560e3517a21d13c4ba9"] = "dlc",
             ["c22fd2378d90cc1305a65c604be12d2a338f6a0c693e3135f7402eb917b0437a"] = "ea",
         };
@@ -23,13 +24,15 @@ namespace MirrorsEdgeTweaks.Helpers
             ["gog"] = "GOG (1.0.1.0, DRM-free)",
             ["steam"] = "Steam (1.0.1.0, SteamStub)",
             ["retail"] = "Retail (1.0.1.0, SecuROM)",
+            ["retold"] = "Retail (1.0.0.0, SecuROM)",
             ["dlc"] = "DLC (1.1.0.0, SecuROM)",
             ["ea"] = "EA App (1.0.1.0, OOA-encrypted)",
         };
 
         private const long SteamFileSize = 31946072;
 
-        private static readonly HashSet<string> KnownCaveTags = new() { "gog", "steam", "retail", "dlc" };
+        private static readonly HashSet<string> KnownCaveTags =
+            new() { "gog", "steam", "retail", "retold", "dlc", "ea" };
         private static readonly byte[] CaveSectionName = Encoding.ASCII.GetBytes(".cave\0\0\0");
 
         public static string? DetectVersion(byte[] peData, string? exePath = null)
@@ -100,7 +103,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     {
                         if (off + 12 > d.Length) continue;
                         uint wm = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(off, 4));
-                        if (wm <= 12 || wm >= rawSize) continue;
+                        // wm == 12 is a reclaimed empty cave whose tag is still valid
+                        if (wm < 12 || wm >= rawSize) continue;
 
                         byte[] tagBytes = new byte[8];
                         Buffer.BlockCopy(d, off + 4, tagBytes, 0, 8);
@@ -126,10 +130,14 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (fileVersion.StartsWith("1.1.0.0", StringComparison.OrdinalIgnoreCase))
                     return "dlc";
 
+                // Day-one retail (1.0.0.0 SecuROM)
+                if (fileVersion.StartsWith("1.0.0.0", StringComparison.OrdinalIgnoreCase))
+                    return "retold";
+
                 if (!fileVersion.StartsWith("1.0.", StringComparison.OrdinalIgnoreCase))
                     return null;
 
-                // 1.0.x.0 base game: GOG, Steam, Retail, or EA.
+                // 1.0.1.0 base game: GOG, Steam, Retail or EA
                 if (OoaService.HasOoaSection(peData))
                     return "ea";
 

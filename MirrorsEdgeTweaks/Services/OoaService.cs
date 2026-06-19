@@ -371,12 +371,28 @@ namespace MirrorsEdgeTweaks.Services
             BitConverter.GetBytes(0u).CopyTo(data, certDdOff + 4);
         }
 
-        public static byte[] TruncateOverlay(byte[] data, OoaContext ctx)
+        // Truncates to the end of the highest section's raw data, dropping the Authenticode
+        // overlay. Cave-aware: when a patch appends a section past .ooa (the font fix's .cave),
+        // that section is the highest and is preserved. With no added section the result is the
+        // .ooa raw end, since .ooa is otherwise the last section.
+        public static byte[] TruncateToSections(byte[] data)
         {
-            if (ctx.OoaSectionRawEnd > 0 && ctx.OoaSectionRawEnd < data.Length)
+            if (!TryGetSectionTable(data, out int secTableOff, out int numSections))
+                return data;
+
+            int end = 0;
+            for (int i = 0; i < numSections; i++)
             {
-                byte[] truncated = new byte[ctx.OoaSectionRawEnd];
-                Buffer.BlockCopy(data, 0, truncated, 0, truncated.Length);
+                int hdr = secTableOff + i * 40;
+                int rawPtr = (int)BitConverter.ToUInt32(data, hdr + 20);
+                int rawSize = (int)BitConverter.ToUInt32(data, hdr + 16);
+                end = Math.Max(end, rawPtr + rawSize);
+            }
+
+            if (end > 0 && end < data.Length)
+            {
+                byte[] truncated = new byte[end];
+                Buffer.BlockCopy(data, 0, truncated, 0, end);
                 return truncated;
             }
 
