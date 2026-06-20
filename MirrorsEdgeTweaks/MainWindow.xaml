@@ -20,6 +20,7 @@
 
     <materialDesign:DialogHost Identifier="RootDialog">
     <Grid Margin="10">
+        <Grid x:Name="ContentRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -27,6 +28,19 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding GameStatus.IsGameRunning}" Value="True">
+                        <Setter Property="Effect">
+                            <Setter.Value>
+                                <BlurEffect Radius="12" KernelType="Gaussian"/>
+                            </Setter.Value>
+                        </Setter>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,10">
             <Button Command="{Binding SelectGameDirectoryCommand}"
@@ -2358,6 +2372,23 @@
                              VerticalAlignment="Center"/>
             </StatusBarItem>
         </StatusBar>
+        </Grid>
+
+        <Border Panel.ZIndex="1000"
+                Background="#50000000"
+                Visibility="{Binding GameStatus.IsGameRunning, Converter={StaticResource BoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="0" Opacity="0.5"/>
+                </StackPanel.Effect>
+                <materialDesign:PackIcon Kind="LockOutline" Width="48" Height="48"
+                                         HorizontalAlignment="Center" Foreground="White"/>
+                <TextBlock Text="Tweaks locked" FontSize="20" FontWeight="Bold"
+                           Foreground="White" HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                    <TextBlock Text="Close Mirror's Edge to continue." FontWeight="Bold"
+                           Foreground="White" Opacity="0.85" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
     </Grid>
     </materialDesign:DialogHost>
 </Window>

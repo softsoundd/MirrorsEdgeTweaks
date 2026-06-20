@@ -39,6 +39,7 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<IAppSettingsService, AppSettingsService>();
             services.AddSingleton<IGameDataService, GameDataService>();
             services.AddSingleton<IFolderPickerService, FolderPickerService>();
+            services.AddSingleton<IGameProcessMonitor, GameProcessMonitor>();
 
             // Shared state + view models
             services.AddSingleton<GameSession>();

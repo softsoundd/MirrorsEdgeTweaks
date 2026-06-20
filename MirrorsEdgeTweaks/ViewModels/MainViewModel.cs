@@ -9,9 +9,6 @@ using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Root view model and shell orchestrator. Owns the shared GameSession, exposes the per-feature
-    // child view models, drives startup / game-directory processing / settings persistence, and runs
-    // the post-package-reload refresh fan-out. Bound as the window's DataContext.
     public partial class MainViewModel : ObservableObject
     {
         private readonly IGameDataService _gameData;
@@ -22,6 +19,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDecompressionService _decompressionService;
         private readonly IFileService _fileService;
         private readonly IFolderPickerService _folderPicker;
+        private readonly IGameProcessMonitor _processMonitor;
 
         public GameSession Session { get; }
 
@@ -68,7 +66,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             IPackageService packageService,
             IDecompressionService decompressionService,
             IFileService fileService,
-            IFolderPickerService folderPicker)
+            IFolderPickerService folderPicker,
+            IGameProcessMonitor processMonitor)
         {
             Session = session;
             GameStatus = gameStatus;
@@ -96,9 +95,24 @@ namespace MirrorsEdgeTweaks.ViewModels
             _decompressionService = decompressionService;
             _fileService = fileService;
             _folderPicker = folderPicker;
+            _processMonitor = processMonitor;
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
+            _processMonitor.RunningStateChanged += OnGameRunningChanged;
         }
+
+        private void OnGameRunningChanged(bool running) => Dispatch(() =>
+        {
+            GameStatus.IsGameRunning = running;
+            if (running)
+            {
+                GameStatus.Status = "Tweaks locked. Close Mirror's Edge to continue.";
+            }
+            else if (!string.IsNullOrEmpty(Session.Config.GameDirectoryPath))
+            {
+                GameStatus.Status = "Ready.";
+            }
+        });
 
         private static void Dispatch(Action action)
         {
@@ -113,6 +127,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         public async Task InitializeAsync()
         {
             LoadSettings();
+
+            GameStatus.IsGameRunning = _processMonitor.IsGameRunning;
+            _processMonitor.Start();
 
             if (!string.IsNullOrEmpty(Session.Config.GameDirectoryPath) && _packageService.IsValidGameDirectory(Session.Config.GameDirectoryPath))
             {
@@ -673,6 +690,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private bool _isGameTweaksEnabled = true;
         private bool _isUiEnabled = true;
         private bool _isMainTabEnabled = true;
+        private bool _isGameRunning;
 
         public string GameDirectoryPath
         {
@@ -720,6 +738,12 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             get => _isMainTabEnabled;
             set => SetProperty(ref _isMainTabEnabled, value);
+        }
+
+        public bool IsGameRunning
+        {
+            get => _isGameRunning;
+            set => SetProperty(ref _isGameRunning, value);
         }
     }
 
