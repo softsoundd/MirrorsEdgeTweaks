@@ -58,6 +58,10 @@ namespace MirrorsEdgeTweaks.Services
                 // size; console/debug text (plain UFont) is excluded.
                 TryApplyCanvasTextFix(gameDirectoryPath);
 
+                // Native exe fix for the ultrawide subtitle bug; pairs with the SubtitleMin/MaxRegion
+                // "set" commands from HighResUIDynamicPatcher.
+                TryApplySubtitleFix(gameDirectoryPath);
+
                 // Todo - better solution needed later: Mouse cursor is size currently edited across every Startup_* localisation
                 TryApplyCursorFix(gameDirectoryPath, height);
 
@@ -84,6 +88,7 @@ namespace MirrorsEdgeTweaks.Services
 
                 HighResUIDynamicPatcher.RemoveAll(enginePath, tdGamePath);
                 TryRemoveExeFontHook(gameDirectoryPath);
+                TryRemoveSubtitleFix(gameDirectoryPath);
                 TryRemoveCursorFix(gameDirectoryPath);
 
                 if (showDialogs)
@@ -159,6 +164,34 @@ namespace MirrorsEdgeTweaks.Services
                 string exePath = ExePath(gameDirectoryPath);
                 if (File.Exists(exePath))
                     MultiFontScalePatcher.Remove(exePath);
+            }
+            catch
+            {
+            }
+        }
+
+        // Native subtitle-region fix (signed centring offset) for aspect ratios wider than 16:9.
+        private static void TryApplySubtitleFix(string gameDirectoryPath)
+        {
+            try
+            {
+                string exePath = ExePath(gameDirectoryPath);
+                if (File.Exists(exePath))
+                    SubtitleRegionPatcher.Apply(exePath);
+            }
+            catch
+            {
+            }
+        }
+
+        // Restore the stock (unsigned) subtitle centring.
+        private static void TryRemoveSubtitleFix(string gameDirectoryPath)
+        {
+            try
+            {
+                string exePath = ExePath(gameDirectoryPath);
+                if (File.Exists(exePath))
+                    SubtitleRegionPatcher.Remove(exePath);
             }
             catch
             {

@@ -5,8 +5,8 @@ using static UELib.Core.UStruct.UByteCodeDecompiler;
 namespace MirrorsEdgeTweaks.Services
 {
     // Injects a self contained ConsoleCommand("set ...") blob into stock packages so the font
-    // ResolutionTestTable and UIStyle_Text scale track the live viewport size and are reapplied
-    // automatically whenever the resolution changes
+    // ResolutionTestTable, UIStyle_Text scale and subtitle region track the live viewport size and
+    // are reapplied automatically whenever the resolution changes
     //
     //   Engine.u  : HUD.PreCalcValues (fires on every size change in menu and gameplay - see ApplyEngine)
     //   TdGame.u  : the video settings apply path
@@ -14,6 +14,8 @@ namespace MirrorsEdgeTweaks.Services
     // The blob is equivalent to (see BytecodeBuilder.BuildHighResCommands for the exact expressions):
     //   ConsoleCommand("set MultiFont ResolutionTestTable (480,720," $ int(FMax(1080, SizeX*0.5625+0.5)) $ ")");
     //   ConsoleCommand("set UIStyle_Text Scale (X=" $ (FMin(SizeY,SizeX*0.5625)/FMin(SizeX*0.5625,1080)) $ ",Y=...)");
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMinRegion (X=0.0,Y=" $ (0.5-0.35*(SizeY/SizeX)*16/9) $ ")");
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMaxRegion (X=1.0,Y=" $ (0.5+0.35*(SizeY/SizeX)*16/9) $ ")");
     //   ConsoleCommand("set TdUIScene bRefreshWidgetStyles true");
     public static class HighResUIDynamicPatcher
     {
@@ -57,8 +59,15 @@ namespace MirrorsEdgeTweaks.Services
         public static void ApplyEngine(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
+            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSubtitleSignature) != -1)
+                return; // already fully patched (current blob includes the subtitle-region commands)
+
+            // Legacy (pre-subtitle) install: strip it, then reinsert the current blob below.
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return; // already patched
+            {
+                RemoveEngine(enginePath);
+                data = File.ReadAllBytes(enginePath);
+            }
 
             EngineRefs r;
             int serialOffset, insertBc;
@@ -122,6 +131,14 @@ namespace MirrorsEdgeTweaks.Services
             int origLen = data.Length;
 
             int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
+            if (blobPos == -1)
+            {
+                // Legacy (pre-subtitle) install - match the blob built without the subtitle commands.
+                blob = BytecodeBuilder.BuildHighResApplyBlob(
+                    r.PlayerOwnerRef, r.ConsoleNameIdx, r.ConsoleReturnValueRef, r.SizeXRef, r.SizeYRef,
+                    includeSubtitleRegion: false);
+                blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
+            }
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
@@ -259,8 +276,15 @@ namespace MirrorsEdgeTweaks.Services
         public static void ApplyTdGame(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
+            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSubtitleSignature) != -1)
+                return; // already fully patched (current blob includes the subtitle-region commands)
+
+            // Upgrade a legacy (pre-subtitle) install in place before reinserting the current blob.
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return; // already patched
+            {
+                RemoveTdGame(tdGamePath);
+                data = File.ReadAllBytes(tdGamePath);
+            }
 
             TdGameRefs r;
             int serialOffset, exportIndex, insertBc;
@@ -320,6 +344,12 @@ namespace MirrorsEdgeTweaks.Services
 
             int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
             if (blobPos == -1)
+            {
+                // Legacy (pre-subtitle) install - match the blob built without the subtitle commands.
+                blob = BuildTdGameBlob(r, includeSubtitleRegion: false);
+                blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
+            }
+            if (blobPos == -1)
                 throw new InvalidOperationException("High-res menu blob not found for removal (variant mismatch?)");
             int insertBc = blobPos - bcStart;
 
@@ -358,11 +388,11 @@ namespace MirrorsEdgeTweaks.Services
             return r;
         }
 
-        static byte[] BuildTdGameBlob(TdGameRefs r)
+        static byte[] BuildTdGameBlob(TdGameRefs r, bool includeSubtitleRegion = true)
         {
             byte[] width = BytecodeBuilder.StructMember(r.ResXRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
             byte[] height = BytecodeBuilder.StructMember(r.ResYRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
-            return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height);
+            return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height, includeSubtitleRegion);
         }
 
         // Insertion point = byte offset just after the closing EndFunctionParms of the named call.
