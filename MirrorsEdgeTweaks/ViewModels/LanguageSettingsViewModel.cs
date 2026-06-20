@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
@@ -250,98 +251,98 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 "Čeština (CZE)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/CZE.zip",
+                    DownloadUrl = DownloadUrls.For("CZE.zip"),
                     RegistryLanguage = "Czech",
                     Locale = "cs",
                     TdEngineLanguage = "cze"
                 },
                 "Deutsch (DEU)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/DEU.zip",
+                    DownloadUrl = DownloadUrls.For("DEU.zip"),
                     RegistryLanguage = "German",
                     Locale = "de_DE",
                     TdEngineLanguage = "deu"
                 },
                 "English (INT)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/INT.zip",
+                    DownloadUrl = DownloadUrls.For("INT.zip"),
                     RegistryLanguage = "English",
                     Locale = "en_UK",
                     TdEngineLanguage = "int"
                 },
                 "Español (ESN)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/ESN.zip",
+                    DownloadUrl = DownloadUrls.For("ESN.zip"),
                     RegistryLanguage = "Spanish",
                     Locale = "es_ES",
                     TdEngineLanguage = "esn"
                 },
                 "Français (FRA)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/FRA.zip",
+                    DownloadUrl = DownloadUrls.For("FRA.zip"),
                     RegistryLanguage = "French",
                     Locale = "fr_FR",
                     TdEngineLanguage = "fra"
                 },
                 "Italiano (ITA)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/ITA.zip",
+                    DownloadUrl = DownloadUrls.For("ITA.zip"),
                     RegistryLanguage = "Italian",
                     Locale = "it_IT",
                     TdEngineLanguage = "ita"
                 },
                 "Magyar (HUN)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/HUN.zip",
+                    DownloadUrl = DownloadUrls.For("HUN.zip"),
                     RegistryLanguage = "Hungarian",
                     Locale = "hu_HU",
                     TdEngineLanguage = "hun"
                 },
                 "Polski (POL)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/POL.zip",
+                    DownloadUrl = DownloadUrls.For("POL.zip"),
                     RegistryLanguage = "Polish",
                     Locale = "pl_PL",
                     TdEngineLanguage = "pol"
                 },
                 "Português (POR)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/POR.zip",
+                    DownloadUrl = DownloadUrls.For("POR.zip"),
                     RegistryLanguage = "Portuguese Brazil",
                     Locale = "pt_PT",
                     TdEngineLanguage = "por"
                 },
                 "Русский (RUS)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/RUS.zip",
+                    DownloadUrl = DownloadUrls.For("RUS.zip"),
                     RegistryLanguage = "Russian",
                     Locale = "ru_RU",
                     TdEngineLanguage = "rus"
                 },
                 "한국어 (KOR)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/KOR.zip",
+                    DownloadUrl = DownloadUrls.For("KOR.zip"),
                     RegistryLanguage = "Korean",
                     Locale = "ko_KR",
                     TdEngineLanguage = "kor"
                 },
                 "台灣繁體中文 (CHT)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/CHT.zip",
+                    DownloadUrl = DownloadUrls.For("CHT.zip"),
                     RegistryLanguage = "Traditional Chinese Taiwan",
                     Locale = "zh-TW",
                     TdEngineLanguage = "cht"
                 },
                 "日本語 (JPN)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/JPN.zip",
+                    DownloadUrl = DownloadUrls.For("JPN.zip"),
                     RegistryLanguage = "Japanese",
                     Locale = "ja_JP",
                     TdEngineLanguage = "jpn"
                 },
                 "简体中文 (CHS)" => new LanguageConfig
                 {
-                    DownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Language%20Files/CHS.zip",
+                    DownloadUrl = DownloadUrls.For("CHS.zip"),
                     RegistryLanguage = "Simplified Chinese",
                     Locale = "zh_CN",
                     TdEngineLanguage = "chs"

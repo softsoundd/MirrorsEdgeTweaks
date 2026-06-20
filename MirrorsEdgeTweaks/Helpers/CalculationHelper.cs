@@ -82,11 +82,11 @@ namespace MirrorsEdgeTweaks.Helpers
 
             if (gameVersionInfo.Contains("1.0.0.0") || gameVersionInfo.Contains("1.0.1.0"))
             {
-                baseUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/Base_";
+                baseUrl = DownloadUrls.AssetBase + "Base_";
             }
             else if (gameVersionInfo.Contains("1.1.0.0"))
             {
-                baseUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/DLC_";
+                baseUrl = DownloadUrls.AssetBase + "DLC_";
             }
             else
             {

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
@@ -108,17 +109,17 @@ namespace MirrorsEdgeTweaks.ViewModels
                 switch (selectedIndex)
                 {
                     case 0:
-                        downloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/OpenAL.zip";
+                        downloadUrl = DownloadUrls.AssetBase + "OpenAL.zip";
                         maxChannels = 32;
                         deviceName = "Generic Hardware";
                         break;
                     case 1:
-                        downloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/OpenALSoft.zip";
+                        downloadUrl = DownloadUrls.AssetBase + "OpenALSoft.zip";
                         maxChannels = 256;
                         deviceName = "OpenAL Soft";
                         break;
                     case 2:
-                        downloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/OpenALSoftHRTF.zip";
+                        downloadUrl = DownloadUrls.AssetBase + "OpenALSoftHRTF.zip";
                         maxChannels = 256;
                         deviceName = "OpenAL Soft";
                         break;

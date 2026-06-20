@@ -13,8 +13,8 @@ namespace MirrorsEdgeTweaks.ViewModels
     // model package and detects the installed variant by file size.
     public partial class CommunityModsViewModel : BusyViewModel
     {
-        private const string OriginalModelUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/FaithModelOriginal.zip";
-        private const string CinematicModelUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/FaithModelCinematic.zip";
+        private const string OriginalModelUrl = DownloadUrls.AssetBase + "FaithModelOriginal.zip";
+        private const string CinematicModelUrl = DownloadUrls.AssetBase + "FaithModelCinematic.zip";
 
         private readonly IDialogService _dialogService;
         private readonly GameSession _session;

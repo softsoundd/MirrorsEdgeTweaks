@@ -13,7 +13,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     // status view models.
     public partial class ModsViewModel : BusyViewModel
     {
-        private const string ConsoleDownloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeConsole.zip";
+        private const string ConsoleDownloadUrl = DownloadUrls.AssetBase + "MirrorsEdgeConsole.zip";
 
         private readonly IDialogService _dialogService;
         private readonly IPackageService _packageService;
@@ -176,7 +176,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            const string downloadUrl = "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeTweaksScripts.zip";
+            const string downloadUrl = DownloadUrls.AssetBase + "MirrorsEdgeTweaksScripts.zip";
             string tempZipPath = Path.Combine(Path.GetTempPath(), "MirrorsEdgeTweaksScripts.zip");
 
             _gameStatus.IsGameTweaksEnabled = false;
@@ -426,8 +426,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             bool isMEMM = versionChoice.Value;
             string downloadUrl = isMEMM
-                ? "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeTweaksScriptsUI_MEMM_compatible.zip"
-                : "https://github.com/softsoundd/MirrorsEdgeTweaks/raw/refs/heads/main/Downloads/MirrorsEdgeTweaksScriptsUI.zip";
+                ? DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI_MEMM_compatible.zip"
+                : DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI.zip";
 
             try
             {
