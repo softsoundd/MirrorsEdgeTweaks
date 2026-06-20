@@ -615,6 +615,8 @@ namespace MirrorsEdgeTweaks.Services
                 new byte[] { 0x00, 0x00 }, inner);
         }
 
+        // Engine.GameViewportClient.SubtitleMin/MaxRegion, read each frame by
+        // TdGameViewportClient.GetSubtitleRegion; the set targets the concrete runtime class.
         const string SubtitleMinRegionSetPrefix = "set TdGameViewportClient SubtitleMinRegion (X=0.0,Y=";
         const string SubtitleMaxRegionSetPrefix = "set TdGameViewportClient SubtitleMaxRegion (X=1.0,Y=";
 
@@ -633,7 +635,7 @@ namespace MirrorsEdgeTweaks.Services
         // GetScalingFactor magnify the page (blurry) on wide / non-16:9 modes (e.g. 2560x1080).
         // widthFloatExpr / heightFloatExpr must each evaluate to a float.
         static byte[] BuildHighResCommands(byte[] widthFloatExpr, byte[] heightFloatExpr,
-            Func<byte[], byte[]> wrap, bool includeSubtitleRegion = true)
+            Func<byte[], byte[]> wrap)
         {
             byte[] mul = Concat(new byte[] { OP_MULTIPLY_FF }, widthFloatExpr, FloatConst(0.5625f), EndFP());
             byte[] rounded = Concat(new byte[] { OP_ADD_FF }, mul, FloatConst(0.5f), EndFP());
@@ -659,10 +661,6 @@ namespace MirrorsEdgeTweaks.Services
                 StrConst(")"));
 
             byte[] refreshCmd = StrConst("set TdUIScene bRefreshWidgetStyles true");
-
-            // Legacy blob (pre-subtitle): emitted only for detecting/removing older installs.
-            if (!includeSubtitleRegion)
-                return Concat(wrap(restestCmd), wrap(scaleCmd), wrap(refreshCmd));
 
             // With SubtitleRegionPatcher's signed-centring exe fix the band sits at
             // frac*SizeX*0.5625 + (SizeY-SizeX*0.5625)/2. Setting MinPos.Y=0.5-0.35*r and
@@ -700,29 +698,26 @@ namespace MirrorsEdgeTweaks.Services
         // wrapped in EatReturnValue (consoleReturnValueRef = ConsoleCommand.ReturnValue) or the VM
         // mishandles the return value and crashes.
         public static byte[] BuildHighResApplyBlob(int playerOwnerRef, int consoleCmdNameIdx,
-            int consoleReturnValueRef, int hudSizeXRef, int hudSizeYRef, bool includeSubtitleRegion = true)
+            int consoleReturnValueRef, int hudSizeXRef, int hudSizeYRef)
         {
             byte[] po = InstVar(playerOwnerRef);
             byte[] eat = EatReturnValue(consoleReturnValueRef);
             return BuildHighResCommands(InstVar(hudSizeXRef), InstVar(hudSizeYRef),
-                arg => Concat(eat, ContextCall(po, consoleCmdNameIdx, arg)), includeSubtitleRegion);
+                arg => Concat(eat, ContextCall(po, consoleCmdNameIdx, arg)));
         }
 
         // Blob for TdUIScene_VideoSettingsPC.ApplyVideoSettings (after SetScreenResolution):
         // self.ConsoleCommand(...), computing from the int width/height expressions just applied.
         public static byte[] BuildHighResApplyBlobSelfCall(int consoleCmdNameIdx,
-            byte[] widthIntExpr, byte[] heightIntExpr, bool includeSubtitleRegion = true)
+            byte[] widthIntExpr, byte[] heightIntExpr)
         {
             byte[] widthF = PrimitiveCast(CAST_INT_TO_FLOAT, widthIntExpr);
             byte[] heightF = PrimitiveCast(CAST_INT_TO_FLOAT, heightIntExpr);
-            return BuildHighResCommands(widthF, heightF, arg => SelfCall(consoleCmdNameIdx, arg), includeSubtitleRegion);
+            return BuildHighResCommands(widthF, heightF, arg => SelfCall(consoleCmdNameIdx, arg));
         }
 
-        // Idempotency marker - the unique StrConst literal emitted by BuildHighResApplyBlob.
+        // Idempotency marker - the StrConst literal emitted by every high-res blob; detects an install.
         public static readonly byte[] HighResSignature = StrConst("set MultiFont ResolutionTestTable (480,720,");
-
-        // Idempotency marker for the subtitle-region commands
-        public static readonly byte[] HighResSubtitleSignature = StrConst(SubtitleMaxRegionSetPrefix);
 
         // Crosshair dynamic scaling (TdSPHUD.DrawLivingHUD)
 

@@ -59,15 +59,8 @@ namespace MirrorsEdgeTweaks.Services
         public static void ApplyEngine(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSubtitleSignature) != -1)
-                return; // already fully patched (current blob includes the subtitle-region commands)
-
-            // Legacy (pre-subtitle) install: strip it, then reinsert the current blob below.
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-            {
-                RemoveEngine(enginePath);
-                data = File.ReadAllBytes(enginePath);
-            }
+                return; // already patched
 
             EngineRefs r;
             int serialOffset, insertBc;
@@ -131,14 +124,6 @@ namespace MirrorsEdgeTweaks.Services
             int origLen = data.Length;
 
             int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
-            if (blobPos == -1)
-            {
-                // Legacy (pre-subtitle) install - match the blob built without the subtitle commands.
-                blob = BytecodeBuilder.BuildHighResApplyBlob(
-                    r.PlayerOwnerRef, r.ConsoleNameIdx, r.ConsoleReturnValueRef, r.SizeXRef, r.SizeYRef,
-                    includeSubtitleRegion: false);
-                blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
-            }
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
@@ -276,15 +261,8 @@ namespace MirrorsEdgeTweaks.Services
         public static void ApplyTdGame(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSubtitleSignature) != -1)
-                return; // already fully patched (current blob includes the subtitle-region commands)
-
-            // Upgrade a legacy (pre-subtitle) install in place before reinserting the current blob.
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-            {
-                RemoveTdGame(tdGamePath);
-                data = File.ReadAllBytes(tdGamePath);
-            }
+                return; // already patched
 
             TdGameRefs r;
             int serialOffset, exportIndex, insertBc;
@@ -344,13 +322,7 @@ namespace MirrorsEdgeTweaks.Services
 
             int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
             if (blobPos == -1)
-            {
-                // Legacy (pre-subtitle) install - match the blob built without the subtitle commands.
-                blob = BuildTdGameBlob(r, includeSubtitleRegion: false);
-                blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
-            }
-            if (blobPos == -1)
-                throw new InvalidOperationException("High-res menu blob not found for removal (variant mismatch?)");
+                throw new InvalidOperationException("High-res menu blob not found for removal");
             int insertBc = blobPos - bcStart;
 
             ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
@@ -388,11 +360,11 @@ namespace MirrorsEdgeTweaks.Services
             return r;
         }
 
-        static byte[] BuildTdGameBlob(TdGameRefs r, bool includeSubtitleRegion = true)
+        static byte[] BuildTdGameBlob(TdGameRefs r)
         {
             byte[] width = BytecodeBuilder.StructMember(r.ResXRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
             byte[] height = BytecodeBuilder.StructMember(r.ResYRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
-            return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height, includeSubtitleRegion);
+            return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height);
         }
 
         // Insertion point = byte offset just after the closing EndFunctionParms of the named call.

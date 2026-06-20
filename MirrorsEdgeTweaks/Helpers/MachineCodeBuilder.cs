@@ -77,6 +77,13 @@ namespace MirrorsEdgeTweaks.Helpers
             _pendingJumps.Add(new PendingJump(position, JumpKind.Jcc6, label));
         }
 
+        public void EmitJle(string label)
+        {
+            int position = _code.Count;
+            Emit(new byte[] { 0x0F, 0x8E, 0x00, 0x00, 0x00, 0x00 });
+            _pendingJumps.Add(new PendingJump(position, JumpKind.Jcc6, label));
+        }
+
         public void EmitJmp(string label)
         {
             int position = _code.Count;

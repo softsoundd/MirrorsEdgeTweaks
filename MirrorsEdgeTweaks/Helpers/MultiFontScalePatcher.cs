@@ -195,9 +195,6 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             var pe = PeImageLayout.Parse(data);
 
-            // Drop any GetScalingFactor-entry hook left by an older version of this fix.
-            RemoveGsfEntryHook(data, pe);
-
             uint gsfVa = FindGsfVa(data, pe)
                 ?? throw new InvalidOperationException("UMultiFont::GetScalingFactor not found.");
             // True window height (GSystemSettings.ResY). Every cave derives its boost from ResY (not the
@@ -368,7 +365,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 && data[dsHookOff] == 0xE9)
                 caveBase = dsHookVa + 5u + (uint)BitConverter.ToInt32(data, dsHookOff + 1);
 
-            changed = RemoveGsfEntryHook(data, pe);
+            changed = false;
             if (TryFindHook(data, pe, DrawStringPrefix, DrawStringHookOffset, out int dsOff, out _))
                 changed |= RestoreIfDetoured(data, dsOff, DrawStringOrig);
             if (TryFindHook(data, pe, WrappedPrintPrefix, WrappedPrintHookOffset, out int wpOff, out _))
@@ -418,6 +415,16 @@ namespace MirrorsEdgeTweaks.Helpers
             return wm;
         }
 
+        // Skips the boost (jumps to skipLabel) unless width > 1920, i.e. the 16:9 render height
+        // ResX*0.5625 exceeds the 1080 authored page. At/below that the stock GetScalingFactor is already
+        // correct, so boosting it oversizes sub-1080p / non-16:9 text. ResX is the INT before ResY.
+        private static void EmitBoostGate(MachineCodeBuilder mc, uint gssResYVa, string skipLabel)
+        {
+            uint resXVa = gssResYVa - 4;
+            mc.Emit(new byte[] { 0x81, 0x3D }); mc.EmitUInt32(resXVa); mc.EmitUInt32(1920); // cmp dword [ResX],1920
+            mc.EmitJle(skipLabel);
+        }
+
         // Emits x87 code that pushes the canvas/HUD scale factor onto st(0):
         //   boost = FMin(ResY, render) / FMax(1.0, FMin(render, 1080)),  render = ResX * 0.5625
         // i.e. visible height / the font page height the lie selects. Matches the bytecode UIStyle scale
@@ -457,6 +464,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildDrawStringCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "after");
             mc.Emit(new byte[] { 0x8B, 0x45, 0x2C });               // mov eax,[ebp+0x2C]  ForcedViewportHeight ptr
             mc.Emit(new byte[] { 0x85, 0xC0 });                     // test eax,eax
             mc.EmitJz("canvas");                                    //  null -> canvas
@@ -495,6 +503,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildWrappedPrintCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "after");
             mc.Emit(new byte[] { 0x8B, 0x07 });                     // mov eax,[edi]    vtable (edi=Font)
             mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
             mc.EmitJnz("after");
@@ -512,6 +521,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildDrawStringCenteredCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "keepXL");                 // before push ebx so the skip leaves esp balanced
             mc.Emit((byte)0x53);                                    // push ebx
             mc.Emit(new byte[] { 0x8B, 0x1F });                     // mov ebx,[edi]   Font vtable
             mc.Emit(new byte[] { 0x81, 0xBB, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [ebx+0x118],gsfVa
@@ -538,6 +548,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildWrapStringCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "keep");
             mc.Emit(new byte[] { 0x83, 0xBF, 0x40, 0x00, 0x00, 0x00, 0x00 }); // cmp dword [edi+0x40],0  ViewportHeight
             mc.EmitJnz("keep");                                    //  VH != 0 -> UI, keep
             mc.Emit(new byte[] { 0x8B, 0x47, 0x18 });             // mov eax,[edi+0x18]  DrawFont
@@ -557,6 +568,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildDrawStringWrappedCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "keep");
             mc.Emit(new byte[] { 0x8B, 0x07 });                   // mov eax,[edi]   vtable (edi=Font)
             mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
             mc.EmitJnz("keep");                                   //  not UMultiFont -> keep
@@ -607,6 +619,7 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static byte[] BuildSubtitleSpacingCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
         {
             var mc = new MachineCodeBuilder(codeVa);
+            EmitBoostGate(mc, gssResYVa, "keep");
             mc.Emit(new byte[] { 0x8B, 0x07 });                   // mov eax,[edi]   vtable (edi=Font)
             mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
             mc.EmitJnz("keep");                                   //  not UMultiFont -> keep
@@ -629,6 +642,7 @@ namespace MirrorsEdgeTweaks.Helpers
             uint resXVa = gssResYVa - 4;
             mc.Emit(new byte[] { 0xB8, 0x00, 0x00, 0x80, 0x3F });   // mov eax,0x3F800000  (1.0f)
             mc.Emit(new byte[] { 0x66, 0x0F, 0x6E, 0xD0 });         // movd xmm2,eax       scale = 1.0
+            EmitBoostGate(mc, gssResYVa, "stores");                 // after the scale=1.0 init, so the skip keeps scale=1.0
             mc.Emit(new byte[] { 0x8B, 0x45, 0x3C });               // mov eax,[ebp+0x3c]  Font
             mc.Emit(new byte[] { 0x8B, 0x00 });                     // mov eax,[eax]       vtable
             mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
@@ -764,20 +778,11 @@ namespace MirrorsEdgeTweaks.Helpers
 
             for (int i = tail; i >= Math.Max(start, tail - MaxPrologueScanBack); i--)
             {
-                if (data[i] == 0xE9 && i + 5 <= data.Length) return i;
                 if (i + GsfPrologue.Length <= data.Length &&
                     data.AsSpan(i, GsfPrologue.Length).SequenceEqual(GsfPrologue))
                     return i;
             }
             return -1;
-        }
-
-        private static bool RemoveGsfEntryHook(byte[] data, PeImageLayout pe)
-        {
-            int off = FindGsfOffset(data, pe);
-            if (off < 0 || data[off] != 0xE9) return false;
-            Buffer.BlockCopy(GsfPrologue, 0, data, off, GsfPrologue.Length);
-            return true;
         }
 
         private static int IndexOf(byte[] data, BytePattern pat, int start, int end)
