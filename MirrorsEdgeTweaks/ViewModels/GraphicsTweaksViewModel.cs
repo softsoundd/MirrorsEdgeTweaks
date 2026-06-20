@@ -5,6 +5,8 @@ using MirrorsEdgeTweaks.Services;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 
@@ -63,6 +65,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         [ObservableProperty] private bool _isTextureDetailCustomVisible;
         [ObservableProperty] private int _graphicsQualityIndex = -1;
         [ObservableProperty] private bool _isGraphicsQualityCustomVisible;
+
+        // ---- Shaders ----
+        [ObservableProperty] private int _toneMapperIndex = -1;
 
         // ---- Render resolution ----
         [ObservableProperty] private double _renderResolutionPercent = 100;
@@ -273,6 +278,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                     string? lodBias = _graphics.ReadIniValue(IniPath, "LODBias");
                     if (lodBias != null)
                         LodBiasText = lodBias;
+
+                    RefreshToneMapper();
 
                     ApplyDetectedPresets();
                 }
@@ -830,8 +837,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             HighResFixStatusForeground = Brushes.Gray;
         }
 
-        // Reads the (expensive, Engine.u-loading) UI-scaling state off the UI thread, then applies it
-        // on the UI thread so the status-bar progress bar keeps animating during startup.
         public async Task RefreshHighResFixAsync()
         {
             var res = SelectedResolution;
@@ -950,8 +955,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Builds the (bound) resolution list on the UI thread, then reads the expensive Engine.u-based
-        // UI-scaling state off the UI thread so the indeterminate progress bar keeps animating.
         public async Task InitializeResolutionsAsync()
         {
             ResolutionHelper.Resolution? selected = null;
@@ -1324,6 +1327,126 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             return true;
+        }
+
+        // ---- Shaders (Tone Mapper) ----
+
+        partial void OnToneMapperIndexChanged(int value) => _ = OnToneMapperChangedAsync(value);
+
+        private async Task OnToneMapperChangedAsync(int index)
+        {
+            if (_isLoading || index < 0)
+                return;
+
+            var gameDir = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir))
+            {
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
+                SetSilently(() => ToneMapperIndex = -1);
+                return;
+            }
+
+            string variantName = index == 1 ? "Faithful Luma" : "Original";
+            string zipName = index == 1 ? "FaithfulLumaTonemap.zip" : "OriginalTonemap.zip";
+            string downloadUrl = DownloadUrls.For(zipName);
+            string tempZipPath = Path.Combine(Path.GetTempPath(), zipName);
+
+            _gameStatus.IsUiEnabled = false;
+            _downloadProgress.IsDownloadProgressVisible = true;
+            _downloadProgress.DownloadProgressValue = 0;
+            _downloadProgress.IsDownloadProgressIndeterminate = true;
+            _gameStatus.Status = $"Downloading {variantName} tone mapper...";
+
+            var dispatcher = System.Windows.Application.Current.Dispatcher;
+
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    using (var client = new HttpClient())
+                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        var totalBytes = response.Content.Headers.ContentLength;
+
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        {
+                            if (totalBytes.HasValue)
+                            {
+                                dispatcher.Invoke(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
+
+                                var totalBytesRead = 0L;
+                                var buffer = new byte[8192];
+                                int bytesRead;
+                                var report = CreateThrottledProgressReporter();
+                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                    totalBytesRead += bytesRead;
+                                    var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
+
+                                    report(progress, $"Downloading {variantName} tone mapper... {progress}%");
+                                }
+                            }
+                            else
+                            {
+                                await stream.CopyToAsync(fileStream);
+                            }
+                        }
+                    }
+
+                    dispatcher.Invoke(() =>
+                    {
+                        _gameStatus.Status = "Extracting shader files...";
+                        _downloadProgress.DownloadProgressValue = 100;
+                        _downloadProgress.IsDownloadProgressIndeterminate = true;
+                    });
+
+                    ZipFile.ExtractToDirectory(tempZipPath, gameDir, true);
+                    File.Delete(tempZipPath);
+                });
+
+                _gameStatus.Status = "Ready.";
+                RefreshToneMapper();
+                await _dialogService.ShowMessageAsync("Success",
+                    $"{variantName} tone mapper successfully downloaded and installed.",
+                    DialogMessageType.Success);
+            }
+            catch (Exception ex)
+            {
+                _gameStatus.Status = "An error occurred during installation.";
+                await _dialogService.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogMessageType.Error);
+                SetSilently(RefreshToneMapper);
+            }
+            finally
+            {
+                _gameStatus.IsUiEnabled = true;
+                _downloadProgress.IsDownloadProgressVisible = false;
+                _downloadProgress.DownloadProgressValue = 0;
+                _downloadProgress.IsDownloadProgressIndeterminate = false;
+            }
+        }
+
+        // Detects the installed tone mapper variant from disk and sets the combo accordingly. The
+        // Faithful Luma shader is identified by a helper function only present in that variant.
+        public void RefreshToneMapper()
+        {
+            var gameDir = _session.Config.GameDirectoryPath;
+            int detected = 0;
+            if (!string.IsNullOrEmpty(gameDir))
+            {
+                string shaderPath = Path.Combine(gameDir, "Engine", "Shaders", "TdToneMappingPixelShader.usf");
+                try
+                {
+                    if (File.Exists(shaderPath) &&
+                        File.ReadAllText(shaderPath).Contains("ApplyWhiteNeutralityCorrection"))
+                        detected = 1;
+                }
+                catch { }
+            }
+
+            SetSilently(() => ToneMapperIndex = detected);
         }
 
         // ---- FOV ----
@@ -1816,6 +1939,18 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Adjusts the distance at which different texture mipmaps are loaded. A higher bias value results in lower resolution texture mipmaps being shown sooner " +
                 "as the player moves away from the texture surface and vice versa. A minimum bias of 0 (highest quality, shows only the maximum resolution LOD) " +
                 "and a maximum bias of 12 (lowest quality) can be entered.",
+                DialogMessageType.Information);
+        }
+
+        [RelayCommand]
+        private void ShowToneMapperInfo()
+        {
+            _dialogService.ShowMessage("Tone Mapper Information",
+                "Replaces the game's post-process tone mapping shaders. Selecting an option downloads and installs the corresponding shader files.\n\n" +
+                "• Original — The game's default tone mapping shaders.\n\n" +
+                "• Faithful Luma — A luminance-preserving tone mapper that better retains highlight detail and colour, while also " +
+                "fixing the black floor level, providing more accurate bloom handling and making the auto-exposure system much more responsive.\n\n" +
+                "Note: Neither tone mapping option will have an effect if the 'Tone Mapping' toggle in the Individual Settings section above is disabled.",
                 DialogMessageType.Information);
         }
     }

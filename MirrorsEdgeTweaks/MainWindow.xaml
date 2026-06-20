@@ -1458,6 +1458,40 @@
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
+
+                            <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
+
+                            <!-- Shaders Header -->
+                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
+                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
+                                <TextBlock Text="Shaders" FontWeight="Bold" FontSize="16" 
+                                           Foreground="White" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <!-- Tone Mapper -->
+                            <Grid Margin="0,15,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="190"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Tone Mapper:" VerticalAlignment="Center"
+                                           FontWeight="Bold" Margin="0,0,20,0"/>
+                                <ComboBox Grid.Column="1" 
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource MaterialDesignComboBox}"
+                                          SelectedIndex="{Binding Graphics.ToneMapperIndex, Mode=TwoWay}"
+>
+                                    <ComboBoxItem Content="Original"/>
+                                    <ComboBoxItem Content="Faithful Luma"/>
+                                </ComboBox>
+                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
+                                        ToolTip="Information"
+                                        Margin="5,0,0,0"
+                                        Command="{Binding Graphics.ShowToneMapperInfoCommand}">
+                                    <materialDesign:PackIcon Kind="Information" />
+                                </Button>
+                            </Grid>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">
