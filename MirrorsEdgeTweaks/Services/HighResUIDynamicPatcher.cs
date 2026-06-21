@@ -14,8 +14,8 @@ namespace MirrorsEdgeTweaks.Services
     // The blob is equivalent to (see BytecodeBuilder.BuildHighResCommands for the exact expressions):
     //   ConsoleCommand("set MultiFont ResolutionTestTable (480,720," $ int(FMax(1080, SizeX*0.5625+0.5)) $ ")");
     //   ConsoleCommand("set UIStyle_Text Scale (X=" $ (FMin(SizeY,SizeX*0.5625)/FMin(SizeX*0.5625,1080)) $ ",Y=...)");
-    //   ConsoleCommand("set TdGameViewportClient SubtitleMinRegion (X=0.0,Y=" $ (0.5-0.35*(SizeY/SizeX)*16/9) $ ")");
-    //   ConsoleCommand("set TdGameViewportClient SubtitleMaxRegion (X=1.0,Y=" $ (0.5+0.35*(SizeY/SizeX)*16/9) $ ")");
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMinRegion (X=" $ (0.5-FMin(FMax(0.4*r*r,0.5*SizeY/SizeX),0.5)) $ ",Y=" $ (0.5-0.35*r) $ ")");   // r=(SizeY/SizeX)*16/9
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMaxRegion (X=" $ (0.5+FMin(FMax(0.4*r*r,0.5*SizeY/SizeX),0.5)) $ ",Y=" $ (0.5+0.35*r) $ ")");
     //   ConsoleCommand("set TdUIScene bRefreshWidgetStyles true");
     public static class HighResUIDynamicPatcher
     {

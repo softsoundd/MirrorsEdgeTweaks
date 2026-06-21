@@ -617,8 +617,8 @@ namespace MirrorsEdgeTweaks.Services
 
         // Engine.GameViewportClient.SubtitleMin/MaxRegion, read each frame by
         // TdGameViewportClient.GetSubtitleRegion; the set targets the concrete runtime class.
-        const string SubtitleMinRegionSetPrefix = "set TdGameViewportClient SubtitleMinRegion (X=0.0,Y=";
-        const string SubtitleMaxRegionSetPrefix = "set TdGameViewportClient SubtitleMaxRegion (X=1.0,Y=";
+        const string SubtitleMinRegionSetPrefix = "set TdGameViewportClient SubtitleMinRegion (X=";
+        const string SubtitleMaxRegionSetPrefix = "set TdGameViewportClient SubtitleMaxRegion (X=";
 
         // The "set" commands, each wrapped by `wrap` into a ConsoleCommand call.
         // restest = int( FMax(1080, width * 0.5625 + 0.5) )   (0.5625 == 9/16; +0.5 rounds to nearest)
@@ -662,27 +662,46 @@ namespace MirrorsEdgeTweaks.Services
 
             byte[] refreshCmd = StrConst("set TdUIScene bRefreshWidgetStyles true");
 
-            // With SubtitleRegionPatcher's signed-centring exe fix the band sits at
-            // frac*SizeX*0.5625 + (SizeY-SizeX*0.5625)/2. Setting MinPos.Y=0.5-0.35*r and
-            // MaxPos.Y=0.5+0.35*r (r=(SizeY/SizeX)*16/9) lands it at the stock 0.15..0.85 of the
-            // window - its 16:9 position - at every aspect ratio (r=1 at 16:9).
+            // Region Y (vertical band) uses r = (SizeY/SizeX)*16/9 (== 1 at 16:9): Y = 0.5 +/- 0.35*r
+            // which, paired with SubtitleRegionPatcher's signed-centring exe fix, lands the band at its
+            // stock 16:9 on-screen position at every aspect ratio.
+            // Region X (wrap width): X = 0.5 +/- FMin(FMax(0.4*r*r, 0.5*SizeY/SizeX), 0.5). The engine
+            // wraps with whichever MultiFont page is closest to the render height, so the band has two
+            // regimes - the lied top page (16:9 / tall) -> 0.4*r*r, the 720/480 pages (wide & short) ->
+            // 0.5*SizeY/SizeX; FMax picks the active one, the clamp caps it at full width
+            byte[] RatioExpr() => Concat(new byte[] { OP_MULTIPLY_FF },
+                Concat(new byte[] { OP_DIVIDE_FF }, heightFloatExpr, widthFloatExpr, EndFP()),
+                FloatConst(REF_AR), EndFP());
+
             byte[] SubtitleRegionYStr(bool isMax)
             {
-                byte[] r = Concat(new byte[] { OP_MULTIPLY_FF },
-                    Concat(new byte[] { OP_DIVIDE_FF }, heightFloatExpr, widthFloatExpr, EndFP()),
-                    FloatConst(REF_AR), EndFP());
-                byte[] half = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.35f), r, EndFP());
+                byte[] half = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.35f), RatioExpr(), EndFP());
                 byte[] yFloat = Concat(new byte[] { isMax ? OP_ADD_FF : OP_SUBTRACT_FF },
                     FloatConst(0.5f), half, EndFP());
                 return PrimitiveCast(CAST_FLOAT_TO_STRING, yFloat);
             }
 
-            byte[] subMinCmd = ConcatStr(
-                ConcatStr(StrConst(SubtitleMinRegionSetPrefix), SubtitleRegionYStr(isMax: false)),
+            byte[] SubtitleRegionXStr(bool isMax)
+            {
+                byte[] sizeRatio = Concat(new byte[] { OP_DIVIDE_FF }, heightFloatExpr, widthFloatExpr, EndFP());
+                byte[] rSq = Concat(new byte[] { OP_MULTIPLY_FF }, RatioExpr(), RatioExpr(), EndFP());
+                byte[] topPage = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.4f), rSq, EndFP());
+                byte[] lowPage = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.5f), sizeRatio, EndFP());
+                byte[] half = Concat(new byte[] { OP_FMIN },
+                    Concat(new byte[] { OP_FMAX }, topPage, lowPage, EndFP()),
+                    FloatConst(0.5f), EndFP());
+                byte[] xFloat = Concat(new byte[] { isMax ? OP_ADD_FF : OP_SUBTRACT_FF },
+                    FloatConst(0.5f), half, EndFP());
+                return PrimitiveCast(CAST_FLOAT_TO_STRING, xFloat);
+            }
+
+            byte[] SubtitleCmd(string prefix, bool isMax) => ConcatStr(ConcatStr(ConcatStr(ConcatStr(
+                StrConst(prefix), SubtitleRegionXStr(isMax)),
+                StrConst(",Y=")), SubtitleRegionYStr(isMax)),
                 StrConst(")"));
-            byte[] subMaxCmd = ConcatStr(
-                ConcatStr(StrConst(SubtitleMaxRegionSetPrefix), SubtitleRegionYStr(isMax: true)),
-                StrConst(")"));
+
+            byte[] subMinCmd = SubtitleCmd(SubtitleMinRegionSetPrefix, isMax: false);
+            byte[] subMaxCmd = SubtitleCmd(SubtitleMaxRegionSetPrefix, isMax: true);
 
             return Concat(
                 wrap(restestCmd),
