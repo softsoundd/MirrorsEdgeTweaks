@@ -34,7 +34,7 @@ namespace MirrorsEdgeTweaks.Services
                                 && state.ClipApplied == enableClip
                                 && state.OnlineSkipApplied == enableOnlineSkip;
 
-            if (stateMatches && !HasBuggyUnzoomPatch(tdGamePath)) return;
+            if (stateMatches) return;
 
             if (anyPatched) Remove(tdGamePath);
             Apply(tdGamePath, enableSens, enableClip, enableOnlineSkip);
@@ -393,16 +393,7 @@ namespace MirrorsEdgeTweaks.Services
             if (fmaxPos == -1) return;
 
             byte[] uzElseReplacement = BytecodeBuilder.BuildUnzoomElseReplacement(r.UzDefaultFov, r.InstFovangle);
-
-            // version4.3.0 may have placed the FMax blob in the StartZoom delay
-            // arg instead of the else-branch zoom rate. Detect this in the else-branch
-            // the preceding 5-byte token is InstVar(FOVZoomRate) - in the StartZoom call
-            // it's LocalVar(Rate)
-            bool isBuggyPosition = fmaxPos >= uzBcStart + 5
-                && data[fmaxPos - 5] == BytecodeBuilder.OP_LOCAL_VAR;
-            byte[] stockBytes = isBuggyPosition
-                ? BytecodeBuilder.FloatConst(0.0f)
-                : BytecodeBuilder.BuildStockUnzoomRate();
+            byte[] stockBytes = BytecodeBuilder.BuildStockUnzoomRate();
 
             ops.Add(new RemovalOp
             {
@@ -907,31 +898,6 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // Utility
-
-        // Detect 4.3.0 buggy patch that placed the FMax blob in StartZoom's delay
-        // arg instead of the else-branch zoom rate. In the correct position, the
-        // ZoomRateSignature is preceded by InstVar (FOVZoomRate)
-        static bool HasBuggyUnzoomPatch(string tdGamePath)
-        {
-            try
-            {
-                byte[] data = File.ReadAllBytes(tdGamePath);
-                using var pkg = UePackageLocator.LoadHeader(tdGamePath);
-                int uzSo = UePackageLocator.FindExportSerialOffset(pkg, "TdPlayerController", "UnZoom");
-                if (uzSo < 0) return false;
-
-                int uzBcStart = uzSo + BytecodeBuilder.SCRIPT_HDR;
-                int uzBss = (int)PackageSplicer.ReadBSS(data, uzSo);
-
-                int sigPos = BytecodeBuilder.FindPattern(data, BytecodeBuilder.ZoomRateSignature,
-                    uzBcStart, uzBcStart + uzBss);
-                if (sigPos == -1) return false;
-
-                return sigPos >= uzBcStart + 5
-                    && data[sigPos - 5] == BytecodeBuilder.OP_LOCAL_VAR;
-            }
-            catch { return false; }
-        }
 
         static TdGamePatchState DetectStateCore(byte[] data, UnrealPackage pkg)
         {

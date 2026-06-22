@@ -14,7 +14,6 @@ namespace MirrorsEdgeTweaks.Helpers
     public static class CommandLineUnlockHelper
     {
         private const string StockMarker = "FlybyFlight";
-        private const string LegacyMarker = "CmdLineArgs";
         private const string StockFlybyCommandLine = "escape_p?Loadcheckpoint=ChaseFlyby?Causeevent=startflyby -nostartupmovies";
         private const string StockNoStartupMoviesToken = "nostartupmovies";
         private const string StockNoStartupMoviesSwitch = "-nostartupmovies";
@@ -222,54 +221,51 @@ namespace MirrorsEdgeTweaks.Helpers
             int noStartupTokenSpan = EncodeUtf16Le(StockNoStartupMoviesToken).Length;
             int noStartupSwitchSpan = EncodeUtf16Le(StockNoStartupMoviesSwitch).Length;
 
-            foreach (string markerText in new[] { StockMarker, LegacyMarker })
+            byte[] markerBytes = EncodeUtf16Le(StockMarker);
+            foreach (int markerOffset in FindAllOffsets(buffer, markerBytes))
             {
-                byte[] markerBytes = EncodeUtf16Le(markerText);
-                foreach (int markerOffset in FindAllOffsets(buffer, markerBytes))
+                uint markerVa = image.OffsetToVa(markerOffset);
+                byte[] codeReference = new byte[6];
+                codeReference[0] = 0x68;
+                WriteUInt32(codeReference, 1, markerVa);
+                codeReference[5] = 0x56;
+
+                foreach (int referenceOffset in FindAllOffsets(buffer, codeReference))
                 {
-                    uint markerVa = image.OffsetToVa(markerOffset);
-                    byte[] codeReference = new byte[6];
-                    codeReference[0] = 0x68;
-                    WriteUInt32(codeReference, 1, markerVa);
-                    codeReference[5] = 0x56;
-
-                    foreach (int referenceOffset in FindAllOffsets(buffer, codeReference))
+                    if (!image.IsExecutableOffset(referenceOffset))
                     {
-                        if (!image.IsExecutableOffset(referenceOffset))
-                        {
-                            continue;
-                        }
-
-                        int branchOffset = FindPattern(buffer, BranchPrefix, referenceOffset, Math.Min(referenceOffset + 0x40, buffer.Length));
-                        if (branchOffset == -1)
-                        {
-                            continue;
-                        }
-
-                        if (!TryFindParseParamLikeTarget(image, buffer, referenceOffset, branchOffset, out uint parseParamLikeTargetVa))
-                        {
-                            continue;
-                        }
-
-                        uint flybyVa = markerVa + (uint)markerSpan;
-                        uint noStartupTokenVa = flybyVa + (uint)flybySpan;
-                        uint noStartupSwitchVa = noStartupTokenVa + (uint)noStartupTokenSpan;
-                        uint emptyVa = noStartupSwitchVa + (uint)noStartupSwitchSpan + EmptyGapBytes;
-                        uint errorHistoryVa = emptyVa + EmptySpanBytes;
-                        uint branchVa = image.OffsetToVa(branchOffset);
-
-                        layout = new CommandLineUnlockLayout(
-                            markerVa,
-                            flybyVa,
-                            noStartupTokenVa,
-                            noStartupSwitchVa,
-                            emptyVa,
-                            errorHistoryVa,
-                            branchOffset,
-                            parseParamLikeTargetVa,
-                            branchVa);
-                        return true;
+                        continue;
                     }
+
+                    int branchOffset = FindPattern(buffer, BranchPrefix, referenceOffset, Math.Min(referenceOffset + 0x40, buffer.Length));
+                    if (branchOffset == -1)
+                    {
+                        continue;
+                    }
+
+                    if (!TryFindParseParamLikeTarget(image, buffer, referenceOffset, branchOffset, out uint parseParamLikeTargetVa))
+                    {
+                        continue;
+                    }
+
+                    uint flybyVa = markerVa + (uint)markerSpan;
+                    uint noStartupTokenVa = flybyVa + (uint)flybySpan;
+                    uint noStartupSwitchVa = noStartupTokenVa + (uint)noStartupTokenSpan;
+                    uint emptyVa = noStartupSwitchVa + (uint)noStartupSwitchSpan + EmptyGapBytes;
+                    uint errorHistoryVa = emptyVa + EmptySpanBytes;
+                    uint branchVa = image.OffsetToVa(branchOffset);
+
+                    layout = new CommandLineUnlockLayout(
+                        markerVa,
+                        flybyVa,
+                        noStartupTokenVa,
+                        noStartupSwitchVa,
+                        emptyVa,
+                        errorHistoryVa,
+                        branchOffset,
+                        parseParamLikeTargetVa,
+                        branchVa);
+                    return true;
                 }
             }
 

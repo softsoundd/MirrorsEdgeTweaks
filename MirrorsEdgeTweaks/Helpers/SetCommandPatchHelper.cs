@@ -30,7 +30,6 @@ namespace MirrorsEdgeTweaks.Helpers
         private const uint JneSetNoPecVa = 0x0110BCB9;
         private const uint OriginalTargetVa = 0x0110B671;
 
-        private const uint LegacyCaveVa = 0x01A916E0;
         private const int ExpectedPerformSetSize = 241;
         private const int ExpectedTrampolineSize = 26;
         private const int TotalPayloadSize = ExpectedPerformSetSize + ExpectedTrampolineSize * 2;
@@ -61,7 +60,7 @@ namespace MirrorsEdgeTweaks.Helpers
             var image = PeImageLayout.Parse(buffer);
 
             SetCommandPatchState state = GetPatchState(buffer, image);
-            if (state == SetCommandPatchState.Patched || state == SetCommandPatchState.LegacyPatched)
+            if (state == SetCommandPatchState.Patched)
                 return SetCommandPatchApplyResult.AlreadyPatched;
 
             if (state != SetCommandPatchState.Unpatched)
@@ -113,10 +112,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
             if (setTarget == OriginalTargetVa && setNoPecTarget == OriginalTargetVa)
                 return SetCommandPatchState.Unpatched;
-
-            if (setTarget >= LegacyCaveVa && setTarget < LegacyCaveVa + 2336 &&
-                setNoPecTarget >= LegacyCaveVa && setNoPecTarget < LegacyCaveVa + 2336)
-                return SetCommandPatchState.LegacyPatched;
 
             if (setTarget != OriginalTargetVa && setNoPecTarget != OriginalTargetVa)
                 return SetCommandPatchState.Patched;
@@ -267,8 +262,7 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             Unknown,
             Unpatched,
-            Patched,
-            LegacyPatched
+            Patched
         }
     }
 }
