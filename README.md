@@ -6,7 +6,6 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 ![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)
-![Downloads](https://img.shields.io/github/downloads/softsoundd/MirrorsEdgeTweaks/total)
 
 <img width="1280" height="720" alt="MET" src="https://github.com/user-attachments/assets/3c072b76-7266-4468-bda7-922386558c7c" />
 
