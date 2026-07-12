@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.ViewModels;
 using System.IO;
@@ -6,9 +6,6 @@ using System.Windows;
 
 namespace MirrorsEdgeTweaks
 {
-    // Composition root: builds the DI container, wires up the service layer and view models,
-    // and resolves the main window. Also owns process-level concerns: single-instance
-    // enforcement and last-chance exception logging.
     public partial class App : System.Windows.Application
     {
         private const string SingleInstanceMutexName = "MirrorsEdgeTweaks_SingleInstance";

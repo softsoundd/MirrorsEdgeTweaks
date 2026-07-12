@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
@@ -119,8 +119,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             else dispatcher.Invoke(action);
         }
 
-        // ---- Startup ----
-
         public async Task InitializeAsync()
         {
             LoadSettings();
@@ -156,7 +154,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             Audio.RefreshAudioBackendSetting();
         }
 
-        public async Task ProcessGameDirectoryAsync(string path)
+        public async Task ProcessGameDirectoryAsync(string path) =>
+            await Session.ApplyGate.RunAsync(() => ProcessGameDirectoryCoreAsync(path));
+
+        private async Task ProcessGameDirectoryCoreAsync(string path)
         {
             Session.IsProcessingGameDirectory = true;
             Session.Config.GameDirectoryPath = path;
@@ -230,7 +231,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     GameStatus.Status = "Ready.";
                 }
 
-                // Re-enable the UI regardless of outcome so the user can retry after a failure.
                 GameStatus.IsUiEnabled = true;
                 GameStatus.IsMainTabEnabled = true;
             }
@@ -424,8 +424,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             await Patches.RefreshAmbiguousBypassStatusAsync();
         }
 
-        // ---- Settings persistence ----
-
         private void LoadSettings()
         {
             _settings.Load();
@@ -453,8 +451,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             Session.Config.Cm360 = Input.Cm360;
             _settings.Save();
         }
-
-        // ---- Top-bar commands ----
 
         [RelayCommand]
         private void LaunchGame()

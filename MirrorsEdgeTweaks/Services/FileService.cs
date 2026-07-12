@@ -18,14 +18,14 @@ namespace MirrorsEdgeTweaks.Services
         string GetTempPath();
         string CombinePaths(params string[] paths);
         string[] ReadAllLines(string path);
+        string ReadAllText(string path);
         void WriteAllLines(string path, IEnumerable<string> lines);
         bool IsReadOnly(string path);
         void SetReadOnly(string path, bool readOnly);
 
-        // Writes the given lines, clearing the read-only attribute first if needed, and always
-        // leaves the file read-only afterwards. This is deliberate: the game's config files are
-        // kept locked so the game does not overwrite user changes on launch, and every write via
-        // this method re-establishes that lock (matching the other config writers in the app).
+        // Clears the read-only attribute if needed, writes, then always re-locks the file.
+        // Game config files are kept read-only so the game does not overwrite user tweaks on launch.
+        void WriteAllTextAndLock(string path, string content);
         void WriteAllLinesAndLock(string path, IEnumerable<string> lines);
     }
 
@@ -101,10 +101,18 @@ namespace MirrorsEdgeTweaks.Services
             return File.ReadAllLines(path);
         }
 
+        public string ReadAllText(string path)
+        {
+            return File.ReadAllText(path);
+        }
+
         public void WriteAllLines(string path, IEnumerable<string> lines)
         {
             File.WriteAllLines(path, lines);
         }
+
+        public void WriteAllTextAndLock(string path, string content) =>
+            WriteAndLock(path, () => File.WriteAllText(path, content));
 
         public bool IsReadOnly(string path)
         {
@@ -124,7 +132,10 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        public void WriteAllLinesAndLock(string path, IEnumerable<string> lines)
+        public void WriteAllLinesAndLock(string path, IEnumerable<string> lines) =>
+            WriteAndLock(path, () => File.WriteAllLines(path, lines));
+
+        private void WriteAndLock(string path, Action write)
         {
             if (IsReadOnly(path))
             {
@@ -133,7 +144,7 @@ namespace MirrorsEdgeTweaks.Services
 
             try
             {
-                File.WriteAllLines(path, lines);
+                write();
             }
             finally
             {

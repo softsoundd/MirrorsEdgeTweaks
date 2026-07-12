@@ -1,22 +1,15 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the entire Graphics Tweaks tab: Video Settings (FOV, resolution, render
-    // resolution, VSync, FPS limit, anti-aliasing, PhysX, PhysX FPS), Quality Presets, the
-    // Individual Settings toggles and LOD settings. A single _isLoading guard ensures programmatic
-    // loads and error-reverts never re-trigger an apply. The near-identical Enabled/Disabled combos
-    // are collapsed into a collection of GraphicsOption sharing one handler body.
     public partial class GraphicsTweaksViewModel : BusyViewModel
     {
         private static readonly string[] AnisoLevels = { "Off", "2x", "4x", "8x", "16x" };
@@ -28,12 +21,11 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameDataService _gameData;
         private readonly IAppSettingsService _settings;
         private readonly IDownloadService _download;
-        private readonly GameSession _session;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
-        // Re-entrancy guard. While true, programmatic property changes (ini load, preset refresh,
-        // error reverts) must not trigger an apply.
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         private bool _isRenderResolutionDragging;
 
@@ -42,7 +34,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         // reload or resolution reconcile) via RefreshEnginePatchState, never on every FOV keystroke.
         private bool _enginePatchesApplied;
 
-        // ---- Video Settings combos (collapsed Enabled/Disabled + level/mode combos) ----
         public GraphicsOption VSync { get; }
         public GraphicsOption PhysX { get; }
         public GraphicsOption Anisotropic { get; }
@@ -59,7 +50,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         public GraphicsOption ToneMapping { get; }
         public GraphicsOption TextureManagement { get; }
 
-        // ---- Special combos ----
         [ObservableProperty] private int _antiAliasingIndex = -1;
         [ObservableProperty] private int _streakEffectIndex = -1;
         [ObservableProperty] private int _textureDetailIndex = -1;
@@ -67,32 +57,25 @@ namespace MirrorsEdgeTweaks.ViewModels
         [ObservableProperty] private int _graphicsQualityIndex = -1;
         [ObservableProperty] private bool _isGraphicsQualityCustomVisible;
 
-        // ---- Shaders ----
         [ObservableProperty] private int _toneMapperIndex = -1;
 
-        // ---- Render resolution ----
         [ObservableProperty] private double _renderResolutionPercent = 100;
 
-        // ---- Resolution + High-Res Fix ----
         public ObservableCollection<ResolutionHelper.Resolution> Resolutions { get; } = new();
         [ObservableProperty] private ResolutionHelper.Resolution? _selectedResolution;
         [ObservableProperty] private string _highResFixStatus = "High-Res Fix N/A";
         [ObservableProperty] private Brush _highResFixStatusForeground = Brushes.Gray;
 
-        // ---- FPS limit ----
         [ObservableProperty] private string _fpsLimitInput = "";
         [ObservableProperty] private string _fpsLimitStatus = "N/A";
         [ObservableProperty] private Brush _fpsLimitStatusForeground = Brushes.Gray;
 
-        // ---- PhysX FPS ----
         [ObservableProperty] private string _physXFpsInput = "";
 
-        // ---- LOD ----
         [ObservableProperty] private string _minLodText = "";
         [ObservableProperty] private string _maxLodText = "";
         [ObservableProperty] private string _lodBiasText = "";
 
-        // ---- FOV ----
         [ObservableProperty] private string _currentFovValue = "N/A";
         [ObservableProperty] private string _newFovValue = "";
         [ObservableProperty] private bool _fovAgnosticSens;
@@ -110,7 +93,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             UnlockedConfigsViewModel unlockedConfigs)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _graphics = graphics;
@@ -118,7 +101,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameData = gameData;
             _settings = settings;
             _download = download;
-            _session = session;
             _unlockedConfigs = unlockedConfigs;
 
             VSync = new GraphicsOption((o, v) => ApplyStandard(o, v, "VSync", () => _graphics.ApplyVSync(IniPath!, v == 0)));
@@ -140,8 +122,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private string? IniPath => _session.Config.TdEngineIniPath;
 
-        // ---- Guard + dispatch helpers ----
-
         private void SetSilently(Action action)
         {
             bool previous = _isLoading;
@@ -160,8 +140,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             return true;
         }
-
-        // ---- Bulk load from ini ----
 
         public void LoadFromIni()
         {
@@ -345,29 +323,28 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- Shared apply for the collapsed Enabled/Disabled + level/mode combos ----
-
         private void ApplyStandard(GraphicsOption option, int index, string failureLabel, Action apply)
         {
-            if (_isLoading || index < 0)
+            if (IsApplySuppressed || index < 0)
                 return;
 
-            if (!EnsureIniExists(() => option.Index = -1))
-                return;
+            EnqueueApply(() =>
+            {
+                if (!EnsureIniExists(() => option.Index = -1))
+                    return;
 
-            try
-            {
-                apply();
-                RefreshPresetIndicators();
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to apply {failureLabel}: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => option.Index = -1);
-            }
+                try
+                {
+                    apply();
+                    RefreshPresetIndicators();
+                }
+                catch (Exception ex)
+                {
+                    _dialogService.ShowMessage("Error", $"Failed to apply {failureLabel}: {ex.Message}", DialogMessageType.Error);
+                    SetSilently(() => option.Index = -1);
+                }
+            });
         }
-
-        // ---- Anti-aliasing (16xQ confirmation) ----
 
         partial void OnAntiAliasingIndexChanged(int oldValue, int newValue) => _ = OnAntiAliasingChangedAsync(oldValue, newValue);
 
@@ -395,21 +372,27 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
             }
 
-            try
+            string iniPath = IniPath!;
+            await RunApplyAsync(() =>
             {
-                _graphics.ApplyAntiAliasing(IniPath!, level);
-                RefreshPresetIndicators();
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to apply anti-aliasing: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => AntiAliasingIndex = previousIndex);
-            }
+                try
+                {
+                    _graphics.ApplyAntiAliasing(iniPath, level);
+                    RefreshPresetIndicators();
+                }
+                catch (Exception ex)
+                {
+                    _dialogService.ShowMessage("Error", $"Failed to apply anti-aliasing: {ex.Message}", DialogMessageType.Error);
+                    SetSilently(() => AntiAliasingIndex = previousIndex);
+                }
+
+                return Task.CompletedTask;
+            });
         }
 
-        // ---- Streak effect (separate ini + unlocked-configs warning) ----
+        partial void OnStreakEffectIndexChanged(int oldValue, int newValue) => EnqueueApply(() => ApplyStreakEffectChange(oldValue, newValue));
 
-        partial void OnStreakEffectIndexChanged(int oldValue, int newValue)
+        private void ApplyStreakEffectChange(int oldValue, int newValue)
         {
             if (_isLoading || newValue < 0)
                 return;
@@ -452,8 +435,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- Quality presets ----
-
         partial void OnTextureDetailIndexChanged(int oldValue, int newValue) => _ = OnTextureDetailChangedAsync(oldValue, newValue);
 
         private async Task OnTextureDetailChangedAsync(int previousIndex, int index)
@@ -478,17 +459,21 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             string preset = TexturePresetName(index);
+            string iniPath = IniPath!;
 
-            try
+            await RunApplyAsync(async () =>
             {
-                _graphics.ApplyTextureDetailPreset(IniPath!, preset);
-                LoadFromIni();
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to apply texture detail preset: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => TextureDetailIndex = previousIndex);
-            }
+                try
+                {
+                    _graphics.ApplyTextureDetailPreset(iniPath, preset);
+                    LoadFromIni();
+                }
+                catch (Exception ex)
+                {
+                    _dialogService.ShowMessage("Error", $"Failed to apply texture detail preset: {ex.Message}", DialogMessageType.Error);
+                    SetSilently(() => TextureDetailIndex = previousIndex);
+                }
+            });
         }
 
         partial void OnGraphicsQualityIndexChanged(int oldValue, int newValue) => _ = OnGraphicsQualityChangedAsync(oldValue, newValue);
@@ -515,17 +500,21 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             string preset = TexturePresetName(index);
+            string iniPath = IniPath!;
 
-            try
+            await RunApplyAsync(async () =>
             {
-                _graphics.ApplyGraphicsQualityPreset(IniPath!, preset);
-                LoadFromIni();
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to apply graphics quality preset: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => GraphicsQualityIndex = previousIndex);
-            }
+                try
+                {
+                    _graphics.ApplyGraphicsQualityPreset(iniPath, preset);
+                    LoadFromIni();
+                }
+                catch (Exception ex)
+                {
+                    _dialogService.ShowMessage("Error", $"Failed to apply graphics quality preset: {ex.Message}", DialogMessageType.Error);
+                    SetSilently(() => GraphicsQualityIndex = previousIndex);
+                }
+            });
         }
 
         private static string TexturePresetName(int index) => index switch
@@ -538,11 +527,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             _ => "Custom"
         };
 
-        // ---- Render resolution ----
-
         partial void OnRenderResolutionPercentChanged(double value)
         {
-            if (_isLoading || _isRenderResolutionDragging)
+            if (IsApplySuppressed || _isRenderResolutionDragging)
                 return;
 
             ApplyRenderResolution();
@@ -556,7 +543,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             ApplyRenderResolution();
         }
 
-        private void ApplyRenderResolution()
+        private void ApplyRenderResolution() => EnqueueApply(ApplyRenderResolutionCore);
+
+        private void ApplyRenderResolutionCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -624,10 +613,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
 
-        // ---- FPS limit ----
-
         [RelayCommand]
-        private async Task ApplyFpsLimit()
+        private Task ApplyFpsLimit() => RunApplyAsync(ApplyFpsLimitCore);
+
+        private async Task ApplyFpsLimitCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -675,7 +664,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task RemoveFpsLimit()
+        private Task RemoveFpsLimit() => RunApplyAsync(RemoveFpsLimitCore);
+
+        private async Task RemoveFpsLimitCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -731,10 +722,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- PhysX FPS ----
-
         [RelayCommand]
-        private async Task ApplyPhysXFps()
+        private Task ApplyPhysXFps() => RunApplyAsync(ApplyPhysXFpsCore);
+
+        private async Task ApplyPhysXFpsCore()
         {
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
@@ -810,10 +801,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 PhysXFpsInput = fps.Value.ToString();
         }
 
-        // ---- LOD ----
-
         [RelayCommand]
-        private async Task ApplyMinLod()
+        private Task ApplyMinLod() => RunApplyAsync(ApplyMinLodCore);
+
+        private async Task ApplyMinLodCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -839,7 +830,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task ApplyMaxLod()
+        private Task ApplyMaxLod() => RunApplyAsync(ApplyMaxLodCore);
+
+        private async Task ApplyMaxLodCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -865,7 +858,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task ApplyLodBias()
+        private Task ApplyLodBias() => RunApplyAsync(ApplyLodBiasCore);
+
+        private async Task ApplyLodBiasCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -934,9 +929,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
     }
 
-    // A single graphics ComboBox whose selected index drives an apply action on the owning
-    // GraphicsTweaksViewModel. Collapses the many near-identical Enabled/Disabled (and level/mode)
-    // combo handlers into one shared body.
     public partial class GraphicsOption : ObservableObject
     {
         private readonly Action<GraphicsOption, int> _onChanged;

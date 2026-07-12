@@ -3,15 +3,9 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the TdGame Version selector in the Game Tweaks tab. Owns the combo selection,
-    // the download + extraction of the chosen TdGame.u variant, and the capture/reapply of the
-    // "touchpoint" settings (FOV, uniform sensitivity, compensated clip, online skip, gamepad
-    // prompts, exec-flag keybinds, high-res UI fix) that depend on TdGame.u and must survive a
-    // version swap. Snapshot values are sourced from the Input / Keybinds / Graphics view models.
     public partial class TdGameVersionViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
@@ -20,12 +14,13 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IUIScalingService _uiScaling;
         private readonly IGameDataService _gameData;
         private readonly IPackageService _packageService;
-        private readonly GameSession _session;
         private readonly InputSettingsViewModel _input;
         private readonly KeybindsViewModel _keybinds;
         private readonly GraphicsTweaksViewModel _graphics;
 
         private bool _isUpdatingComboBoxProgrammatically;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isUpdatingComboBoxProgrammatically;
 
         [ObservableProperty] private int _selectedVersionIndex = -1;
 
@@ -42,7 +37,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             InputSettingsViewModel input,
             KeybindsViewModel keybinds,
             GraphicsTweaksViewModel graphics)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _decompressionService = decompressionService;
@@ -50,7 +45,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _uiScaling = uiScaling;
             _gameData = gameData;
             _packageService = packageService;
-            _session = session;
             _input = input;
             _keybinds = keybinds;
             _graphics = graphics;
@@ -102,25 +96,22 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             var result = await _dialogService.ShowConfirmationAsync("Confirm Download", $"This will download and replace your current 'TdGame.u' file.\n\nThis action cannot be undone. Do you want to continue?");
 
-            if (result)
+            if (!result)
             {
-                TdGameTouchpointSnapshot touchpointSnapshot = CaptureTdGameTouchpointSnapshot();
-
-                _packageService.DisposePackage(_session.Package);
-                _packageService.DisposePackage(_session.TdGamePackage);
-                _session.Package = null;
-                _session.TdGamePackage = null;
-
-                _gameStatus.IsGameTweaksEnabled = false;
-
-                await DownloadAndExtractTdGameAsync(selectedVersionName, touchpointSnapshot);
-            }
-            else
-            {
-                // The user declined the download, so the combo must go back to reflecting the
-                // version actually installed on disk instead of the aborted selection.
                 SetVersionIndexSilently(previousIndex);
+                return;
             }
+
+            TdGameTouchpointSnapshot touchpointSnapshot = CaptureTdGameTouchpointSnapshot();
+
+            _packageService.DisposePackage(_session.Package);
+            _packageService.DisposePackage(_session.TdGamePackage);
+            _session.Package = null;
+            _session.TdGamePackage = null;
+
+            _gameStatus.IsGameTweaksEnabled = false;
+
+            await RunApplyAsync(() => DownloadAndExtractTdGameAsync(selectedVersionName, touchpointSnapshot));
         }
 
         private async Task DownloadAndExtractTdGameAsync(string selectedVersionName, TdGameTouchpointSnapshot touchpointSnapshot)
@@ -239,8 +230,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                     if (!installSucceeded)
                     {
-                        // Failed download/extraction: re-detect from disk so the combo reflects
-                        // whatever TdGame.u is actually installed, not the failed selection.
                         DetectVersion();
                     }
 

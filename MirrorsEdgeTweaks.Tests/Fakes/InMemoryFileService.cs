@@ -2,7 +2,6 @@ using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Tests.Fakes
 {
-    // The byte/async/directory members throw because no current test exercises them.
     public sealed class InMemoryFileService : IFileService
     {
         private readonly Dictionary<string, string[]> _files = new(StringComparer.Ordinal);
@@ -14,11 +13,16 @@ namespace MirrorsEdgeTweaks.Tests.Fakes
         public string[] ReadAllLines(string path) =>
             _files.TryGetValue(path, out var lines) ? lines : throw new FileNotFoundException(path);
 
+        public string ReadAllText(string path) =>
+            string.Join(Environment.NewLine, ReadAllLines(path));
+
         public void WriteAllLines(string path, IEnumerable<string> lines) => _files[path] = lines.ToArray();
+
+        public void WriteAllTextAndLock(string path, string content) =>
+            WriteAllLinesAndLock(path, content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None));
 
         public void DeleteFile(string path) => _files.Remove(path);
 
-        // ---- Unused by the current test suite ----
         public Task<string> ReadAllTextAsync(string path) => throw new NotSupportedException();
         public Task WriteAllTextAsync(string path, string content) => throw new NotSupportedException();
         public Task<byte[]> ReadAllBytesAsync(string path) => throw new NotSupportedException();

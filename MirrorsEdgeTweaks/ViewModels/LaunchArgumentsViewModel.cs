@@ -8,17 +8,11 @@ using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the Launch Arguments section of the Game Tweaks tab: the entered arguments,
-    // the executable command-line-unlock patch status, and the apply / reset / info commands. The
-    // entered text is mirrored into GameSession.Config so it is persisted alongside the other
-    // settings via IAppSettingsService.
     public partial class LaunchArgumentsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
         private readonly IAppSettingsService _settings;
-        private readonly GameSession _session;
-
         [ObservableProperty] private string _launchArguments = string.Empty;
         [ObservableProperty] private string _patchStatus = "N/A";
         [ObservableProperty] private Brush _patchStatusForeground = Brushes.Gray;
@@ -30,12 +24,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
             _settings = settings;
-            _session = session;
         }
 
         partial void OnLaunchArgumentsChanged(string value) => _session.Config.LaunchArguments = value ?? string.Empty;
@@ -155,7 +148,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task ResetLaunchArguments()
+        private Task ResetLaunchArguments() => RunApplyAsync(ResetLaunchArgumentsCore);
+
+        private async Task ResetLaunchArgumentsCore()
         {
             try
             {
@@ -213,7 +208,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task ApplyLaunchArguments()
+        private Task ApplyLaunchArguments() => RunApplyAsync(ApplyLaunchArgumentsCore);
+
+        private async Task ApplyLaunchArgumentsCore()
         {
             try
             {

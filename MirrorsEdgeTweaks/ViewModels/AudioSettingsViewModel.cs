@@ -4,21 +4,17 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the Audio Settings section: selecting the OpenAL audio backend
-    // (default / OpenAL Soft / OpenAL Soft + HRTF), which downloads the relevant files and
-    // updates TdEngine.ini.
     public partial class AudioSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
         private readonly IDownloadService _download;
-        private readonly GameSession _session;
-
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         [ObservableProperty]
         private int _selectedAudioBackendIndex = -1;
@@ -30,12 +26,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
             _download = download;
-            _session = session;
         }
 
         public void RefreshAudioBackendSetting()
@@ -115,7 +110,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            _ = ApplyAudioBackendAsync(oldValue, newValue);
+            EnqueueApply(() => ApplyAudioBackendAsync(oldValue, newValue));
         }
 
         private async Task ApplyAudioBackendAsync(int previousIndex, int selectedIndex)
@@ -242,8 +237,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (!applied)
                 {
-                    // Re-detect from the INI (falling back to the prior index) so the combo shows
-                    // the backend that is actually configured, not the failed selection.
                     SetAudioBackendIndexSilently(previousIndex);
                     RefreshAudioBackendSetting();
                 }

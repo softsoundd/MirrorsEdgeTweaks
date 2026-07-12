@@ -6,7 +6,6 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Rendered by the shared keybind-row DataTemplate in MainWindow.xaml.
     public partial class KeybindEntryViewModel : ObservableObject
     {
         private readonly KeybindsViewModel _owner;
@@ -34,9 +33,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowInfo() => _owner.ShowInfo(this);
     }
 
-    // View model for the Custom / Cheat-Trainer / Macro keybind sections of the Other Tweaks tab.
-    // Owns the 19 keybind entries, the capture flow (KeybindCaptureDialog), and the TdInput.ini /
-    // TweaksScriptsSettings apply-load logic.
     public partial class KeybindsViewModel : ObservableObject
     {
         private readonly IDialogService _dialogService;
@@ -174,7 +170,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public async Task CaptureAsync(KeybindEntryViewModel entry)
         {
-            if (_isLoading)
+            if (_isLoading || _session.IsProcessingGameDirectory)
                 return;
 
             var info = entry.Info;
@@ -201,49 +197,51 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (result is string ue3Key)
             {
-                if (string.IsNullOrEmpty(ue3Key))
+                await _session.ApplyGate.RunAsync(async () =>
                 {
-                    entry.DisplayKey = string.Empty;
-                    switch (info.Type)
+                    if (string.IsNullOrEmpty(ue3Key))
                     {
-                        case KeybindType.GodMode:
-                            await RemoveGodModeKeybind();
-                            break;
-                        case KeybindType.TriggersVolumes:
-                            await RemoveTriggersVolumesKeybind();
-                            break;
-                        case KeybindType.Macro:
-                            await UpdateMacroKeybind(info.RemoveCommand, "");
-                            break;
-                        default:
-                            await RemoveKeybind(info.RemoveCommand);
-                            break;
+                        entry.DisplayKey = string.Empty;
+                        switch (info.Type)
+                        {
+                            case KeybindType.GodMode:
+                                await RemoveGodModeKeybind();
+                                break;
+                            case KeybindType.TriggersVolumes:
+                                await RemoveTriggersVolumesKeybind();
+                                break;
+                            case KeybindType.Macro:
+                                await UpdateMacroKeybind(info.RemoveCommand, "");
+                                break;
+                            default:
+                                await RemoveKeybind(info.RemoveCommand);
+                                break;
+                        }
                     }
-                }
-                else
-                {
-                    entry.DisplayKey = ue3Key;
-                    switch (info.Type)
+                    else
                     {
-                        case KeybindType.GodMode:
-                            await UpdateGodModeKeybind(entry, ue3Key);
-                            break;
-                        case KeybindType.TriggersVolumes:
-                            await UpdateTriggersVolumesKeybind(entry, ue3Key);
-                            break;
-                        case KeybindType.Macro:
-                            if (!await UpdateMacroKeybind(info.SetCommand, ue3Key))
-                                entry.DisplayKey = string.Empty;
-                            break;
-                        default:
-                            await UpdateKeybind(entry, info.SetCommand, ue3Key);
-                            break;
+                        entry.DisplayKey = ue3Key;
+                        switch (info.Type)
+                        {
+                            case KeybindType.GodMode:
+                                await UpdateGodModeKeybind(entry, ue3Key);
+                                break;
+                            case KeybindType.TriggersVolumes:
+                                await UpdateTriggersVolumesKeybind(entry, ue3Key);
+                                break;
+                            case KeybindType.Macro:
+                                if (!await UpdateMacroKeybind(info.SetCommand, ue3Key))
+                                    entry.DisplayKey = string.Empty;
+                                break;
+                            default:
+                                await UpdateKeybind(entry, info.SetCommand, ue3Key);
+                                break;
+                        }
                     }
-                }
+                });
             }
         }
 
-        // ---- Load / display ----
 
         public void LoadCustomKeybinds()
         {
@@ -548,7 +546,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- God Mode (3-binding toggle) ----
 
         private async Task UpdateGodModeKeybind(KeybindEntryViewModel entry, string key)
         {
@@ -733,7 +730,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- Triggers & Volumes (3-binding toggle) ----
 
         private async Task UpdateTriggersVolumesKeybind(KeybindEntryViewModel entry, string key)
         {
@@ -921,7 +917,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- Macro keybinds (TweaksScriptsSettings file) ----
 
         private string? CheckMacroKeybindConflict(string ue3Key, string? excludeSetting = null)
         {

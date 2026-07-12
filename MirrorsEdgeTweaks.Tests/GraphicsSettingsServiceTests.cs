@@ -5,7 +5,7 @@ namespace MirrorsEdgeTweaks.Tests
 {
     public class GraphicsSettingsServiceTests
     {
-        private readonly GraphicsSettingsService _service = new();
+        private readonly GraphicsSettingsService _service = new(new FileService());
 
         [Fact]
         public void ReadIniValue_ReturnsValueForExistingKey()
@@ -63,7 +63,6 @@ namespace MirrorsEdgeTweaks.Tests
 
             Assert.Equal("True", _service.ReadIniValue(ini.Path, "UseVsync"));
 
-            // The inserted line must live inside [SystemSettings], i.e. before [OtherSection].
             string[] lines = ini.ReadLines();
             int vsyncIndex = Array.FindIndex(lines, l => l.Trim().StartsWith("UseVsync=", StringComparison.OrdinalIgnoreCase));
             int otherSectionIndex = Array.FindIndex(lines, l => l.Trim().Equals("[OtherSection]", StringComparison.OrdinalIgnoreCase));
@@ -233,8 +232,6 @@ namespace MirrorsEdgeTweaks.Tests
 
             _service.ApplyVSync(ini.Path, enabled: false);
 
-            // Deliberate design: game config files are locked after writes so the game cannot
-            // overwrite user tweaks on launch.
             Assert.True((File.GetAttributes(ini.Path) & FileAttributes.ReadOnly) != 0);
         }
 

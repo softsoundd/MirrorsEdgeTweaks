@@ -5,18 +5,16 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the "Initialisation Settings" section of the Other Tweaks tab: intro video,
-    // main menu delay, time trial countdown and the skip-online-check patch. Skip Online Check
-    // drives TdGamePatcher with the FOV-agnostic-sens / compensated-clip flags owned by the Graphics
-    // tab, so it reads those from GraphicsTweaksViewModel.
-    public partial class InitialisationSettingsViewModel : ObservableObject
+    // Skip Online Check passes Graphics' FovAgnosticSens / CompensatedClip into TdGamePatcher.
+    public partial class InitialisationSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
-        private readonly GameSession _session;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
         private readonly GraphicsTweaksViewModel _graphics;
 
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         [ObservableProperty] private int _introVideoIndex = -1;
         [ObservableProperty] private int _mainMenuDelayIndex = -1;
@@ -26,11 +24,13 @@ namespace MirrorsEdgeTweaks.ViewModels
         public InitialisationSettingsViewModel(
             IDialogService dialogService,
             GameSession session,
+            GameStatusViewModel gameStatus,
+            DownloadProgressViewModel downloadProgress,
             UnlockedConfigsViewModel unlockedConfigs,
             GraphicsTweaksViewModel graphics)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
-            _session = session;
             _unlockedConfigs = unlockedConfigs;
             _graphics = graphics;
         }
@@ -47,9 +47,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally { _isLoading = previous; }
         }
 
-        // ---- Intro video ----
 
-        partial void OnIntroVideoIndexChanged(int value) => _ = OnIntroVideoChangedAsync(value);
+        partial void OnIntroVideoIndexChanged(int value) => EnqueueApply(() => OnIntroVideoChangedAsync(value));
 
         private async Task OnIntroVideoChangedAsync(int value)
         {
@@ -191,9 +190,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Main menu delay ----
 
-        partial void OnMainMenuDelayIndexChanged(int value) => _ = OnMainMenuDelayChangedAsync(value);
+        partial void OnMainMenuDelayIndexChanged(int value) => EnqueueApply(() => OnMainMenuDelayChangedAsync(value));
 
         private async Task OnMainMenuDelayChangedAsync(int value)
         {
@@ -320,9 +318,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Time trial countdown ----
 
-        partial void OnTimeTrialCountdownIndexChanged(int value) => _ = OnTimeTrialCountdownChangedAsync(value);
+        partial void OnTimeTrialCountdownIndexChanged(int value) => EnqueueApply(() => OnTimeTrialCountdownChangedAsync(value));
 
         private async Task OnTimeTrialCountdownChangedAsync(int value)
         {
@@ -460,12 +457,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Skip online check ----
 
         partial void OnSkipOnlineIndexChanged(int value)
         {
             _session.OnlineSkipEnabled = value == 1;
-            _ = OnSkipOnlineChangedAsync(value);
+            EnqueueApply(() => OnSkipOnlineChangedAsync(value));
         }
 
         private async Task OnSkipOnlineChangedAsync(int value)
@@ -494,7 +490,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Sets the Skip Online Check index from a known package state without re-applying.
         public void SetSkipOnlineFromState(bool onlineSkipApplied) =>
             SetSilently(() => SkipOnlineIndex = onlineSkipApplied ? 1 : 0);
 

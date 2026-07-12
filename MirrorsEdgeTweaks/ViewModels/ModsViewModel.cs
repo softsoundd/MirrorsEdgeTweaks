@@ -3,14 +3,9 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the "Mods" section of the Game Tweaks tab (TdGame version, developer console,
-    // Tweaks Scripts and Tweaks Scripts UI). Owns the section's informational dialog commands and the
-    // developer-console install/uninstall commands. Per-feature status text lives in the shared
-    // status view models.
     public partial class ModsViewModel : BusyViewModel
     {
         private const string ConsoleDownloadUrl = DownloadUrls.AssetBase + "MirrorsEdgeConsole.zip";
@@ -20,7 +15,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IFileService _fileService;
         private readonly IGameDataService _gameData;
         private readonly IDownloadService _download;
-        private readonly GameSession _session;
         private readonly TweaksScriptsViewModel _tweaksScripts;
 
         public ModsViewModel(
@@ -33,18 +27,15 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             TweaksScriptsViewModel tweaksScripts)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _packageService = packageService;
             _fileService = fileService;
             _gameData = gameData;
             _download = download;
-            _session = session;
             _tweaksScripts = tweaksScripts;
         }
-
-        // ---- Tweaks Scripts status ----
 
         private bool IsTweaksScriptsInstalled()
         {
@@ -170,7 +161,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task InstallTweaksScriptsAsync()
+        private Task InstallTweaksScriptsAsync() => RunApplyAsync(InstallTweaksScriptsCoreAsync);
+
+        private async Task InstallTweaksScriptsCoreAsync()
         {
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
@@ -324,6 +317,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
+            await RunApplyAsync(UninstallTweaksScriptsCoreAsync);
+        }
+
+        private async Task UninstallTweaksScriptsCoreAsync()
+        {
+            var gameDir = _session.Config.GameDirectoryPath!;
+
             try
             {
                 int filesDeleted = await Task.Run(() =>
@@ -408,7 +408,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            bool isMEMM = versionChoice.Value;
+            await RunApplyAsync(() => InstallTweaksScriptsUICoreAsync(versionChoice.Value));
+        }
+
+        private async Task InstallTweaksScriptsUICoreAsync(bool isMEMM)
+        {
             string downloadUrl = isMEMM
                 ? DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI_MEMM_compatible.zip"
                 : DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI.zip";
@@ -488,7 +492,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task UninstallTweaksScriptsUI()
+        private Task UninstallTweaksScriptsUI() => RunApplyAsync(UninstallTweaksScriptsUICoreAsync);
+
+        private async Task UninstallTweaksScriptsUICoreAsync()
         {
             try
             {
@@ -541,7 +547,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task InstallConsoleAsync()
+        private Task InstallConsoleAsync() => RunApplyAsync(InstallConsoleCoreAsync);
+
+        private async Task InstallConsoleCoreAsync()
         {
             var config = _session.Config;
             var offsets = _session.Offsets;
@@ -672,10 +680,17 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            string gameDir = config.GameDirectoryPath;
-            string tdEngineIni = config.TdEngineIniPath;
-            string tdInputIni = config.TdInputIniPath;
-            string enginePackagePath = config.EnginePackagePath;
+            await RunApplyAsync(UninstallConsoleCoreAsync);
+        }
+
+        private async Task UninstallConsoleCoreAsync()
+        {
+            var config = _session.Config;
+            var offsets = _session.Offsets;
+            string gameDir = config.GameDirectoryPath!;
+            string tdEngineIni = config.TdEngineIniPath!;
+            string tdInputIni = config.TdInputIniPath!;
+            string enginePackagePath = config.EnginePackagePath!;
             long consoleHeightOffset = offsets.ConsoleHeightOffset;
 
             _gameStatus.IsGameTweaksEnabled = false;

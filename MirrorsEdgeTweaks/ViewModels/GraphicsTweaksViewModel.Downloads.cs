@@ -1,20 +1,13 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
-using System.Globalization;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
-using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Tone mapper shader selection: download, install and detection.
     public partial class GraphicsTweaksViewModel
     {
-        partial void OnToneMapperIndexChanged(int value) => _ = OnToneMapperChangedAsync(value);
+        partial void OnToneMapperIndexChanged(int value) => EnqueueApply(() => OnToneMapperChangedAsync(value));
 
         private async Task OnToneMapperChangedAsync(int index)
         {
@@ -92,8 +85,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Detects the installed tone mapper variant from disk and sets the combo accordingly. The
-        // Faithful Luma shader is identified by a helper function only present in that variant.
         public void RefreshToneMapper()
         {
             var gameDir = _session.Config.GameDirectoryPath;

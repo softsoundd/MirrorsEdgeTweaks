@@ -2,19 +2,48 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Shared base for feature view models: dispatcher helpers, the global status-bar progress
-    // plumbing, and a simple re-entrancy guard for long-running work (RunBusyAsync).
     public abstract class BusyViewModel : ObservableObject
     {
+        protected readonly GameSession _session;
         protected readonly GameStatusViewModel _gameStatus;
         protected readonly DownloadProgressViewModel _downloadProgress;
+        private readonly ApplyGate _applyGate;
         private bool _isBusy;
         protected bool IsBusy => _isBusy;
 
-        protected BusyViewModel(GameStatusViewModel gameStatus, DownloadProgressViewModel downloadProgress)
+        protected BusyViewModel(GameSession session, GameStatusViewModel gameStatus, DownloadProgressViewModel downloadProgress)
         {
+            _session = session;
+            _applyGate = session.ApplyGate;
             _gameStatus = gameStatus;
             _downloadProgress = downloadProgress;
+        }
+
+        // Checked at enqueue time so deferred work is not scheduled during load/startup.
+        protected virtual bool IsApplySuppressed => _session.IsProcessingGameDirectory;
+
+        protected void EnqueueApply(Func<Task> work)
+        {
+            if (IsApplySuppressed)
+                return;
+
+            _applyGate.Enqueue(work);
+        }
+
+        protected void EnqueueApply(Action work)
+        {
+            if (IsApplySuppressed)
+                return;
+
+            _applyGate.Enqueue(work);
+        }
+
+        protected Task RunApplyAsync(Func<Task> work)
+        {
+            if (IsApplySuppressed)
+                return Task.CompletedTask;
+
+            return _applyGate.RunAsync(work);
         }
 
         protected static void Dispatch(Action action)

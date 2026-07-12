@@ -1,23 +1,12 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
-using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // FOV entry, apply (Engine.u/TdGame.u/exe reconcile + offset writes) and HOR+/VERT+ status.
     public partial class GraphicsTweaksViewModel
     {
-        // Pushes the camera FOV discovered during package offset finding (stored on
-        // GameSession.DetectedCameraFov) into the displayed value, seeding the editable FOV when it
-        // is still at its default. Called from the post-reload fan-out so the package-load service
-        // need not depend on this view model.
         public void RefreshFovDisplay()
         {
             float? detected = _session.DetectedCameraFov;
@@ -38,7 +27,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         partial void OnNewFovValueChanged(string value) => RefreshScalingStatus();
 
         [RelayCommand]
-        private async Task ApplyFov()
+        private Task ApplyFov() => RunApplyAsync(ApplyFovCore);
+
+        private async Task ApplyFovCore()
         {
             var config = _session.Config;
 
@@ -151,9 +142,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Re-reads the (expensive) Engine.u dynamic-FOV-scaling patch state from disk into the
-        // cache and refreshes the HOR+/VERT+ label. Call this only when the patch state may have
-        // changed (package reload or resolution reconcile), not on every FOV keystroke.
         public void RefreshEnginePatchState()
         {
             _enginePatchesApplied = false;
@@ -186,8 +174,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             RefreshScalingStatus();
         }
 
-        // Recomputes the HOR+/VERT+ label from the cached engine patch state, the selected
-        // resolution and the entered FOV. Pure arithmetic (no disk I/O), safe to call per keystroke.
         public void RefreshScalingStatus()
         {
             if (!_enginePatchesApplied)

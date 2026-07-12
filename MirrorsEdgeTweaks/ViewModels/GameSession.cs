@@ -4,9 +4,6 @@ using UELib;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Observable, application-wide game state shared between the View, the ViewModels and the
-    // service layer. Holds the GameConfiguration, PackageOffsets and the loaded Unreal packages
-    // so every consumer reads and writes the same instances.
     public partial class GameSession : ObservableObject
     {
         public GameConfiguration Config { get; } = new GameConfiguration();
@@ -19,15 +16,14 @@ namespace MirrorsEdgeTweaks.ViewModels
         // refreshers skip work during this window (a single refresh runs afterwards) to avoid flicker.
         public bool IsProcessingGameDirectory { get; set; }
 
-        // The horizontal FOV (degrees) discovered in the Camera CDO during package offset finding,
-        // or null if not found. Shared so GraphicsTweaksViewModel can refresh its FOV display
-        // without the package-load service depending on the feature VM.
+        // Populated during offset finding; read by GraphicsTweaksViewModel to avoid service→VM coupling.
         public float? DetectedCameraFov { get; set; }
 
-        // Whether the "skip online check" TdGame patch is enabled. Owned by
-        // InitialisationSettingsViewModel but stored here so GraphicsTweaksViewModel can read it when
-        // reconciling TdGame.u without a circular dependency (Init already depends on Graphics).
+        // Owned by InitialisationSettingsViewModel but stored here so GraphicsTweaksViewModel can
+        // reconcile TdGame.u without a circular dependency (Init already depends on Graphics).
         public bool OnlineSkipEnabled { get; set; }
+
+        public ApplyGate ApplyGate { get; } = new();
 
         [ObservableProperty]
         private bool _isGameLoaded;

@@ -6,13 +6,10 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the "Patches" section of the Game Tweaks tab. Owns the Unlocked Configs
-    // patch/unpatch commands and status refresh, plus the section's informational dialogs.
     public partial class PatchesViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
-        private readonly GameSession _session;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
         [ObservableProperty] private string _loggingPatchStatus = "N/A";
@@ -29,11 +26,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             UnlockedConfigsViewModel unlockedConfigs)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _fileService = fileService;
-            _session = session;
             _unlockedConfigs = unlockedConfigs;
 
             LoggingPatchStatusForeground = BodyLightBrush();
@@ -61,7 +57,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             return File.Exists(exePath) ? exePath : null;
         }
 
-        // ---- Logging / Multi-instance / Ambiguous-bypass status ----
 
         public void RefreshLoggingStatus()
         {
@@ -195,10 +190,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // ---- Logging ----
 
         [RelayCommand]
-        private async Task PatchLogging()
+        private Task PatchLogging() => RunApplyAsync(PatchLoggingCore);
+
+        private async Task PatchLoggingCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -232,7 +228,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task UnpatchLogging()
+        private Task UnpatchLogging() => RunApplyAsync(UnpatchLoggingCore);
+
+        private async Task UnpatchLoggingCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -279,10 +277,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Multi-instance ----
 
         [RelayCommand]
-        private async Task PatchMultiInstance()
+        private Task PatchMultiInstance() => RunApplyAsync(PatchMultiInstanceCore);
+
+        private async Task PatchMultiInstanceCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -316,7 +315,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task UnpatchMultiInstance()
+        private Task UnpatchMultiInstance() => RunApplyAsync(UnpatchMultiInstanceCore);
+
+        private async Task UnpatchMultiInstanceCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -358,10 +359,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Ambiguous bypass ----
 
         [RelayCommand]
-        private async Task PatchAmbiguousBypass()
+        private Task PatchAmbiguousBypass() => RunApplyAsync(PatchAmbiguousBypassCore);
+
+        private async Task PatchAmbiguousBypassCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -395,7 +397,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private async Task UnpatchAmbiguousBypass()
+        private Task UnpatchAmbiguousBypass() => RunApplyAsync(UnpatchAmbiguousBypassCore);
+
+        private async Task UnpatchAmbiguousBypassCore()
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
@@ -548,7 +552,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         [RelayCommand]
         private Task UnpatchConfigsAsync() => ModifyExeConfigPatchAsync(unlock: false);
 
-        private async Task ModifyExeConfigPatchAsync(bool unlock)
+        private Task ModifyExeConfigPatchAsync(bool unlock) => RunApplyAsync(() => ModifyExeConfigPatchCoreAsync(unlock));
+
+        private async Task ModifyExeConfigPatchCoreAsync(bool unlock)
         {
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))

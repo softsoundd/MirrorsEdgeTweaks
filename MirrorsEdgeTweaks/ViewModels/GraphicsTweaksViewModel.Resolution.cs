@@ -1,17 +1,10 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
-using System.Globalization;
 using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
-using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Resolution selection, dynamic high-res UI fix orchestration and per-resolution patch reconcile.
     public partial class GraphicsTweaksViewModel
     {
         partial void OnSelectedResolutionChanged(ResolutionHelper.Resolution? value) => _ = OnResolutionChangedAsync(value);
@@ -21,60 +14,64 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (_isLoading || selectedResolution == null)
                 return;
 
-            _gameStatus.IsUiEnabled = false;
+            bool userWantsUIScaling = false;
+            var gameDir = _session.Config.GameDirectoryPath;
 
-            try
+            if (_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
             {
-                bool success = await UpdateResolutionInConfigAsync(selectedResolution.Width, selectedResolution.Height);
-                if (!success)
-                    return;
+                userWantsUIScaling = await _uiScaling.AskUserForUIScalingConfirmationAsync();
+            }
 
-                bool userWantsUIScaling = false;
-                var gameDir = _session.Config.GameDirectoryPath;
+            await RunApplyAsync(async () =>
+            {
+                _gameStatus.IsUiEnabled = false;
 
-                if (_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
+                try
+                {
+                    bool success = await UpdateResolutionInConfigAsync(selectedResolution.Width, selectedResolution.Height);
+                    if (!success)
+                        return;
+
+                    if (_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
+                    {
+                        if (!string.IsNullOrEmpty(gameDir))
+                        {
+                            ShowProgress("Applying UI scaling...", true);
+
+                            await Task.Run(async () =>
+                            {
+                                if (userWantsUIScaling)
+                                    await _uiScaling.ApplyUIScalingAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
+                                else
+                                    await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
+                            });
+                        }
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(gameDir))
+                        {
+                            ShowProgress("Resetting UI scaling...", true);
+
+                            await Task.Run(async () =>
+                            {
+                                await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
+                            });
+                        }
+                    }
+
+                    UpdateHighResFixStatus(selectedResolution.Width, userWantsUIScaling);
+
+                    await Task.Run(ApplyDynamicPatchesForResolution);
+
+                    RefreshEnginePatchState();
+                }
+                finally
                 {
                     _gameStatus.IsUiEnabled = true;
-                    userWantsUIScaling = await _uiScaling.AskUserForUIScalingConfirmationAsync();
-                    _gameStatus.IsUiEnabled = false;
-
-                    if (!string.IsNullOrEmpty(gameDir))
-                    {
-                        ShowProgress("Applying UI scaling...", true);
-
-                        await Task.Run(async () =>
-                        {
-                            if (userWantsUIScaling)
-                                await _uiScaling.ApplyUIScalingAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                            else
-                                await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                        });
-                    }
+                    _gameStatus.Status = "Ready.";
                 }
-                else
-                {
-                    if (!string.IsNullOrEmpty(gameDir))
-                    {
-                        ShowProgress("Resetting UI scaling...", true);
-
-                        await Task.Run(async () =>
-                        {
-                            await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                        });
-                    }
-                }
-
-                UpdateHighResFixStatus(selectedResolution.Width, userWantsUIScaling);
-
-                await Task.Run(ApplyDynamicPatchesForResolution);
-
-                RefreshEnginePatchState();
-            }
-            finally
-            {
-                _gameStatus.IsUiEnabled = true;
-                _gameStatus.Status = "Ready.";
-            }
+            });
         }
 
         private void ApplyDynamicPatchesForResolution()

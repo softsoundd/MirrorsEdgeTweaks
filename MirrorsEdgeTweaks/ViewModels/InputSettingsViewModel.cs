@@ -7,17 +7,14 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the "Input Settings" section of the Other Tweaks tab: mouse smoothing,
-    // uniform sensitivity (TdGame.u byte-patch), the cm/360 sensitivity converter, and the gamepad
-    // button-prompt swap. Package byte-patching is delegated to the helper layer.
     public partial class InputSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;
         private readonly IDecompressionService _decompressionService;
         private readonly IAppSettingsService _settings;
-        private readonly GameSession _session;
-
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         [ObservableProperty] private int _mouseSmoothingIndex = -1;
         [ObservableProperty] private int _uniformSensitivityIndex = -1;
@@ -32,12 +29,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _decompressionService = decompressionService;
             _settings = settings;
-            _session = session;
         }
 
         private static string TdInputIniPath => Path.Combine(
@@ -52,9 +48,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally { _isLoading = previous; }
         }
 
-        // ---- Mouse smoothing ----
 
-        partial void OnMouseSmoothingIndexChanged(int value)
+        partial void OnMouseSmoothingIndexChanged(int value) => EnqueueApply(() => ApplyMouseSmoothingChange(value));
+
+        private void ApplyMouseSmoothingChange(int value)
         {
             if (_isLoading || value < 0)
                 return;
@@ -153,7 +150,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Uniform sensitivity ----
 
         partial void OnUniformSensitivityIndexChanged(int value) => _ = OnUniformSensitivityChangedAsync(value);
 
@@ -175,44 +171,47 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try
-            {
-                bool enabled = value == 0;
+            bool enabled = value == 0;
 
-                if (enabled)
+            if (enabled)
+            {
+                var result = await _dialogService.ShowConfirmationAsync(
+                    "Speedrun Warning",
+                    "Warning: Enabling uniform sensitivity is banned in official Mirror's Edge speedrun categories. " +
+                    "Only enable this if you are playing casually.\n\n" +
+                    "Do you want to continue?");
+
+                if (!result)
                 {
-                    var result = await _dialogService.ShowConfirmationAsync(
-                        "Speedrun Warning",
-                        "Warning: Enabling uniform sensitivity is banned in official Mirror's Edge speedrun categories. " +
-                        "Only enable this if you are playing casually.\n\n" +
-                        "Do you want to continue?");
-
-                    if (!result)
-                    {
-                        SetSilently(() => UniformSensitivityIndex = 1);
-                        return;
-                    }
+                    SetSilently(() => UniformSensitivityIndex = 1);
+                    return;
                 }
-
-                float targetValue = enabled ? UniformSensitivityPatcher.EnabledValue : UniformSensitivityPatcher.DisabledValue;
-
-                ShowProgress("Applying uniform sensitivity setting...", true);
-
-                await Task.Run(() => UniformSensitivityPatcher.Apply(path, targetValue));
-
-                HideProgress();
-
-                string message = enabled
-                    ? "Uniform sensitivity enabled. Mouse sensitivity will now remain consistent regardless of vertical view angle."
-                    : "Uniform sensitivity disabled (default behavior restored).";
-
-                _dialogService.ShowMessage("Success", message, DialogMessageType.Success);
             }
-            catch (Exception ex)
+
+            float targetValue = enabled ? UniformSensitivityPatcher.EnabledValue : UniformSensitivityPatcher.DisabledValue;
+
+            await RunApplyAsync(async () =>
             {
-                HideProgress();
-                _dialogService.ShowMessage("Error", $"Failed to apply uniform sensitivity: {ex.Message}", DialogMessageType.Error);
-            }
+                try
+                {
+                    ShowProgress("Applying uniform sensitivity setting...", true);
+
+                    await Task.Run(() => UniformSensitivityPatcher.Apply(path, targetValue));
+
+                    HideProgress();
+
+                    string message = enabled
+                        ? "Uniform sensitivity enabled. Mouse sensitivity will now remain consistent regardless of vertical view angle."
+                        : "Uniform sensitivity disabled (default behavior restored).";
+
+                    _dialogService.ShowMessage("Success", message, DialogMessageType.Success);
+                }
+                catch (Exception ex)
+                {
+                    HideProgress();
+                    _dialogService.ShowMessage("Error", $"Failed to apply uniform sensitivity: {ex.Message}", DialogMessageType.Error);
+                }
+            });
         }
 
         public void RefreshUniformSensitivity()
@@ -230,7 +229,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 SetSilently(() => UniformSensitivityIndex = enabled.Value ? 0 : 1);
         }
 
-        // Used by the TdGame version-swap snapshot capture (TdGameVersionViewModel).
         public float? GetUniformSensitivityTargetValue() => UniformSensitivityIndex switch
         {
             0 => UniformSensitivityPatcher.EnabledValue,
@@ -249,10 +247,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- cm/360 converter ----
 
         [RelayCommand]
-        private async Task ApplyCm360()
+        private Task ApplyCm360() => RunApplyAsync(ApplyCm360Core);
+
+        private async Task ApplyCm360Core()
         {
             string tdInputIniPath = TdInputIniPath;
 
@@ -303,7 +302,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void ResetCm360()
+        private void ResetCm360() => EnqueueApply(ResetCm360Core);
+
+        private void ResetCm360Core()
         {
             string tdInputIniPath = TdInputIniPath;
 
@@ -411,9 +412,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 DialogMessageType.Information);
         }
 
-        // ---- Gamepad buttons ----
 
-        partial void OnGamepadButtonsIndexChanged(int value) => _ = OnGamepadButtonsChangedAsync(value);
+        partial void OnGamepadButtonsIndexChanged(int value) => EnqueueApply(() => OnGamepadButtonsChangedAsync(value));
 
         private async Task OnGamepadButtonsChangedAsync(int value)
         {
@@ -496,7 +496,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             SetSilently(() => GamepadButtonsIndex = isPs3 == true ? 1 : 0);
         }
 
-        // Used by the TdGame version-swap snapshot capture (TdGameVersionViewModel).
         public string? GetGamepadButtonType() => GamepadButtonsIndex switch
         {
             0 => "xbox",

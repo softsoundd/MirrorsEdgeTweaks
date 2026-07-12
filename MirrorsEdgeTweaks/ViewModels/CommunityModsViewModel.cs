@@ -4,13 +4,9 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the "Community Mods" section of the Other Tweaks tab. Currently hosts the
-    // Cinematic Faith Model (by Keku) install/uninstall, which downloads and extracts the relevant
-    // model package and detects the installed variant by file size.
     public partial class CommunityModsViewModel : BusyViewModel
     {
         private const string OriginalModelUrl = DownloadUrls.AssetBase + "FaithModelOriginal.zip";
@@ -18,9 +14,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
-        private readonly GameSession _session;
-
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         [ObservableProperty] private int _cinematicFaithIndex = -1;
 
@@ -30,14 +26,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _download = download;
-            _session = session;
         }
 
-        partial void OnCinematicFaithIndexChanged(int oldValue, int newValue) => _ = OnCinematicFaithChangedAsync(oldValue, newValue);
+        partial void OnCinematicFaithIndexChanged(int oldValue, int newValue) => EnqueueApply(() => OnCinematicFaithChangedAsync(oldValue, newValue));
 
         private async Task OnCinematicFaithChangedAsync(int previousIndex, int value)
         {
@@ -82,8 +77,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply Cinematic Faith Model setting: {ex.Message}", DialogMessageType.Error);
 
-                // The model swap did not complete; re-detect the installed variant from disk so
-                // the combo reflects reality (falls back to the prior selection if undetectable).
                 SetSilently(() => CinematicFaithIndex = previousIndex);
                 RefreshCinematicFaith();
             }

@@ -1,19 +1,27 @@
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace MirrorsEdgeTweaks.Services
 {
     public class GraphicsSettingsService : IGraphicsSettingsService
     {
+        private readonly IFileService _fileService;
+
+        public GraphicsSettingsService(IFileService fileService)
+        {
+            _fileService = fileService;
+        }
+
         public string? ReadIniValue(string filePath, string key)
         {
-            if (!File.Exists(filePath))
+            if (!_fileService.FileExists(filePath))
             {
                 return null;
             }
 
             try
             {
-                string[] lines = File.ReadAllLines(filePath);
+                string[] lines = _fileService.ReadAllLines(filePath);
 
                 foreach (string line in lines)
                 {
@@ -39,93 +47,78 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        // Note: all INI writers in this service deliberately leave the file read-only afterwards
-        // (even if it was writable before). Game config files are kept locked so the game does
-        // not overwrite user tweaks on launch; every write re-establishes that lock.
         private void ModifyIniFile(string filePath, Dictionary<string, string> replacements)
         {
-            if (!File.Exists(filePath))
+            if (!_fileService.FileExists(filePath))
             {
                 throw new FileNotFoundException($"INI file not found: {filePath}");
             }
 
-            FileInfo fileInfo = new FileInfo(filePath);
+            string[] lines = _fileService.ReadAllLines(filePath);
+            var modifiedKeys = new HashSet<string>();
 
-            if (fileInfo.IsReadOnly)
-                fileInfo.IsReadOnly = false;
-
-            try
+            for (int i = 0; i < lines.Length; i++)
             {
-                string[] lines = File.ReadAllLines(filePath);
-                var modifiedKeys = new HashSet<string>();
+                string line = lines[i];
+                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith(";"))
+                    continue;
+
+                int equalsIndex = line.IndexOf('=');
+                if (equalsIndex > 0)
+                {
+                    string key = line.Substring(0, equalsIndex).Trim();
+                    if (replacements.ContainsKey(key))
+                    {
+                        lines[i] = replacements[key];
+                        modifiedKeys.Add(key);
+                    }
+                }
+            }
+
+            var missingKeys = new List<string>();
+            foreach (var key in replacements.Keys)
+            {
+                if (!modifiedKeys.Contains(key))
+                {
+                    missingKeys.Add(key);
+                }
+            }
+
+            if (missingKeys.Count > 0)
+            {
+                int systemSettingsIndex = -1;
+                int nextSectionIndex = -1;
 
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    string line = lines[i];
-                    if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith(";"))
-                        continue;
-
-                    int equalsIndex = line.IndexOf('=');
-                    if (equalsIndex > 0)
+                    string trimmedLine = lines[i].Trim();
+                    if (trimmedLine.Equals("[SystemSettings]", StringComparison.OrdinalIgnoreCase))
                     {
-                        string key = line.Substring(0, equalsIndex).Trim();
-                        if (replacements.ContainsKey(key))
-                        {
-                            lines[i] = replacements[key];
-                            modifiedKeys.Add(key);
-                        }
+                        systemSettingsIndex = i;
+                    }
+                    else if (systemSettingsIndex >= 0 && trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+                    {
+                        nextSectionIndex = i;
+                        break;
                     }
                 }
 
-                var missingKeys = new List<string>();
-                foreach (var key in replacements.Keys)
+                if (systemSettingsIndex >= 0)
                 {
-                    if (!modifiedKeys.Contains(key))
+                    int insertIndex = nextSectionIndex >= 0 ? nextSectionIndex : lines.Length;
+                    var newLines = new List<string>(lines);
+
+                    foreach (var key in missingKeys)
                     {
-                        missingKeys.Add(key);
+                        newLines.Insert(insertIndex, replacements[key]);
+                        insertIndex++;
                     }
+
+                    lines = newLines.ToArray();
                 }
-
-                if (missingKeys.Count > 0)
-                {
-                    int systemSettingsIndex = -1;
-                    int nextSectionIndex = -1;
-
-                    for (int i = 0; i < lines.Length; i++)
-                    {
-                        string trimmedLine = lines[i].Trim();
-                        if (trimmedLine.Equals("[SystemSettings]", StringComparison.OrdinalIgnoreCase))
-                        {
-                            systemSettingsIndex = i;
-                        }
-                        else if (systemSettingsIndex >= 0 && trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                        {
-                            nextSectionIndex = i;
-                            break;
-                        }
-                    }
-
-                    if (systemSettingsIndex >= 0)
-                    {
-                        int insertIndex = nextSectionIndex >= 0 ? nextSectionIndex : lines.Length;
-                        var newLines = new List<string>(lines);
-
-                        foreach (var key in missingKeys)
-                        {
-                            newLines.Insert(insertIndex, replacements[key]);
-                            insertIndex++;
-                        }
-
-                        lines = newLines.ToArray();
-                    }
-                }
-
-                File.WriteAllLines(filePath, lines);
             }
-            finally
-            {
-                fileInfo.IsReadOnly = true;
-            }
+
+            _fileService.WriteAllLinesAndLock(filePath, lines);
         }
 
         public void ApplyVSync(string tdEngineIniPath, bool enabled)
@@ -741,149 +734,79 @@ namespace MirrorsEdgeTweaks.Services
             return "Custom";
         }
 
-        public void ApplyMinLOD(string tdEngineIniPath, int value)
+        private void ApplyIniRegex(string filePath, string pattern, string replacement)
         {
-            if (!File.Exists(tdEngineIniPath))
+            if (!_fileService.FileExists(filePath))
             {
-                throw new FileNotFoundException($"INI file not found: {tdEngineIniPath}");
+                throw new FileNotFoundException($"INI file not found: {filePath}");
             }
 
-            FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
-
-            try
-            {
-                string fileData = File.ReadAllText(tdEngineIniPath);
-
-                fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData,
-                    @"(MinLODSize=)(\d+)",
-                    "${1}" + value);
-
-                File.WriteAllText(tdEngineIniPath, fileData);
-            }
-            finally
-            {
-                fileInfo.IsReadOnly = true;
-            }
+            string fileData = _fileService.ReadAllText(filePath);
+            fileData = Regex.Replace(fileData, pattern, replacement);
+            _fileService.WriteAllTextAndLock(filePath, fileData);
         }
 
-        public void ApplyMaxLOD(string tdEngineIniPath, int value)
-        {
-            if (!File.Exists(tdEngineIniPath))
-            {
-                throw new FileNotFoundException($"INI file not found: {tdEngineIniPath}");
-            }
+        public void ApplyMinLOD(string tdEngineIniPath, int value) =>
+            ApplyIniRegex(tdEngineIniPath, @"(MinLODSize=)(\d+)", "${1}" + value);
 
-            FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
+        public void ApplyMaxLOD(string tdEngineIniPath, int value) =>
+            ApplyIniRegex(tdEngineIniPath, @"(MaxLODSize=)(\d+)", "${1}" + value);
 
-            try
-            {
-                string fileData = File.ReadAllText(tdEngineIniPath);
-
-                fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData,
-                    @"(MaxLODSize=)(\d+)",
-                    "${1}" + value);
-
-                File.WriteAllText(tdEngineIniPath, fileData);
-            }
-            finally
-            {
-                fileInfo.IsReadOnly = true;
-            }
-        }
-
-        public void ApplyLODBias(string tdEngineIniPath, int value)
-        {
-            if (!File.Exists(tdEngineIniPath))
-            {
-                throw new FileNotFoundException($"INI file not found: {tdEngineIniPath}");
-            }
-
-            FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
-
-            try
-            {
-                string fileData = File.ReadAllText(tdEngineIniPath);
-
-                fileData = System.Text.RegularExpressions.Regex.Replace(
-                    fileData,
-                    @"(LODBias=)(-?\d+)",
-                    "${1}" + value);
-
-                File.WriteAllText(tdEngineIniPath, fileData);
-            }
-            finally
-            {
-                fileInfo.IsReadOnly = true;
-            }
-        }
+        public void ApplyLODBias(string tdEngineIniPath, int value) =>
+            ApplyIniRegex(tdEngineIniPath, @"(LODBias=)(-?\d+)", "${1}" + value);
 
         public void ApplyStreakEffect(string defaultHudEffectsIniPath, bool enabled)
         {
-            if (!File.Exists(defaultHudEffectsIniPath))
+            if (!_fileService.FileExists(defaultHudEffectsIniPath))
             {
                 throw new FileNotFoundException($"INI file not found: {defaultHudEffectsIniPath}");
             }
 
-            FileInfo fileInfo = new FileInfo(defaultHudEffectsIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
+            var replacementMap = new Dictionary<string, string>();
 
-            try
+            if (enabled)
             {
-                var replacementMap = new Dictionary<string, string>();
-
-                if (enabled)
-                {
-                    replacementMap["bEnableStreakEffect"] = "bEnableStreakEffect=true";
-                    replacementMap["StreakDistanceInMovementDirection"] = "StreakDistanceInMovementDirection=120";
-                    replacementMap["StreakDistanceInCameraDirection"] = "StreakDistanceInCameraDirection=120";
-                    replacementMap["StreakEffectFadeTime"] = "StreakEffectFadeTime=0.34f";
-                }
-                else
-                {
-                    replacementMap["bEnableStreakEffect"] = "bEnableStreakEffect=false";
-                    replacementMap["StreakDistanceInMovementDirection"] = "StreakDistanceInMovementDirection=0";
-                    replacementMap["StreakDistanceInCameraDirection"] = "StreakDistanceInCameraDirection=0";
-                    replacementMap["StreakEffectFadeTime"] = "StreakEffectFadeTime=0.00f";
-                }
-
-                string[] lines = File.ReadAllLines(defaultHudEffectsIniPath);
-
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    string line = lines[i];
-                    if (string.IsNullOrWhiteSpace(line) || !line.Contains('='))
-                        continue;
-
-                    string key = line.Split('=')[0];
-                    if (replacementMap.ContainsKey(key))
-                    {
-                        lines[i] = replacementMap[key];
-                    }
-                }
-
-                File.WriteAllLines(defaultHudEffectsIniPath, lines);
+                replacementMap["bEnableStreakEffect"] = "bEnableStreakEffect=true";
+                replacementMap["StreakDistanceInMovementDirection"] = "StreakDistanceInMovementDirection=120";
+                replacementMap["StreakDistanceInCameraDirection"] = "StreakDistanceInCameraDirection=120";
+                replacementMap["StreakEffectFadeTime"] = "StreakEffectFadeTime=0.34f";
             }
-            finally
+            else
             {
-                fileInfo.IsReadOnly = true;
+                replacementMap["bEnableStreakEffect"] = "bEnableStreakEffect=false";
+                replacementMap["StreakDistanceInMovementDirection"] = "StreakDistanceInMovementDirection=0";
+                replacementMap["StreakDistanceInCameraDirection"] = "StreakDistanceInCameraDirection=0";
+                replacementMap["StreakEffectFadeTime"] = "StreakEffectFadeTime=0.00f";
             }
+
+            string[] lines = _fileService.ReadAllLines(defaultHudEffectsIniPath);
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                if (string.IsNullOrWhiteSpace(line) || !line.Contains('='))
+                    continue;
+
+                string key = line.Split('=')[0];
+                if (replacementMap.ContainsKey(key))
+                {
+                    lines[i] = replacementMap[key];
+                }
+            }
+
+            _fileService.WriteAllLinesAndLock(defaultHudEffectsIniPath, lines);
         }
 
         public string? ReadStreakEffectStatus(string defaultHudEffectsIniPath)
         {
-            if (!File.Exists(defaultHudEffectsIniPath))
+            if (!_fileService.FileExists(defaultHudEffectsIniPath))
             {
                 return null;
             }
 
             try
             {
-                string[] lines = File.ReadAllLines(defaultHudEffectsIniPath);
+                string[] lines = _fileService.ReadAllLines(defaultHudEffectsIniPath);
 
                 foreach (string line in lines)
                 {
@@ -912,95 +835,75 @@ namespace MirrorsEdgeTweaks.Services
 
         public void ApplyFPSLimit(string tdEngineIniPath, int fpsValue)
         {
-            if (!File.Exists(tdEngineIniPath))
+            if (!_fileService.FileExists(tdEngineIniPath))
             {
                 throw new FileNotFoundException($"INI file not found: {tdEngineIniPath}");
             }
 
-            FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
+            string[] lines = _fileService.ReadAllLines(tdEngineIniPath);
+            bool foundSmoothFrameRate = false;
+            bool foundMaxSmoothedFrameRate = false;
 
-            try
+            for (int i = 0; i < lines.Length; i++)
             {
-                string[] lines = File.ReadAllLines(tdEngineIniPath);
-                bool foundSmoothFrameRate = false;
-                bool foundMaxSmoothedFrameRate = false;
-
-                for (int i = 0; i < lines.Length; i++)
+                if (lines[i].StartsWith("bSmoothFrameRate="))
                 {
-                    if (lines[i].StartsWith("bSmoothFrameRate="))
-                    {
-                        lines[i] = "bSmoothFrameRate=TRUE";
-                        foundSmoothFrameRate = true;
-                    }
-                    else if (lines[i].StartsWith("MaxSmoothedFrameRate="))
-                    {
-                        lines[i] = $"MaxSmoothedFrameRate={fpsValue}";
-                        foundMaxSmoothedFrameRate = true;
-                    }
+                    lines[i] = "bSmoothFrameRate=TRUE";
+                    foundSmoothFrameRate = true;
                 }
-
-                if (!foundSmoothFrameRate || !foundMaxSmoothedFrameRate)
+                else if (lines[i].StartsWith("MaxSmoothedFrameRate="))
                 {
-                    throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
+                    lines[i] = $"MaxSmoothedFrameRate={fpsValue}";
+                    foundMaxSmoothedFrameRate = true;
                 }
-
-                File.WriteAllLines(tdEngineIniPath, lines);
             }
-            finally
+
+            if (!foundSmoothFrameRate || !foundMaxSmoothedFrameRate)
             {
-                fileInfo.IsReadOnly = true;
+                throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
             }
+
+            _fileService.WriteAllLinesAndLock(tdEngineIniPath, lines);
         }
 
         public void RemoveFPSLimit(string tdEngineIniPath)
         {
-            if (!File.Exists(tdEngineIniPath))
+            if (!_fileService.FileExists(tdEngineIniPath))
             {
                 throw new FileNotFoundException($"INI file not found: {tdEngineIniPath}");
             }
 
-            FileInfo fileInfo = new FileInfo(tdEngineIniPath);
-            if (fileInfo.IsReadOnly) fileInfo.IsReadOnly = false;
+            string[] lines = _fileService.ReadAllLines(tdEngineIniPath);
+            bool foundSmoothFrameRate = false;
 
-            try
+            for (int i = 0; i < lines.Length; i++)
             {
-                string[] lines = File.ReadAllLines(tdEngineIniPath);
-                bool foundSmoothFrameRate = false;
-
-                for (int i = 0; i < lines.Length; i++)
+                if (lines[i].StartsWith("bSmoothFrameRate="))
                 {
-                    if (lines[i].StartsWith("bSmoothFrameRate="))
-                    {
-                        lines[i] = "bSmoothFrameRate=FALSE";
-                        foundSmoothFrameRate = true;
-                        break;
-                    }
+                    lines[i] = "bSmoothFrameRate=FALSE";
+                    foundSmoothFrameRate = true;
+                    break;
                 }
-
-                if (!foundSmoothFrameRate)
-                {
-                    throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
-                }
-
-                File.WriteAllLines(tdEngineIniPath, lines);
             }
-            finally
+
+            if (!foundSmoothFrameRate)
             {
-                fileInfo.IsReadOnly = true;
+                throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
             }
+
+            _fileService.WriteAllLinesAndLock(tdEngineIniPath, lines);
         }
 
         public (bool isLimited, int? fpsValue) ReadFPSLimitStatus(string tdEngineIniPath)
         {
-            if (!File.Exists(tdEngineIniPath))
+            if (!_fileService.FileExists(tdEngineIniPath))
             {
                 return (false, null);
             }
 
             try
             {
-                string[] lines = File.ReadAllLines(tdEngineIniPath);
+                string[] lines = _fileService.ReadAllLines(tdEngineIniPath);
                 bool? smoothFrameRate = null;
                 int? maxSmoothedFrameRate = null;
 

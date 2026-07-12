@@ -4,13 +4,9 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // View model for the Game Language setting: detects the configured language, and on change
-    // updates the Windows registry + TdEngine.ini and downloads/extracts the matching language
-    // pack (reapplying the high-res UI fix afterwards).
     public partial class LanguageSettingsViewModel : BusyViewModel
     {
         private const long SteamMirrorsEdgeExeSize = 31946072;
@@ -35,10 +31,11 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
-        private readonly GameSession _session;
         private readonly GraphicsTweaksViewModel _graphics;
 
         private bool _isLoading;
+
+        protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
         [ObservableProperty] private int _selectedLanguageIndex = -1;
 
@@ -49,11 +46,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             GraphicsTweaksViewModel graphics)
-            : base(gameStatus, downloadProgress)
+            : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _download = download;
-            _session = session;
             _graphics = graphics;
         }
 
@@ -129,7 +125,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        partial void OnSelectedLanguageIndexChanged(int oldValue, int newValue) => _ = OnLanguageChangedAsync(oldValue, newValue);
+        partial void OnSelectedLanguageIndexChanged(int oldValue, int newValue) => EnqueueApply(() => OnLanguageChangedAsync(oldValue, newValue));
 
         private async Task OnLanguageChangedAsync(int previousIndex, int value)
         {
@@ -261,8 +257,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (!switched)
                 {
-                    // The switch did not complete, so put the combo back on the language that is
-                    // still configured rather than leaving it on the failed selection.
                     SetLanguageIndexSilently(previousIndex);
                 }
                 _gameStatus.IsUiEnabled = true;
