@@ -35,7 +35,7 @@ jobs:
         run: Compress-Archive -Path publish/* -DestinationPath "MirrorsEdgeTweaks-${{ github.ref_name }}.zip"
 
       - name: Create GitHub release with asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: MirrorsEdgeTweaks-${{ github.ref_name }}.zip
           draft: true
