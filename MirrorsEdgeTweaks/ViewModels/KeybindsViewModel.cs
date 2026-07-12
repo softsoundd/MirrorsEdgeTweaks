@@ -6,21 +6,24 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // A single keybind row: its captured key (DisplayKey), the click-to-capture command and the
-    // info command, plus the static KeybindInfo metadata and info-dialog text.
+    // A single keybind row: its display label, captured key (DisplayKey), the click-to-capture
+    // command and the info command, plus the static KeybindInfo metadata and info-dialog text.
+    // Rendered by the shared keybind-row DataTemplate in MainWindow.xaml.
     public partial class KeybindEntryViewModel : ObservableObject
     {
         private readonly KeybindsViewModel _owner;
 
         [ObservableProperty] private string _displayKey = "";
 
+        public string Label { get; }
         public KeybindInfo Info { get; }
         public string InfoTitle { get; }
         public string InfoBody { get; }
 
-        public KeybindEntryViewModel(KeybindsViewModel owner, KeybindInfo info, string infoTitle, string infoBody)
+        public KeybindEntryViewModel(KeybindsViewModel owner, string label, KeybindInfo info, string infoTitle, string infoBody)
         {
             _owner = owner;
+            Label = label;
             Info = info;
             InfoTitle = infoTitle;
             InfoBody = infoBody;
@@ -40,7 +43,6 @@ namespace MirrorsEdgeTweaks.ViewModels
     {
         private readonly IDialogService _dialogService;
         private readonly GameSession _session;
-        private readonly Dictionary<string, KeybindEntryViewModel> _entriesByName;
 
         private bool _isLoading;
 
@@ -64,115 +66,107 @@ namespace MirrorsEdgeTweaks.ViewModels
         public KeybindEntryViewModel ScrollDownMacro { get; }
         public KeybindEntryViewModel ScrollUpMacro { get; }
 
+        // Section collections rendered by the shared keybind-row DataTemplate (ItemsControl).
+        public IReadOnlyList<KeybindEntryViewModel> CustomKeybinds { get; }
+        public IReadOnlyList<KeybindEntryViewModel> CheatTrainerKeybinds { get; }
+        public IReadOnlyList<KeybindEntryViewModel> MacroKeybinds { get; }
+
         public KeybindsViewModel(IDialogService dialogService, GameSession session)
         {
             _dialogService = dialogService;
             _session = session;
 
-            KeybindEntryViewModel Make(string textBoxName, string title, string body) =>
-                new KeybindEntryViewModel(this, KeybindDefinitions.KeybindMap[textBoxName], title, body);
+            KeybindEntryViewModel Make(string textBoxName, string label, string title, string body) =>
+                new KeybindEntryViewModel(this, label, KeybindDefinitions.KeybindMap[textBoxName], title, body);
 
-            RestartLevel = Make("RestartLevelKeyTextBox", "Restart Level Keybind Information",
+            RestartLevel = Make("RestartLevelKeyTextBox", "Restart Level:", "Restart Level Keybind Information",
                 "Restarts the level from where you started (this does not respect checkpoints reached, refer to the \"Load last checkpoint\" keybind for this).\n\n" +
                 "In time trial and speedrun modes, this will reload the level back to the start.\n\nIn chapter mode, this will reload the level back to the checkpoint that was selected in the main menu.\n\n" +
                 "In story mode, this will reload the level back to where you started when you pressed \"Continue Game\" (except when you complete a chapter, you'll instead respawn at checkpoint A of the next chapter).");
 
-            LoadLastCheckpoint = Make("LoadLastCheckpointKeyTextBox", "Load Last Checkpoint Keybind Information",
+            LoadLastCheckpoint = Make("LoadLastCheckpointKeyTextBox", "Load Last Checkpoint:", "Load Last Checkpoint Keybind Information",
                 "In earlier dev/review builds of Mirror's Edge there used to be a dedicated \"Load last checkpoint\" button in the pause menu that would reload Faith " +
                 "to the last hard or soft checkpoint that was reached, however, this never made its way into the game's final release.\n\nAlthough the UI for this was removed, " +
                 "the underlying function for this still exists in retail builds, and Mirror's Edge Tweaks can patch it to become executable via keybinds/console commands. " +
                 "This is essentially a faster way to reset without having to force a death.");
 
-            RestartTimeTrial = Make("RestartTimeTrialKeyTextBox", "Restart Time Trial Keybind Information",
+            RestartTimeTrial = Make("RestartTimeTrialKeyTextBox", "Restart Time Trial:", "Restart Time Trial Keybind Information",
                 "Restarts the time trial directly to the count down screen — this bypasses having to access it from the \"Restart Race\" button in the pause menu which can make resetting runs less tedious.\n\n" +
                 "By default this command is not accessible, Mirror's Edge Tweaks performs a patch to make this function executable via keybinds/console commands.");
 
-            ResetReactionTime = Make("ResetReactionTimeKeyTextBox", "Reset Reaction Time Keybind Information",
+            ResetReactionTime = Make("ResetReactionTimeKeyTextBox", "Reset Reaction Time:", "Reset Reaction Time Keybind Information",
                 "Restores reaction time without needing to build up the required momentum. Toggling this keybind while reaction time is active will immediately disengage it.");
 
-            GodMode = Make("GodModeKeyTextBox", "God Mode Keybind Information",
+            GodMode = Make("GodModeKeyTextBox", "God Mode:", "God Mode Keybind Information",
                 "Toggles invincibility, as well as additional commands for disabling kill volumes that god mode by itself misses.");
 
-            KillBots = Make("KillBotsKeyTextBox", "Kill Bots Keybind Information",
+            KillBots = Make("KillBotsKeyTextBox", "Kill Bots:", "Kill Bots Keybind Information",
                 "Kills (deletes) all current bots and enemy helicopters.");
 
-            ThirdPerson = Make("ThirdPersonKeyTextBox", "Third Person Keybind Information",
+            ThirdPerson = Make("ThirdPersonKeyTextBox", "Third Person:", "Third Person Keybind Information",
                 "Cycles through different third person camera perspectives. The 6th press will return you to normal first person view.");
 
-            ToggleHUD = Make("ToggleHUDKeyTextBox", "Toggle HUD Keybind Information",
+            ToggleHUD = Make("ToggleHUDKeyTextBox", "Toggle HUD:", "Toggle HUD Keybind Information",
                 "Toggles the visibility of the crosshair and timer/checkpoint elements.");
 
-            FPSIndicator = Make("FPSIndicatorKeyTextBox", "FPS Indicator Keybind Information",
+            FPSIndicator = Make("FPSIndicatorKeyTextBox", "FPS Indicator:", "FPS Indicator Keybind Information",
                 "Toggles an overlay displaying the frames per second and other rendering statistics.");
 
-            LevelStats = Make("LevelStatsKeyTextBox", "Level Stats Keybind Information",
+            LevelStats = Make("LevelStatsKeyTextBox", "Level Stats:", "Level Stats Keybind Information",
                 "Toggles an overlay displaying level streaming statistics, listing the levels for the current map. Red levels indicate the level is loaded and visible, " +
                 "with the number of seconds next to the level name representing the time taken from load request to load finish. Green levels indicate unloaded levels.");
 
-            TriggersVolumes = Make("TriggersVolumesKeyTextBox", "Triggers & Volumes Keybind Information",
+            TriggersVolumes = Make("TriggersVolumesKeyTextBox", "Triggers & Volumes:", "Triggers & Volumes Keybind Information",
                 "Toggles the display of the bounding boxes of ALL triggers (checkpoints, level loads, other scripted gameplay events) and volumes " +
                 "(areas that put Faith in a specific movement state, kill barriers, etc.).\n\nThis command also shows invisible blocking volumes the player can collide with, " +
                 "making it a more performant alternative to using \"nxvis collision\" ('Show Collision' keybind).");
 
-            ShowCollision = Make("ShowCollisionKeyTextBox", "Show Collision Keybind Information",
+            ShowCollision = Make("ShowCollisionKeyTextBox", "Show Collision:", "Show Collision Keybind Information",
                 "Note: This command is very performance intensive and in some cases can crash the game.\n\n" +
                 "Toggles the display of the PhysX collision data for the level, allowing you to see the wireframes and volumes for ALL collision objects with which rigid bodies interact.");
 
-            Noclip = Make("NoclipKeyTextBox", "Noclip Keybind Information",
+            Noclip = Make("NoclipKeyTextBox", "Noclip:", "Noclip Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
                 "Toggles the use of noclip (flying with no collision). Keybinds for noclip movement speed can be set in the TweaksScriptsSettings file in the Binaries folder.");
 
-            SaveState = Make("SaveStateKeyTextBox", "Save State Keybind Information",
+            SaveState = Make("SaveStateKeyTextBox", "Save State:", "Save State Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
                 "Saves Faith's current position and state. If bots were manually spawned, their states will also be saved.");
 
-            LoadSavedState = Make("LoadSavedStateKeyTextBox", "Load Saved State Keybind Information",
+            LoadSavedState = Make("LoadSavedStateKeyTextBox", "Load Saved State:", "Load Saved State Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
                 "Restores Faith to the saved state. This will also restore manually spawned bots.");
 
-            SaveTimerLocation = Make("SaveTimerLocationKeyTextBox", "Save Timer Location Keybind Information",
+            SaveTimerLocation = Make("SaveTimerLocationKeyTextBox", "Save Timer Location:", "Save Timer Location Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
                 "Saves the current player location as the checkpoint for the timer in the trainer HUD.");
 
-            DeleteViewedActor = Make("DeleteViewedActorKeyTextBox", "Delete Viewed Actor Keybind Information",
+            DeleteViewedActor = Make("DeleteViewedActorKeyTextBox", "Delete Viewed Actor:", "Delete Viewed Actor Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
                 "Deletes the bot/object currently looked at (some objects are connected to essential world geometry and are excluded).");
 
-            ScrollDownMacro = Make("ScrollDownMacroKeyTextBox", "Scroll Down Macro Key Information",
+            ScrollDownMacro = Make("ScrollDownMacroKeyTextBox", "Scroll Down Macro Key:", "Scroll Down Macro Key Information",
                 "Set the keybind that will macro the action that is assigned to 'Scroll Down' in the game's control settings menu.\n\n" +
                 "Note: This setting requires the Tweaks Scripts package to be installed. Macros are available while Softimer is active.");
 
-            ScrollUpMacro = Make("ScrollUpMacroKeyTextBox", "Scroll Up Macro Key Information",
+            ScrollUpMacro = Make("ScrollUpMacroKeyTextBox", "Scroll Up Macro Key:", "Scroll Up Macro Key Information",
                 "Set the keybind that will macro the action that is assigned to 'Scroll Up' in the game's control settings menu.\n\n" +
                 "Note: This setting requires the Tweaks Scripts package to be installed. Macros are available while Softimer is active.");
 
-            _entriesByName = new Dictionary<string, KeybindEntryViewModel>
+            CustomKeybinds = new[]
             {
-                ["RestartLevelKeyTextBox"] = RestartLevel,
-                ["LoadLastCheckpointKeyTextBox"] = LoadLastCheckpoint,
-                ["RestartTimeTrialKeyTextBox"] = RestartTimeTrial,
-                ["ResetReactionTimeKeyTextBox"] = ResetReactionTime,
-                ["GodModeKeyTextBox"] = GodMode,
-                ["KillBotsKeyTextBox"] = KillBots,
-                ["ThirdPersonKeyTextBox"] = ThirdPerson,
-                ["ToggleHUDKeyTextBox"] = ToggleHUD,
-                ["FPSIndicatorKeyTextBox"] = FPSIndicator,
-                ["LevelStatsKeyTextBox"] = LevelStats,
-                ["TriggersVolumesKeyTextBox"] = TriggersVolumes,
-                ["ShowCollisionKeyTextBox"] = ShowCollision,
-                ["NoclipKeyTextBox"] = Noclip,
-                ["SaveStateKeyTextBox"] = SaveState,
-                ["LoadSavedStateKeyTextBox"] = LoadSavedState,
-                ["SaveTimerLocationKeyTextBox"] = SaveTimerLocation,
-                ["DeleteViewedActorKeyTextBox"] = DeleteViewedActor,
-                ["ScrollDownMacroKeyTextBox"] = ScrollDownMacro,
-                ["ScrollUpMacroKeyTextBox"] = ScrollUpMacro,
+                RestartLevel, LoadLastCheckpoint, RestartTimeTrial, ResetReactionTime, GodMode,
+                KillBots, ThirdPerson, ToggleHUD, FPSIndicator, LevelStats, TriggersVolumes, ShowCollision,
+            };
+            CheatTrainerKeybinds = new[]
+            {
+                Noclip, SaveState, LoadSavedState, SaveTimerLocation, DeleteViewedActor,
+            };
+            MacroKeybinds = new[]
+            {
+                ScrollDownMacro, ScrollUpMacro,
             };
         }
-
-        // Entry point for the window's keybind-field click handler (entry identified by TextBox x:Name).
-        public Task CaptureByFieldName(string textBoxName)
-            => _entriesByName.TryGetValue(textBoxName, out var entry) ? CaptureAsync(entry) : Task.CompletedTask;
 
         private static string TdInputIniPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),

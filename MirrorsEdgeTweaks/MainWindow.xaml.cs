@@ -5,9 +5,9 @@ using System.Windows.Controls;
 namespace MirrorsEdgeTweaks
 {
     // Thin View shell: resolves the MainViewModel DataContext via DI and hosts the few interactions
-    // that genuinely belong to the View - the render-resolution slider Thumb drag events, the
-    // name-based keybind-field capture click, and a class handler that re-applies a setting when its
-    // already-selected combo item is re-clicked. All orchestration lives in the view model layer.
+    // that genuinely belong to the View - the render-resolution slider Thumb drag events and a class
+    // handler that re-applies a setting when its already-selected combo item is re-clicked. All
+    // orchestration lives in the view model layer.
     public partial class MainWindow : Window
     {
         private readonly MainViewModel _viewModel;
@@ -39,14 +39,6 @@ namespace MirrorsEdgeTweaks
 
         private void RenderResolutionSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
             => _viewModel.Graphics.EndRenderResolutionDrag();
-
-        // Forwards a keybind field click to the KeybindsViewModel's capture flow (the entry is
-        // identified by the read-only TextBox's x:Name).
-        private void KeybindField_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (sender is System.Windows.Controls.TextBox textBox)
-                _ = _viewModel.Keybinds.CaptureByFieldName(textBox.Name);
-        }
 
         // Re-clicking the already-selected combo item should re-apply its setting. The combos are
         // bound via SelectedIndex/SelectedItem, which only raise their VM OnChanged handler on an

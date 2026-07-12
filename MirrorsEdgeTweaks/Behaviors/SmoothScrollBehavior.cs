@@ -130,23 +130,42 @@ namespace MirrorsEdgeTweaks.Behaviors
             {
                 scrollViewer.PreviewMouseWheel -= ScrollViewer_PreviewMouseWheel;
                 scrollViewer.ScrollChanged -= ScrollViewer_ScrollChanged;
+                scrollViewer.Unloaded -= ScrollViewer_Unloaded;
 
                 if ((bool)e.NewValue)
                 {
                     scrollViewer.PreviewMouseWheel += ScrollViewer_PreviewMouseWheel;
                     scrollViewer.ScrollChanged += ScrollViewer_ScrollChanged;
+                    scrollViewer.Unloaded += ScrollViewer_Unloaded;
                 }
                 else
                 {
-                    _targetOffsets.Remove(scrollViewer);
-                    _isAnimating.Remove(scrollViewer);
-
-                    if (_renderingHandlers.ContainsKey(scrollViewer))
-                    {
-                        CompositionTarget.Rendering -= _renderingHandlers[scrollViewer];
-                        _renderingHandlers.Remove(scrollViewer);
-                    }
+                    CleanupScrollViewerState(scrollViewer);
                 }
+            }
+        }
+
+        // The static dictionaries hold strong references, so state must be dropped when a
+        // ScrollViewer leaves the tree (e.g. tab switch or window close) or it leaks. Entries are
+        // lazily re-created by the wheel handler if the viewer is loaded again.
+        private static void ScrollViewer_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is ScrollViewer scrollViewer)
+            {
+                CleanupScrollViewerState(scrollViewer);
+            }
+        }
+
+        private static void CleanupScrollViewerState(ScrollViewer scrollViewer)
+        {
+            _targetOffsets.Remove(scrollViewer);
+            _isAnimating.Remove(scrollViewer);
+            _lastRenderTime.Remove(scrollViewer);
+
+            if (_renderingHandlers.TryGetValue(scrollViewer, out var handler))
+            {
+                CompositionTarget.Rendering -= handler;
+                _renderingHandlers.Remove(scrollViewer);
             }
         }
 

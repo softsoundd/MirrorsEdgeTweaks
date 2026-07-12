@@ -39,6 +39,9 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
+        // Note: all INI writers in this service deliberately leave the file read-only afterwards
+        // (even if it was writable before). Game config files are kept locked so the game does
+        // not overwrite user tweaks on launch; every write re-establishes that lock.
         private void ModifyIniFile(string filePath, Dictionary<string, string> replacements)
         {
             if (!File.Exists(filePath))
@@ -380,7 +383,6 @@ namespace MirrorsEdgeTweaks.Services
         {
             var replacements = new Dictionary<string, string>();
 
-            // common settings for all texture detail presets
             replacements["bEnableVSMShadows"] = "bEnableVSMShadows=True";
             replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False";
             replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2";
@@ -530,7 +532,6 @@ namespace MirrorsEdgeTweaks.Services
         {
             var replacements = new Dictionary<string, string>();
 
-            // common settings for all graphics quality presets
             replacements["bEnableVSMShadows"] = "bEnableVSMShadows=True";
             replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False";
             replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2";

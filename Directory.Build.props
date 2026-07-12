@@ -1,0 +1,15 @@
+<Project>
+
+  <!-- Shared build configuration for all projects in the repository. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- CI passes -warnaserror so warnings block merges without slowing local iteration. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

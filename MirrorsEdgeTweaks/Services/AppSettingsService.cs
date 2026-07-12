@@ -4,10 +4,7 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IAppSettingsService
     {
-        // Reads persisted settings from the store into GameSession.Config.
         void Load();
-
-        // Writes the current GameSession.Config values back to the store.
         void Save();
     }
 

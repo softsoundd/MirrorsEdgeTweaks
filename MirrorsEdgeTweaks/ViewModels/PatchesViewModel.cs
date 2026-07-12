@@ -116,7 +116,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try { ApplyMultiInstanceStatus(MultiInstancePatchHelper.GetPatchState(exePath)); }
+            try { ApplyMultiInstanceStatus(InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey)); }
             catch { MultiInstancePatchStatus = ""; }
         }
 
@@ -129,19 +129,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try { ApplyMultiInstanceStatus(await Task.Run(() => MultiInstancePatchHelper.GetPatchState(exePath))); }
+            try { ApplyMultiInstanceStatus(await Task.Run(() => InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey))); }
             catch { MultiInstancePatchStatus = ""; }
         }
 
-        private void ApplyMultiInstanceStatus(MultiInstancePatchState state)
+        private void ApplyMultiInstanceStatus(InlinePatchState state)
         {
             switch (state)
             {
-                case MultiInstancePatchState.Patched:
+                case InlinePatchState.Patched:
                     MultiInstancePatchStatus = "Patched";
                     MultiInstancePatchStatusForeground = PatchedBrush();
                     break;
-                case MultiInstancePatchState.Unpatched:
+                case InlinePatchState.Unpatched:
                     MultiInstancePatchStatus = "Unpatched";
                     MultiInstancePatchStatusForeground = BodyLightBrush();
                     break;
@@ -160,7 +160,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try { ApplyAmbiguousBypassStatus(AmbiguousBypassPatchHelper.GetPatchState(exePath)); }
+            try { ApplyAmbiguousBypassStatus(InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey)); }
             catch { AmbiguousBypassPatchStatus = ""; }
         }
 
@@ -173,19 +173,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            try { ApplyAmbiguousBypassStatus(await Task.Run(() => AmbiguousBypassPatchHelper.GetPatchState(exePath))); }
+            try { ApplyAmbiguousBypassStatus(await Task.Run(() => InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey))); }
             catch { AmbiguousBypassPatchStatus = ""; }
         }
 
-        private void ApplyAmbiguousBypassStatus(AmbiguousBypassPatchState state)
+        private void ApplyAmbiguousBypassStatus(InlinePatchState state)
         {
             switch (state)
             {
-                case AmbiguousBypassPatchState.Patched:
+                case InlinePatchState.Patched:
                     AmbiguousBypassPatchStatus = "Patched";
                     AmbiguousBypassPatchStatusForeground = PatchedBrush();
                     break;
-                case AmbiguousBypassPatchState.Unpatched:
+                case InlinePatchState.Unpatched:
                     AmbiguousBypassPatchStatus = "Unpatched";
                     AmbiguousBypassPatchStatusForeground = BodyLightBrush();
                     break;
@@ -292,13 +292,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                 bool alreadyPatched = false;
                 bool ran = await RunBusyAsync("Applying multi-instance patch...", () =>
                 {
-                    if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Patched)
+                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey) == InlinePatchState.Patched)
                     {
                         alreadyPatched = true;
                         return;
                     }
 
-                    MultiInstancePatchHelper.ApplyPatch(exePath);
+                    InlineVaPatchHelper.ApplyPatch(exePath, InlineVaPatchHelper.MultiInstanceKey);
                 });
                 if (!ran) return;
 
@@ -326,13 +326,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                 bool alreadyUnpatched = false;
                 bool ran = await RunBusyAsync("Removing multi-instance patch...", () =>
                 {
-                    if (MultiInstancePatchHelper.GetPatchState(exePath) == MultiInstancePatchState.Unpatched)
+                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey) == InlinePatchState.Unpatched)
                     {
                         alreadyUnpatched = true;
                         return;
                     }
 
-                    MultiInstancePatchHelper.RemovePatch(exePath);
+                    InlineVaPatchHelper.RemovePatch(exePath, InlineVaPatchHelper.MultiInstanceKey);
                 });
                 if (!ran) return;
 
@@ -371,13 +371,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                 bool alreadyPatched = false;
                 bool ran = await RunBusyAsync("Applying ambiguous bypass patch...", () =>
                 {
-                    if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Patched)
+                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey) == InlinePatchState.Patched)
                     {
                         alreadyPatched = true;
                         return;
                     }
 
-                    AmbiguousBypassPatchHelper.ApplyPatch(exePath);
+                    InlineVaPatchHelper.ApplyPatch(exePath, InlineVaPatchHelper.AmbiguousPackageKey);
                 });
                 if (!ran) return;
 
@@ -405,13 +405,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                 bool alreadyUnpatched = false;
                 bool ran = await RunBusyAsync("Removing ambiguous bypass patch...", () =>
                 {
-                    if (AmbiguousBypassPatchHelper.GetPatchState(exePath) == AmbiguousBypassPatchState.Unpatched)
+                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey) == InlinePatchState.Unpatched)
                     {
                         alreadyUnpatched = true;
                         return;
                     }
 
-                    AmbiguousBypassPatchHelper.RemovePatch(exePath);
+                    InlineVaPatchHelper.RemovePatch(exePath, InlineVaPatchHelper.AmbiguousPackageKey);
                 });
                 if (!ran) return;
 

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    env:
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore MirrorsEdgeTweaks.slnx
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build MirrorsEdgeTweaks.slnx --configuration Release --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test MirrorsEdgeTweaks.slnx --configuration Release --no-build --verbosity normal

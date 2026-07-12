@@ -12,8 +12,6 @@ namespace MirrorsEdgeTweaks.Helpers
         public const float EnabledValue = 66536f;
         public const float DisabledValue = 16384f;
 
-        // Writes the given rotation-speed modifier value (EnabledValue or DisabledValue) into
-        // TdGame.u. Throws on failure.
         public static void Apply(string tdGamePackagePath, float targetValue)
         {
             FileAttributes attributes = File.GetAttributes(tdGamePackagePath);
@@ -26,23 +24,30 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                using var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read);
-                package?.InitializePackage();
+                long floatOffset;
 
-                if (package == null)
-                    throw new Exception("Failed to load TdGame.u package.");
+                // The package reader must be disposed before the file is rewritten below: the
+                // safe-write pipeline replaces the file via rename, which Windows refuses while
+                // another handle is open on it.
+                using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
+                {
+                    package?.InitializePackage();
 
-                var tdPlayerController = package.FindObject<UClass>("TdPlayerController");
-                if (tdPlayerController == null)
-                    throw new Exception("TdPlayerController class not found in TdGame.u");
+                    if (package == null)
+                        throw new Exception("Failed to load TdGame.u package.");
 
-                var updateRotationFunc = tdPlayerController.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "UpdateRotation");
-                if (updateRotationFunc == null)
-                    throw new Exception("UpdateRotation function not found in TdPlayerController class.");
+                    var tdPlayerController = package.FindObject<UClass>("TdPlayerController");
+                    if (tdPlayerController == null)
+                        throw new Exception("TdPlayerController class not found in TdGame.u");
 
-                updateRotationFunc.Load<UObjectRecordStream>();
+                    var updateRotationFunc = tdPlayerController.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "UpdateRotation");
+                    if (updateRotationFunc == null)
+                        throw new Exception("UpdateRotation function not found in TdPlayerController class.");
 
-                long floatOffset = FindRotSpeedModFloatOffset(updateRotationFunc);
+                    updateRotationFunc.Load<UObjectRecordStream>();
+
+                    floatOffset = FindRotSpeedModFloatOffset(updateRotationFunc);
+                }
 
                 if (floatOffset == -1)
                     throw new Exception("Could not locate the rotation speed modifier float in UpdateRotation function.");
@@ -58,7 +63,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 byte[] newValueBytes = BitConverter.GetBytes(targetValue);
                 Array.Copy(newValueBytes, 0, data, floatOffset, 4);
 
-                File.WriteAllBytes(tdGamePackagePath, data);
+                PatchUtility.WritePreservingAttributes(tdGamePackagePath, data);
             }
             finally
             {
@@ -69,8 +74,6 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Reads the current state: true if uniform sensitivity is enabled (66536), false if disabled,
-        // or null if it cannot be determined (leave the UI unchanged).
         public static bool? ReadIsEnabled(string? tdGamePackagePath)
         {
             if (string.IsNullOrEmpty(tdGamePackagePath) || !File.Exists(tdGamePackagePath))
@@ -117,8 +120,8 @@ namespace MirrorsEdgeTweaks.Helpers
             function.ByteCodeManager.Deserialize();
             var tokens = function.ByteCodeManager.DeserializedTokens;
 
-            // look for the 2nd last float in the expression
-            // for reference: RotSpeedMod = FMax(0.4, 1 - float(Min(1, int(Abs(float(Normalize(Rotation - myPawn.Rotation).Pitch) / 16384) + 0.3))));
+            // Returns the first float token matching either sentinel value (16384/66536).
+            // For reference: RotSpeedMod = FMax(0.4, 1 - float(Min(1, int(Abs(float(Normalize(Rotation - myPawn.Rotation).Pitch) / 16384) + 0.3))));
             for (int i = 0; i < tokens.Count; i++)
             {
                 if (tokens[i] is FloatConstToken floatToken)

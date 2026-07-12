@@ -145,7 +145,6 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Section-relative offset of the next allocation (i.e. the current high-water mark).
         public int CurrentWatermark
         {
             get
@@ -171,36 +170,24 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private void ParsePe()
         {
-            var d = _peData;
-            if (d.Length < 2 || d[0] != (byte)'M' || d[1] != (byte)'Z')
-                throw new InvalidOperationException("Not a PE file.");
+            // Header parsing is delegated to the shared PE reader; CaveSection keeps only the
+            // raw header offsets it needs for its own section-table edits.
+            var pe = PeImageLayout.Parse(_peData);
 
-            _peOffset = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(0x3C, 4));
-            if (d[_peOffset] != 0x50 || d[_peOffset + 1] != 0x45 ||
-                d[_peOffset + 2] != 0x00 || d[_peOffset + 3] != 0x00)
-                throw new InvalidOperationException("PE signature not found.");
+            _peOffset = pe.PeOffset;
+            _coffOffset = pe.CoffOffset;
+            _optOffset = pe.OptionalHeaderOffset;
+            _sectionsOffset = pe.SectionTableOffset;
+            _numSections = pe.Sections.Count;
+            _imageBase = pe.ImageBase;
+            _sectionAlign = pe.SectionAlignment;
+            _fileAlign = pe.FileAlignment;
 
-            _coffOffset = _peOffset + 4;
-            _numSections = BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(_coffOffset + 2, 2));
-            ushort optHdrSize = BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(_coffOffset + 16, 2));
-            _optOffset = _coffOffset + 20;
-
-            ushort magic = BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(_optOffset, 2));
-            if (magic != 0x10B)
-                throw new InvalidOperationException($"Only PE32 supported (magic=0x{magic:X4}).");
-
-            _imageBase = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(_optOffset + 28, 4));
-            _sectionAlign = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(_optOffset + 32, 4));
-            _fileAlign = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(_optOffset + 36, 4));
-
-            _sectionsOffset = _optOffset + optHdrSize;
-
-            for (int i = 0; i < _numSections; i++)
+            foreach (var section in pe.Sections)
             {
-                int hdrOff = _sectionsOffset + i * 40;
-                if (d.AsSpan(hdrOff, 8).SequenceEqual(SectionName))
+                if (section.Name == ".cave")
                 {
-                    LoadExisting(hdrOff);
+                    LoadExisting(section.HeaderOffset);
                     return;
                 }
             }

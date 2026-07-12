@@ -14,7 +14,6 @@ namespace MirrorsEdgeTweaks.Helpers
             "TdGame Fix + Time Trials Timer Fix" // 3
         };
 
-        // Returns the combo index for an exact version name, or -1 if not recognised.
         public static int IndexOf(string? versionName)
         {
             if (string.IsNullOrEmpty(versionName))
@@ -28,7 +27,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return -1;
         }
 
-        // Returns the version name for a combo index, or null if out of range.
         public static string? NameAt(int index) =>
             index >= 0 && index < Names.Count ? Names[index] : null;
     }

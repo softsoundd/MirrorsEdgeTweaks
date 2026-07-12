@@ -285,7 +285,6 @@ namespace MirrorsEdgeTweaks.Services
             byte[] fminExpr = Concat(
                 new byte[] { OP_FMIN }, fminArgA, fminArgB, EndFP());
 
-            // Then-branch
             byte[] innerThen = Concat(vfunc, fminExpr, EndFP());
             byte[] thenCall = Context(Concat(dcast, powner), (ushort)innerThen.Length, 0, innerThen);
 
@@ -796,18 +795,6 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         public static int FindPattern(byte[] data, byte[] pattern, int start = 0, int end = -1)
-        {
-            if (end < 0) end = data.Length;
-            for (int i = start; i <= end - pattern.Length; i++)
-            {
-                bool match = true;
-                for (int j = 0; j < pattern.Length; j++)
-                {
-                    if (data[i + j] != pattern[j]) { match = false; break; }
-                }
-                if (match) return i;
-            }
-            return -1;
-        }
+            => Helpers.PatternHelper.FindPattern(data, pattern, start, end);
     }
 }

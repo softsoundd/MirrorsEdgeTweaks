@@ -2,7 +2,6 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IFolderPickerService
     {
-        // Shows a folder browse dialog and returns the chosen path, or null if cancelled.
         string? PickFolder(string description, string? initialPath);
     }
 

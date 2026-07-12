@@ -79,8 +79,6 @@ namespace MirrorsEdgeTweaks.Services
             WriteBSS(data, exportStart, (uint)newBss);
         }
 
-        // UE3 package header parsing
-
         public struct PackageHeader
         {
             public int FileVersion;
@@ -136,8 +134,6 @@ namespace MirrorsEdgeTweaks.Services
             };
         }
 
-        // Export table update - heuristic scan (Engine.u style)
-
         // Heuristic export table fixup: scan for (SerialSize, SerialOffset) pairs.
         // Used by Engine.u where we don't need export index precision.
         public static (int offsetsFixed, int sizesFixed) UpdateExportsHeuristic(
@@ -172,9 +168,7 @@ namespace MirrorsEdgeTweaks.Services
             return (nOff, nSz);
         }
 
-        // Export table update - structural walk (TdGame.u style)
-
-        // Structural export table fixup using export index matching.
+        // Structural export table fixup using export index matching (used by TdGame.u).
         // Each modification is (serialOffset, insertSize, exportIndex).
         public static (int offsetsFixed, int sizesFixed) UpdateExportsStructural(
             byte[] buf, PackageHeader hdr,
@@ -192,7 +186,7 @@ namespace MirrorsEdgeTweaks.Services
 
             for (int exportNum = 1; exportNum <= hdr.ExportCount; exportNum++)
             {
-                pos += 4 + 4 + 4 + 8 + 4 + 8; // skip to SerialSize
+                pos += 4 + 4 + 4 + 8 + 4 + 8;
                 int ssPos = pos;
                 int serialSize = BitConverter.ToInt32(buf, pos); pos += 4;
                 int soPos = pos;
@@ -232,8 +226,6 @@ namespace MirrorsEdgeTweaks.Services
             }
             return (nOff, nSz);
         }
-
-        // Name table reader
 
         public static List<string> ReadNameTable(byte[] data, PackageHeader hdr)
         {

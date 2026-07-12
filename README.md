@@ -2,7 +2,7 @@
 
 A tool for modding, tweaking settings and providing game fixes for Mirror's Edge.
 
-![Version](https://img.shields.io/badge/version-4.4.2-blue.svg)
+![Version](https://img.shields.io/badge/version-4.5.0-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)
@@ -69,6 +69,9 @@ dotnet restore
 
 # Build the solution
 dotnet build --configuration Release
+
+# Run the tests
+dotnet test --configuration Release
 
 # The executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/
 ```

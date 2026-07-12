@@ -17,6 +17,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private const string CinematicModelUrl = DownloadUrls.AssetBase + "FaithModelCinematic.zip";
 
         private readonly IDialogService _dialogService;
+        private readonly IDownloadService _download;
         private readonly GameSession _session;
 
         private bool _isLoading;
@@ -25,27 +26,35 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public CommunityModsViewModel(
             IDialogService dialogService,
+            IDownloadService download,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
             : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
+            _download = download;
             _session = session;
         }
 
-        partial void OnCinematicFaithIndexChanged(int value) => _ = OnCinematicFaithChangedAsync(value);
+        partial void OnCinematicFaithIndexChanged(int oldValue, int newValue) => _ = OnCinematicFaithChangedAsync(oldValue, newValue);
 
-        private async Task OnCinematicFaithChangedAsync(int value)
+        private async Task OnCinematicFaithChangedAsync(int previousIndex, int value)
         {
             if (_isLoading || value < 0)
                 return;
+
+            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            {
+                SetSilently(() => CinematicFaithIndex = previousIndex);
+                return;
+            }
 
             bool enabled = value == 1;
 
             if (enabled)
             {
-                string tdGamePath = Path.Combine(_session.Config.GameDirectoryPath!, "TdGame", "CookedPC", "TdGame.u");
+                string tdGamePath = Path.Combine(_session.Config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
                 if (File.Exists(tdGamePath))
                 {
                     string tdGameVersion = TdGameVersionDetector.DetectTdGameVersion(tdGamePath);
@@ -72,6 +81,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply Cinematic Faith Model setting: {ex.Message}", DialogMessageType.Error);
+
+                // The model swap did not complete; re-detect the installed variant from disk so
+                // the combo reflects reality (falls back to the prior selection if undetectable).
+                SetSilently(() => CinematicFaithIndex = previousIndex);
+                RefreshCinematicFaith();
             }
             finally
             {
@@ -88,41 +102,16 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                using (HttpClient client = new HttpClient())
+                _gameStatus.Status = "Downloading Cinematic Faith Model files...";
+                _downloadProgress.IsDownloadProgressIndeterminate = false;
+                _downloadProgress.IsDownloadProgressVisible = true;
+
+                var report = CreateThrottledProgressReporter();
+                await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
                 {
-                    client.Timeout = TimeSpan.FromMinutes(10);
-
-                    _gameStatus.Status = "Downloading Cinematic Faith Model files...";
-                    _downloadProgress.IsDownloadProgressIndeterminate = false;
-                    _downloadProgress.IsDownloadProgressVisible = true;
-
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                    {
-                        response.EnsureSuccessStatusCode();
-                        long? totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var contentStream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                        {
-                            var buffer = new byte[8192];
-                            long totalRead = 0;
-                            int bytesRead;
-                            var report = CreateThrottledProgressReporter();
-
-                            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                            {
-                                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                totalRead += bytesRead;
-
-                                if (totalBytes.HasValue)
-                                {
-                                    double progress = (double)totalRead / totalBytes.Value * 100;
-                                    report(progress, $"Downloading Cinematic Faith Model files... {progress:F0}%");
-                                }
-                            }
-                        }
-                    }
-                }
+                    if (p >= 0)
+                        report(p, $"Downloading Cinematic Faith Model files... {p:F0}%");
+                });
 
                 _gameStatus.Status = "Extracting Cinematic Faith Model files...";
                 _downloadProgress.IsDownloadProgressIndeterminate = true;

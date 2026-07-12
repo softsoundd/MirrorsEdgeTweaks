@@ -6,6 +6,8 @@
         xmlns:local="clr-namespace:MirrorsEdgeTweaks"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:behaviors="clr-namespace:MirrorsEdgeTweaks.Behaviors"
+        xmlns:controls="clr-namespace:MirrorsEdgeTweaks.Controls"
+        xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
         mc:Ignorable="d"
         Style="{StaticResource MaterialDesignWindow}"
         Background="{DynamicResource MaterialDesignPaper}"
@@ -17,6 +19,43 @@
         ResizeMode="CanMinimize"
         IsEnabled="{Binding GameStatus.IsUiEnabled}"
         WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Shared row template for all keybind entries (Custom / Cheat-Trainer / Macro sections).
+             Replaces the 19 previously copy-pasted per-keybind grids. -->
+        <DataTemplate x:Key="KeybindRowTemplate">
+            <Grid Margin="0,15,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
+                <TextBox Grid.Column="1" Text="{Binding DisplayKey, Mode=OneWay}"
+                         VerticalAlignment="Center"
+                         Style="{StaticResource MaterialDesignTextBox}"
+                         Foreground="Black"
+                         materialDesign:HintAssist.Hint="Click to set keybind"
+                         IsReadOnly="True"
+                         IsReadOnlyCaretVisible="False"
+                         Focusable="False"
+                         Cursor="Hand">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="PreviewMouseLeftButtonDown">
+                            <b:InvokeCommandAction Command="{Binding CaptureCommand}"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                </TextBox>
+                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
+                        ToolTip="Information"
+                        Margin="5,0,0,0"
+                        Command="{Binding ShowInfoCommand}">
+                    <materialDesign:PackIcon Kind="Information" />
+                </Button>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
 
     <materialDesign:DialogHost Identifier="RootDialog">
     <Grid Margin="10">
@@ -709,7 +748,7 @@
                                                     ToolTip="Information"
                                                     Margin="5,0,0,0"
                                                     VerticalAlignment="Center"
-                                                    Command="{Binding Graphics.ShowFovInfoCommand}">
+                                                    Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="Fov">
                                                 <materialDesign:PackIcon Kind="Information" />
                                             </Button>
                                         </StackPanel>
@@ -759,7 +798,7 @@
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
                                         VerticalAlignment="Center"
-                                        Command="{Binding Graphics.ShowHighResFixInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="HighResFix">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -784,35 +823,18 @@
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowRenderResolutionInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="RenderResolution">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
 
                             <!-- VSync -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="VSync:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.VSync.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="VSync:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="VSync">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.VSync.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowVSyncInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- FPS Limit -->
                             <StackPanel Margin="0,20,0,0">
@@ -842,7 +864,7 @@
                                             ToolTip="Information"
                                             Margin="5,0,0,0"
                                             VerticalAlignment="Center"
-                                            Command="{Binding Graphics.ShowFpsLimitInfoCommand}">
+                                            Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="FpsLimit">
                                         <materialDesign:PackIcon Kind="Information" />
                                     </Button>
                                 </Grid>
@@ -858,19 +880,8 @@
                             </StackPanel>
 
                             <!-- Anti-Aliasing -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Anti-Aliasing:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.AntiAliasingIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Anti-Aliasing:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="AntiAliasing">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.AntiAliasingIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
                                     <ComboBoxItem Content="4x"/>
@@ -878,38 +889,15 @@
                                     <ComboBoxItem Content="8xQ"/>
                                     <ComboBoxItem Content="16xQ"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowAntiAliasingInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- PhysX -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="PhysX:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.PhysX.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="PhysX:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="PhysX">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.PhysX.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowPhysXInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- PhysX FPS -->
                             <Grid Margin="0,15,0,0">
@@ -932,7 +920,7 @@
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowPhysXFpsInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="PhysXFps">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -972,7 +960,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowTextureDetailInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="TextureDetail">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1000,7 +988,7 @@
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
                                         Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowGraphicsQualityInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="GraphicsQuality">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1017,357 +1005,119 @@
                                        FontSize="12" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
 
                             <!-- Anisotropic Filtering -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Anisotropic Filtering:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.Anisotropic.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Anisotropic Filtering:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="AnisotropicFiltering">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.Anisotropic.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Off"/>
                                     <ComboBoxItem Content="2x"/>
                                     <ComboBoxItem Content="4x"/>
                                     <ComboBoxItem Content="8x"/>
                                     <ComboBoxItem Content="16x"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowAnisotropicFilteringInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Static Decals -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Static Decals:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.StaticDecals.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Static Decals:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="StaticDecals">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.StaticDecals.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowStaticDecalsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Dynamic Decals -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Dynamic Decals:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.DynamicDecals.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Decals:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicDecals">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicDecals.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowDynamicDecalsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Radial Blur -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Radial Blur:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.RadialBlur.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Radial Blur:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="RadialBlur">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.RadialBlur.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowRadialBlurInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Streak Effect -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Streak Effect:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.StreakEffectIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Streak Effect:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="StreakEffect">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.StreakEffectIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowStreakEffectInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Bloom & DoF -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Bloom &amp; DoF:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.BloomDoF.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Bloom &amp; DoF:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="BloomDoF">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.BloomDoF.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowBloomDoFInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Lens Flare -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Lens Flare:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.LensFlare.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Lens Flare:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="LensFlare">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.LensFlare.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowLensFlareInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Dynamic Lights -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Dynamic Lights:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.DynamicLights.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Lights:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicLights">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicLights.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowDynamicLightsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Dynamic Shadows -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Dynamic Shadows:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.DynamicShadows.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Shadows:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicShadows">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicShadows.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowDynamicShadowsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- HQ Dynamic Shadows -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="HQ Dynamic Shadows:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.HqDynamicShadows.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="HQ Dynamic Shadows:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="HqDynamicShadows">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.HqDynamicShadows.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowHqDynamicShadowsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Lightmaps -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Lightmaps:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.Lightmaps.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Lightmaps:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="Lightmaps">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.Lightmaps.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowLightmapsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Sun Haze -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Sun Haze:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.SunHaze.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Sun Haze:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="SunHaze">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.SunHaze.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowSunHazeInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Tone Mapping -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Tone Mapping:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.ToneMapping.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Tone Mapping:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ToneMapping">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ToneMapping.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
                                     <ComboBoxItem Content="Disabled"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowToneMappingInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Texture Management -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Texture Management:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.TextureManagement.Index, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Texture Management:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="TextureManagement">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.TextureManagement.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Modern"/>
                                     <ComboBoxItem Content="Default"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowTextureManagementInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
@@ -1400,7 +1150,7 @@
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Command="{Binding Graphics.ShowMinLodInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="MinLod">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1427,7 +1177,7 @@
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Command="{Binding Graphics.ShowMaxLodInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="MaxLod">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1454,7 +1204,7 @@
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
                                         ToolTip="Information"
-                                        Command="{Binding Graphics.ShowLodBiasInfoCommand}">
+                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="LodBias">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
@@ -1469,29 +1219,12 @@
                             </Border>
 
                             <!-- Tone Mapper -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Tone Mapper:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.ToneMapperIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Tone Mapper:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ToneMapper">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ToneMapperIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Original"/>
                                     <ComboBoxItem Content="Faithful Luma"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Graphics.ShowToneMapperInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">
@@ -1554,55 +1287,19 @@
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Mouse Smoothing:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Input.MouseSmoothingIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Mouse Smoothing:" Foreground="Black" InfoCommand="{Binding Input.ShowMouseSmoothingInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Input.MouseSmoothingIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Input.ShowMouseSmoothingInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                             
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Uniform Sensitivity:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Input.UniformSensitivityIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Uniform Sensitivity:" Foreground="Black" InfoCommand="{Binding Input.ShowUniformSensitivityInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Input.UniformSensitivityIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Input.ShowUniformSensitivityInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                             
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
@@ -1646,30 +1343,12 @@
                                 </Button>
                             </Grid>
                             
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Gamepad Buttons:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1" 
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Input.GamepadButtonsIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Gamepad Buttons:" Foreground="Black" InfoCommand="{Binding Input.ShowGamepadButtonsInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Input.GamepadButtonsIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Xbox" Foreground="Black"/>
                                     <ComboBoxItem Content="PS3" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Input.ShowGamepadButtonsInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                             
                             <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
@@ -1681,329 +1360,7 @@
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <!-- Restart Level Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Restart Level:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="RestartLevelKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.RestartLevel.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.RestartLevel.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Load Last Checkpoint Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Load Last Checkpoint:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LoadLastCheckpointKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LoadLastCheckpoint.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.LoadLastCheckpoint.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Restart Time Trial Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Restart Time Trial:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="RestartTimeTrialKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.RestartTimeTrial.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.RestartTimeTrial.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Reset Reaction Time Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Reset Reaction Time:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ResetReactionTimeKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ResetReactionTime.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ResetReactionTime.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- God Mode Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="God Mode:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="GodModeKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.GodMode.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.GodMode.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Kill Bots Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Kill Bots:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="KillBotsKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.KillBots.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.KillBots.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Third Person Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Third Person:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ThirdPersonKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ThirdPerson.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ThirdPerson.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Toggle HUD Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Toggle HUD:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ToggleHUDKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ToggleHUD.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ToggleHUD.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- FPS Indicator Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="FPS Indicator:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="FPSIndicatorKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.FPSIndicator.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.FPSIndicator.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Level Stats Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Level Stats:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LevelStatsKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LevelStats.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.LevelStats.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Triggers & Volumes Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Triggers &amp; Volumes:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="TriggersVolumesKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.TriggersVolumes.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.TriggersVolumes.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Show Collision Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Show Collision:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ShowCollisionKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ShowCollision.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ShowCollision.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Keybinds.CustomKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
                             
                             <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
@@ -2015,140 +1372,7 @@
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <!-- Noclip Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Noclip:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="NoclipKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.Noclip.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.Noclip.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Save State Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Save State:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="SaveStateKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.SaveState.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.SaveState.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Load Saved State Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Load Saved State:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="LoadSavedStateKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.LoadSavedState.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.LoadSavedState.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Save Timer Location Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Save Timer Location:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="SaveTimerLocationKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.SaveTimerLocation.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.SaveTimerLocation.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-                            
-                            <!-- Delete Viewed Actor Keybind -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Delete Viewed Actor:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="DeleteViewedActorKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.DeleteViewedActor.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.DeleteViewedActor.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Keybinds.CheatTrainerKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
@@ -2159,59 +1383,7 @@
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
 
-                            <!-- Scroll Down Macro Key -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Scroll Down Macro Key:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ScrollDownMacroKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ScrollDownMacro.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ScrollDownMacro.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
-
-                            <!-- Scroll Up Macro Key -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Scroll Up Macro Key:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <TextBox x:Name="ScrollUpMacroKeyTextBox" Grid.Column="1" Text="{Binding Keybinds.ScrollUpMacro.DisplayKey, Mode=OneWay}" 
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         Foreground="Black"
-                                         materialDesign:HintAssist.Hint="Click to set keybind"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="False"
-                                         Focusable="False"
-                                         Cursor="Hand"
-                                         PreviewMouseLeftButtonDown="KeybindField_Click"/>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Keybinds.ScrollUpMacro.ShowInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Keybinds.MacroKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
                             
                             <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
@@ -2224,106 +1396,38 @@
                             </Border>
                             
                             <!-- Intro Video Setting -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Intro Video:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Init.IntroVideoIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Intro Video:" Foreground="Black" InfoCommand="{Binding Init.ShowIntroVideoInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.IntroVideoIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Init.ShowIntroVideoInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                             
                             <!-- Main Menu Delay Setting -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Main Menu Delay:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Init.MainMenuDelayIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Main Menu Delay:" Foreground="Black" InfoCommand="{Binding Init.ShowMainMenuDelayInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.MainMenuDelayIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Init.ShowMainMenuDelayInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                             
                             <!-- Time Trial Countdown Setting -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Time Trial Countdown:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Init.TimeTrialCountdownIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Time Trial Countdown:" Foreground="Black" InfoCommand="{Binding Init.ShowTimeTrialCountdownInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.TimeTrialCountdownIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="4 seconds (default)" Foreground="Black"/>
                                     <ComboBoxItem Content="3 seconds ('Ready' message starts sooner)" Foreground="Black"/>
                                     <ComboBoxItem Content="2 seconds (starts on 'Set' message)" Foreground="Black"/>
                                     <ComboBoxItem Content="1 second (starts on 'Go' message)" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Init.ShowTimeTrialCountdownInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <!-- Skip Online Check Setting -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Skip Online Check:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding Init.SkipOnlineIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Skip Online Check:" Foreground="Black" InfoCommand="{Binding Init.ShowSkipOnlineCheckInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.SkipOnlineIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding Init.ShowSkipOnlineCheckInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
@@ -2335,29 +1439,12 @@
                             </Border>
 
                             <!-- Cinematic Faith Model Setting -->
-                            <Grid Margin="0,15,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Cinematic Faith Model:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0" Foreground="Black"/>
-                                <ComboBox Grid.Column="1"                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          Foreground="Black"
-                                          SelectedIndex="{Binding CommunityMods.CinematicFaithIndex, Mode=TwoWay}"
->
+                            <controls:SettingRow Margin="0,15,0,0" Label="Cinematic Faith Model:" Foreground="Black" InfoCommand="{Binding CommunityMods.ShowCinematicFaithInfoCommand}">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding CommunityMods.CinematicFaithIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
-                                        Margin="5,0,0,0"
-                                        Command="{Binding CommunityMods.ShowCinematicFaithInfoCommand}">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">

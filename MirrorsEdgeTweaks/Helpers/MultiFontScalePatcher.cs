@@ -183,9 +183,17 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             byte[] data = File.ReadAllBytes(exePath);
             if (OoaService.HasOoaSection(data))
+            {
                 data = PatchUtility.ApplyUnderOoa(data, img => ApplyToImage(img, "ea"));
+            }
             else
-                data = ApplyToImage(data, ExeVersionDetector.DetectVersion(data, exePath) ?? "gog");
+            {
+                // An unrecognised exe must not be patched with a guessed tag: the cave version tag
+                // drives later detection/reapply logic, and a wrong tag corrupts that pipeline.
+                string version = ExeVersionDetector.DetectVersion(data, exePath)
+                    ?? throw new InvalidOperationException("Unknown or unsupported MirrorsEdge.exe version; cannot apply the HUD text fix.");
+                data = ApplyToImage(data, version);
+            }
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
 

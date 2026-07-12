@@ -36,6 +36,19 @@
                 "${workspaceFolder}/MirrorsEdgeTweaks.slnx"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "test",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "test",
+                "${workspaceFolder}/MirrorsEdgeTweaks.slnx",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": "test",
+            "problemMatcher": "$msCompile"
         }
     ]
 }

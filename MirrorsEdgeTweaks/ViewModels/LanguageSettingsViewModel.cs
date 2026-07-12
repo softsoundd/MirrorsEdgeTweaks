@@ -34,6 +34,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         };
 
         private readonly IDialogService _dialogService;
+        private readonly IDownloadService _download;
         private readonly GameSession _session;
         private readonly GraphicsTweaksViewModel _graphics;
 
@@ -43,6 +44,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public LanguageSettingsViewModel(
             IDialogService dialogService,
+            IDownloadService download,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -50,6 +52,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             : base(gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
+            _download = download;
             _session = session;
             _graphics = graphics;
         }
@@ -113,21 +116,42 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        partial void OnSelectedLanguageIndexChanged(int value) => _ = OnLanguageChangedAsync(value);
-
-        private async Task OnLanguageChangedAsync(int value)
+        private void SetLanguageIndexSilently(int index)
         {
-            if (value < 0 || _isLoading || string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            _isLoading = true;
+            try
+            {
+                SelectedLanguageIndex = index;
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+
+        partial void OnSelectedLanguageIndexChanged(int oldValue, int newValue) => _ = OnLanguageChangedAsync(oldValue, newValue);
+
+        private async Task OnLanguageChangedAsync(int previousIndex, int value)
+        {
+            if (value < 0 || _isLoading)
                 return;
 
-            if (value >= LanguageNames.Length)
+            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath) || value >= LanguageNames.Length)
+            {
+                SetLanguageIndexSilently(previousIndex);
                 return;
+            }
 
             string language = LanguageNames[value];
 
             var languageConfig = GetLanguageConfig(language);
             if (languageConfig == null)
+            {
+                SetLanguageIndexSilently(previousIndex);
                 return;
+            }
+
+            bool switched = false;
 
             _gameStatus.IsUiEnabled = false;
 
@@ -191,8 +215,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                         if (!modified)
                         {
-                            _dialogService.ShowMessage("Error", "TdEngine.ini file is corrupted.", DialogMessageType.Error);
-                            return;
+                            // Thrown (not shown) here: this runs on a background thread, and a
+                            // corrupted INI must also abort the language-pack download below.
+                            throw new InvalidDataException("TdEngine.ini file is corrupted (no Language= entry found).");
                         }
 
                         FileAttributes attributes = File.GetAttributes(tdEnginePath);
@@ -214,6 +239,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 await DownloadAndExtractLanguageFiles(languageConfig.DownloadUrl);
 
+                switched = true;
                 _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);
             }
             catch (System.Security.SecurityException)
@@ -233,6 +259,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             finally
             {
+                if (!switched)
+                {
+                    // The switch did not complete, so put the combo back on the language that is
+                    // still configured rather than leaving it on the failed selection.
+                    SetLanguageIndexSilently(previousIndex);
+                }
                 _gameStatus.IsUiEnabled = true;
             }
         }
@@ -381,55 +413,20 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string tempZipPath = Path.Combine(Path.GetTempPath(), $"MELanguage_{Guid.NewGuid()}.zip");
                 string extractPath = _session.Config.GameDirectoryPath;
 
-                using (var client = new HttpClient())
+                await dispatcher.InvokeAsync(() =>
                 {
-                    using (var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-                    {
-                        response.EnsureSuccessStatusCode();
+                    _downloadProgress.IsDownloadProgressIndeterminate = false;
+                    _downloadProgress.DownloadProgressValue = 0;
+                    _downloadProgress.IsDownloadProgressVisible = true;
+                    _gameStatus.Status = "Downloading language files...";
+                });
 
-                        var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-                        var canReportProgress = totalBytes != -1;
-
-                        await using (var contentStream = await response.Content.ReadAsStreamAsync())
-                        await using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                        {
-                            var totalRead = 0L;
-                            var buffer = new byte[8192];
-                            var isMoreToRead = true;
-                            var report = CreateThrottledProgressReporter();
-
-                            await dispatcher.InvokeAsync(() =>
-                            {
-                                _downloadProgress.IsDownloadProgressIndeterminate = false;
-                                _downloadProgress.DownloadProgressValue = 0;
-                                _downloadProgress.IsDownloadProgressVisible = true;
-                                _gameStatus.Status = "Downloading language files...";
-                            });
-
-                            do
-                            {
-                                var read = await contentStream.ReadAsync(buffer, 0, buffer.Length);
-                                if (read == 0)
-                                {
-                                    isMoreToRead = false;
-                                }
-                                else
-                                {
-                                    await fileStream.WriteAsync(buffer, 0, read);
-
-                                    totalRead += read;
-
-                                    if (canReportProgress)
-                                    {
-                                        var progressPercentage = (double)totalRead / totalBytes * 100;
-                                        report(progressPercentage, $"Downloading language files... {progressPercentage:F0}%");
-                                    }
-                                }
-                            }
-                            while (isMoreToRead);
-                        }
-                    }
-                }
+                var report = CreateThrottledProgressReporter();
+                await _download.DownloadToFileAsync(url, tempZipPath, p =>
+                {
+                    if (p >= 0)
+                        report(p, $"Downloading language files... {p:F0}%");
+                });
 
                 await dispatcher.InvokeAsync(() =>
                 {

@@ -192,12 +192,14 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private static bool TryReadHashResource(byte[] buffer, out HashResourceLayout layout)
         {
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
-            if (!image.TryGetResourceDirectory(out ResourceDirectoryLocation resourceDirectory))
+            PeImageLayout image = PeImageLayout.Parse(buffer);
+            if (image.ResourceDirectoryRva == 0 || image.ResourceDirectorySize == 0)
             {
                 layout = default;
                 return false;
             }
+
+            var resourceDirectory = new ResourceDirectoryLocation(image.RvaToOffset(image.ResourceDirectoryRva));
 
             if (!TryFindResourceData(buffer, resourceDirectory, HashResourceId, out ResourceDataEntry dataEntry))
             {
@@ -307,26 +309,7 @@ namespace MirrorsEdgeTweaks.Helpers
         }
 
         private static void WriteAllBytesPreservingAttributes(string path, byte[] content)
-        {
-            FileAttributes attributes = File.GetAttributes(path);
-            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-            if (wasReadOnly)
-            {
-                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
-            }
-
-            try
-            {
-                File.WriteAllBytes(path, content);
-            }
-            finally
-            {
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(path, attributes);
-                }
-            }
-        }
+            => PatchUtility.WritePreservingAttributes(path, content);
 
         private static ReadOnlySpan<byte> ReadSpan(byte[] buffer, int offset, int length)
         {
@@ -348,25 +331,6 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             ReadOnlySpan<byte> span = ReadSpan(buffer, offset, sizeof(uint));
             return (uint)(span[0] | (span[1] << 8) | (span[2] << 16) | (span[3] << 24));
-        }
-
-        private static ulong ReadUInt64(byte[] buffer, int offset)
-        {
-            ReadOnlySpan<byte> span = ReadSpan(buffer, offset, sizeof(ulong));
-            return
-                span[0] |
-                ((ulong)span[1] << 8) |
-                ((ulong)span[2] << 16) |
-                ((ulong)span[3] << 24) |
-                ((ulong)span[4] << 32) |
-                ((ulong)span[5] << 40) |
-                ((ulong)span[6] << 48) |
-                ((ulong)span[7] << 56);
-        }
-
-        private static int ReadInt32(byte[] buffer, int offset)
-        {
-            return unchecked((int)ReadUInt32(buffer, offset));
         }
 
         private readonly struct HashResourceLayout
@@ -433,140 +397,5 @@ namespace MirrorsEdgeTweaks.Helpers
             public uint Size { get; }
         }
 
-        private sealed class ExecutableImageLayout
-        {
-            private readonly List<SectionInfo> _sections;
-
-            private ExecutableImageLayout(List<SectionInfo> sections, uint resourceDirectoryRva, uint resourceDirectorySize)
-            {
-                _sections = sections;
-                ResourceDirectoryRva = resourceDirectoryRva;
-                ResourceDirectorySize = resourceDirectorySize;
-            }
-
-            public uint ResourceDirectoryRva { get; }
-            public uint ResourceDirectorySize { get; }
-
-            public static ExecutableImageLayout Parse(byte[] buffer)
-            {
-                const int peSignatureOffset = 0x3C;
-                const int peHeaderSize = 24;
-                const int pe32DataDirectoryOffset = 96;
-                const int pe64DataDirectoryOffset = 112;
-                const int imageDirectoryEntrySize = 8;
-
-                if (buffer.Length < 0x40 || buffer[0] != 'M' || buffer[1] != 'Z')
-                {
-                    throw new InvalidDataException("The selected file is not a valid PE executable.");
-                }
-
-                int peHeaderOffset = ReadInt32(buffer, peSignatureOffset);
-                if (peHeaderOffset < 0 || checked(peHeaderOffset + peHeaderSize) > buffer.Length)
-                {
-                    throw new InvalidDataException("The selected executable has an invalid PE header.");
-                }
-
-                if (!ReadSpan(buffer, peHeaderOffset, 4).SequenceEqual(new byte[] { 0x50, 0x45, 0x00, 0x00 }))
-                {
-                    throw new InvalidDataException("The selected executable has an invalid PE signature.");
-                }
-
-                ushort sectionCount = ReadUInt16(buffer, checked(peHeaderOffset + 6));
-                ushort optionalHeaderSize = ReadUInt16(buffer, checked(peHeaderOffset + 20));
-                int optionalHeaderOffset = checked(peHeaderOffset + peHeaderSize);
-                int optionalHeaderEnd = checked(optionalHeaderOffset + optionalHeaderSize);
-                if (optionalHeaderEnd > buffer.Length)
-                {
-                    throw new InvalidDataException("The selected executable has an incomplete optional header.");
-                }
-
-                ushort optionalHeaderMagic = ReadUInt16(buffer, optionalHeaderOffset);
-                int dataDirectoryOffset = optionalHeaderMagic switch
-                {
-                    0x10B => checked(optionalHeaderOffset + pe32DataDirectoryOffset),
-                    0x20B => checked(optionalHeaderOffset + pe64DataDirectoryOffset),
-                    _ => throw new InvalidDataException("Unsupported PE optional header format.")
-                };
-
-                int requiredDataDirectoryBytes = checked((ResourceDirectoryIndex + 1) * imageDirectoryEntrySize);
-                if (checked(dataDirectoryOffset + requiredDataDirectoryBytes) > optionalHeaderEnd)
-                {
-                    throw new InvalidDataException("The selected executable does not expose the resource directory entry.");
-                }
-
-                uint resourceDirectoryRva = ReadUInt32(buffer, checked(dataDirectoryOffset + (ResourceDirectoryIndex * imageDirectoryEntrySize)));
-                uint resourceDirectorySize = ReadUInt32(buffer, checked(dataDirectoryOffset + (ResourceDirectoryIndex * imageDirectoryEntrySize) + 4));
-
-                int sectionTableOffset = checked(optionalHeaderOffset + optionalHeaderSize);
-                int requiredSectionBytes = checked(sectionCount * 40);
-                if (checked(sectionTableOffset + requiredSectionBytes) > buffer.Length)
-                {
-                    throw new InvalidDataException("The executable section table is incomplete.");
-                }
-
-                List<SectionInfo> sections = new List<SectionInfo>(sectionCount);
-                for (int index = 0; index < sectionCount; index++)
-                {
-                    int sectionOffset = checked(sectionTableOffset + (index * 40));
-                    sections.Add(new SectionInfo(
-                        ReadUInt32(buffer, checked(sectionOffset + 12)),
-                        ReadUInt32(buffer, checked(sectionOffset + 8)),
-                        ReadUInt32(buffer, checked(sectionOffset + 20)),
-                        ReadUInt32(buffer, checked(sectionOffset + 16))));
-                }
-
-                return new ExecutableImageLayout(sections, resourceDirectoryRva, resourceDirectorySize);
-            }
-
-            public bool TryGetResourceDirectory(out ResourceDirectoryLocation directory)
-            {
-                if (ResourceDirectoryRva == 0 || ResourceDirectorySize == 0)
-                {
-                    directory = default;
-                    return false;
-                }
-
-                directory = new ResourceDirectoryLocation(RvaToOffset(ResourceDirectoryRva));
-                return true;
-            }
-
-            public int RvaToOffset(uint rva)
-            {
-                SectionInfo section = FindSectionByRva(rva);
-                return checked((int)(section.PointerToRawData + (rva - section.VirtualAddress)));
-            }
-
-            private SectionInfo FindSectionByRva(uint rva)
-            {
-                foreach (SectionInfo section in _sections)
-                {
-                    uint size = Math.Max(section.VirtualSize, section.SizeOfRawData);
-                    uint start = section.VirtualAddress;
-                    uint end = start + size;
-                    if (rva >= start && rva < end)
-                    {
-                        return section;
-                    }
-                }
-
-                throw new InvalidDataException($"Could not map RVA 0x{rva:X} into a PE section.");
-            }
-        }
-
-        private readonly struct SectionInfo
-        {
-            public SectionInfo(uint virtualAddress, uint virtualSize, uint pointerToRawData, uint sizeOfRawData)
-            {
-                VirtualAddress = virtualAddress;
-                VirtualSize = virtualSize;
-                PointerToRawData = pointerToRawData;
-                SizeOfRawData = sizeOfRawData;
-            }
-
-            public uint VirtualAddress { get; }
-            public uint VirtualSize { get; }
-            public uint PointerToRawData { get; }
-            public uint SizeOfRawData { get; }
-        }
     }
 }

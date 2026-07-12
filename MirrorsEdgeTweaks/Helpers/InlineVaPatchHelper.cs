@@ -2,65 +2,71 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    public enum MultiInstancePatchState
+    public enum InlinePatchState
     {
         Unknown,
         Unpatched,
         Patched
     }
 
-    public static class MultiInstancePatchHelper
+    // Shared implementation for the simple inline byte patches defined per game version in the
+    // VersionAddressTable "inlinePatches" section (multi-instance bypass, ambiguous-package
+    // bypass). Handles version detection, OOA (EA) transparency, pre-write byte verification and
+    // attribute-preserving writes; the per-feature classes this replaces were ~98% identical.
+    public static class InlineVaPatchHelper
     {
-        private const uint ImageBase = 0x00400000;
-        private const string PatchKey = "multiInstance_bypass";
+        public const string MultiInstanceKey = "multiInstance_bypass";
+        public const string AmbiguousPackageKey = "ambiguousPackage_bypass";
 
-        public static MultiInstancePatchState GetPatchState(string exePath)
+        private const uint ImageBase = 0x00400000;
+
+        public static InlinePatchState GetPatchState(string exePath, string patchKey)
         {
             byte[] data = File.ReadAllBytes(exePath);
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
-            if (version == null) return MultiInstancePatchState.Unknown;
+            if (version == null) return InlinePatchState.Unknown;
 
             if (version == "ea")
             {
                 try { PatchUtility.DecryptOoaInPlace(data); }
-                catch { return MultiInstancePatchState.Unknown; }
+                catch { return InlinePatchState.Unknown; }
             }
 
             VersionAddressTable addrs;
             try { addrs = VersionAddressTable.Load(version); }
-            catch { return MultiInstancePatchState.Unknown; }
+            catch { return InlinePatchState.Unknown; }
 
-            if (!addrs.InlinePatches.TryGetValue(PatchKey, out var patch))
-                return MultiInstancePatchState.Unknown;
+            if (!addrs.InlinePatches.TryGetValue(patchKey, out var patch))
+                return InlinePatchState.Unknown;
 
             int offset = (int)(patch.Va - ImageBase);
             if (offset < 0 || offset + patch.OldBytes.Length > data.Length)
-                return MultiInstancePatchState.Unknown;
+                return InlinePatchState.Unknown;
 
             if (data.AsSpan(offset, patch.OldBytes.Length).SequenceEqual(patch.OldBytes))
-                return MultiInstancePatchState.Unpatched;
+                return InlinePatchState.Unpatched;
 
             if (patch.NewBytes.Length > 0 &&
                 data.AsSpan(offset, patch.NewBytes.Length).SequenceEqual(patch.NewBytes))
-                return MultiInstancePatchState.Patched;
+                return InlinePatchState.Patched;
 
-            return MultiInstancePatchState.Unknown;
+            return InlinePatchState.Unknown;
         }
 
-        public static void ApplyPatch(string exePath)
+        public static void ApplyPatch(string exePath, string patchKey)
         {
             byte[] data = File.ReadAllBytes(exePath);
 
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
             if (version == null)
-                throw new InvalidOperationException("Unrecognized executable -- cannot detect game version.");
+                throw new InvalidOperationException("Unrecognized executable - cannot detect game version.");
 
             bool isOoa = version == "ea";
             PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
             var addrs = VersionAddressTable.Load(version);
-            if (!addrs.InlinePatches.TryGetValue(PatchKey, out var patch))
-                throw new InvalidOperationException($"No {PatchKey} patch defined for version '{version}'.");
+            if (!addrs.InlinePatches.TryGetValue(patchKey, out var patch))
+                throw new InvalidOperationException($"No {patchKey} patch defined for version '{version}'.");
 
             int offset = (int)(patch.Va - ImageBase);
             if (offset < 0 || offset + patch.OldBytes.Length > data.Length)
@@ -71,7 +77,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 return;
             if (!site.SequenceEqual(patch.OldBytes))
                 throw new InvalidOperationException(
-                    $"Unexpected bytes at patch site 0x{patch.Va:X8} -- executable may be modified.");
+                    $"Unexpected bytes at patch site 0x{patch.Va:X8} - executable may be modified.");
 
             Buffer.BlockCopy(patch.NewBytes, 0, data, offset, patch.NewBytes.Length);
 
@@ -81,7 +87,7 @@ namespace MirrorsEdgeTweaks.Helpers
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
-        public static void RemovePatch(string exePath)
+        public static void RemovePatch(string exePath, string patchKey)
         {
             byte[] data = File.ReadAllBytes(exePath);
 
@@ -100,7 +106,7 @@ namespace MirrorsEdgeTweaks.Helpers
             try { addrs = VersionAddressTable.Load(version); }
             catch { return; }
 
-            if (!addrs.InlinePatches.TryGetValue(PatchKey, out var patch))
+            if (!addrs.InlinePatches.TryGetValue(patchKey, out var patch))
                 return;
 
             int offset = (int)(patch.Va - ImageBase);

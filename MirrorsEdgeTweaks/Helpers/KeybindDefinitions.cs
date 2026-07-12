@@ -48,12 +48,10 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static readonly Dictionary<string, string> Ue3KeyMap = new Dictionary<string, string>
         {
-            // Function keys
             { "F1", "F1" }, { "F2", "F2" }, { "F3", "F3" }, { "F4", "F4" },
             { "F5", "F5" }, { "F6", "F6" }, { "F7", "F7" }, { "F8", "F8" },
             { "F9", "F9" }, { "F10", "F10" }, { "F11", "F11" }, { "F12", "F12" },
-            
-            // Special keys
+
             { "Escape", "Escape" }, { "Tab", "Tab" }, { "OemTilde", "Tilde" },
             { "Scroll", "ScrollLock" }, { "Pause", "Pause" },
             { "D1", "ONE" }, { "D2", "TWO" }, { "D3", "THREE" }, { "D4", "FOUR" },

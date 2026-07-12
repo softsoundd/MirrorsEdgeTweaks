@@ -12,10 +12,10 @@
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		
 		<!-- Version Information -->
-		<Version>4.4.2</Version>
-		<AssemblyVersion>4.4.2.0</AssemblyVersion>
-		<FileVersion>4.4.2.0</FileVersion>
-		<InformationalVersion>4.4.2</InformationalVersion>
+		<Version>4.5.0</Version>
+		<AssemblyVersion>4.5.0.0</AssemblyVersion>
+		<FileVersion>4.5.0.0</FileVersion>
+		<InformationalVersion>4.5.0</InformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -28,7 +28,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<InternalsVisibleTo Include="Harness" />
+		<InternalsVisibleTo Include="MirrorsEdgeTweaks.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>

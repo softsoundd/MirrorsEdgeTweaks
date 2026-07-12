@@ -20,7 +20,6 @@ namespace MirrorsEdgeTweaks.Helpers
             SetAllStartups(cookedPcPath, target);
         }
 
-        // Restore the stock cursor size.
         public static void Remove(string cookedPcPath) => SetAllStartups(cookedPcPath, ArrowBaseSize);
 
         static void SetAllStartups(string cookedPcPath, int newSize)

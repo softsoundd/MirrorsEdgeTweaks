@@ -265,6 +265,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
+        // Deliberately leaves the file read-only afterwards: game config files are kept locked so
+        // the game does not overwrite user tweaks on launch.
         public static void ModifyIniFile(string filePath, string section, string key, string value)
         {
             var fileInfo = new System.IO.FileInfo(filePath);

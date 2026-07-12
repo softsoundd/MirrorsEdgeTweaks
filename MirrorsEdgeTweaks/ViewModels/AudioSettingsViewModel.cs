@@ -15,6 +15,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     {
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
+        private readonly IDownloadService _download;
         private readonly GameSession _session;
 
         private bool _isLoading;
@@ -25,6 +26,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         public AudioSettingsViewModel(
             IDialogService dialogService,
             IFileService fileService,
+            IDownloadService download,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
@@ -32,6 +34,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService = dialogService;
             _fileService = fileService;
+            _download = download;
             _session = session;
         }
 
@@ -88,17 +91,37 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        partial void OnSelectedAudioBackendIndexChanged(int value)
+        private void SetAudioBackendIndexSilently(int index)
         {
-            if (_isLoading || value < 0 || string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                return;
-
-            _ = ApplyAudioBackendAsync(value);
+            _isLoading = true;
+            try
+            {
+                SelectedAudioBackendIndex = index;
+            }
+            finally
+            {
+                _isLoading = false;
+            }
         }
 
-        private async Task ApplyAudioBackendAsync(int selectedIndex)
+        partial void OnSelectedAudioBackendIndexChanged(int oldValue, int newValue)
+        {
+            if (_isLoading || newValue < 0)
+                return;
+
+            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            {
+                SetAudioBackendIndexSilently(oldValue);
+                return;
+            }
+
+            _ = ApplyAudioBackendAsync(oldValue, newValue);
+        }
+
+        private async Task ApplyAudioBackendAsync(int previousIndex, int selectedIndex)
         {
             _gameStatus.IsUiEnabled = false;
+            bool applied = false;
 
             try
             {
@@ -195,7 +218,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             throw new Exception("Failed to find MaxChannels or DeviceName in [ALAudio.ALAudioDevice] section of TdEngine.ini");
                         }
 
-                        _fileService.WriteAllLinesPreservingReadOnly(tdEnginePath, lines);
+                        _fileService.WriteAllLinesAndLock(tdEnginePath, lines);
                     }
                     catch (FileNotFoundException)
                     {
@@ -208,6 +231,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 });
 
                 string[] backendNames = { "OpenAL (default)", "OpenAL Soft (modern)", "OpenAL Soft (HRTF)" };
+                applied = true;
                 _dialogService.ShowMessage("Success", $"Audio backend has been changed to {backendNames[selectedIndex]}.", DialogMessageType.Success);
             }
             catch (Exception ex)
@@ -216,6 +240,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             finally
             {
+                if (!applied)
+                {
+                    // Re-detect from the INI (falling back to the prior index) so the combo shows
+                    // the backend that is actually configured, not the failed selection.
+                    SetAudioBackendIndexSilently(previousIndex);
+                    RefreshAudioBackendSetting();
+                }
                 _gameStatus.IsUiEnabled = true;
             }
         }
@@ -232,53 +263,20 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string tempZipPath = Path.Combine(Path.GetTempPath(), $"MEAudioBackend_{Guid.NewGuid()}.zip");
                 string extractPath = _session.Config.GameDirectoryPath;
 
-                using (var client = new HttpClient())
-                using (var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+                await dispatcher.InvokeAsync(() =>
                 {
-                    response.EnsureSuccessStatusCode();
+                    _downloadProgress.IsDownloadProgressIndeterminate = false;
+                    _downloadProgress.DownloadProgressValue = 0;
+                    _downloadProgress.IsDownloadProgressVisible = true;
+                    _gameStatus.Status = "Downloading audio backend files...";
+                });
 
-                    var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-                    var canReportProgress = totalBytes != -1;
-
-                    await using (var contentStream = await response.Content.ReadAsStreamAsync())
-                    await using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                    {
-                        var totalRead = 0L;
-                        var buffer = new byte[8192];
-                        var isMoreToRead = true;
-                        var report = CreateThrottledProgressReporter();
-
-                        await dispatcher.InvokeAsync(() =>
-                        {
-                            _downloadProgress.IsDownloadProgressIndeterminate = false;
-                            _downloadProgress.DownloadProgressValue = 0;
-                            _downloadProgress.IsDownloadProgressVisible = true;
-                            _gameStatus.Status = "Downloading audio backend files...";
-                        });
-
-                        do
-                        {
-                            var read = await contentStream.ReadAsync(buffer, 0, buffer.Length);
-                            if (read == 0)
-                            {
-                                isMoreToRead = false;
-                            }
-                            else
-                            {
-                                await fileStream.WriteAsync(buffer, 0, read);
-
-                                totalRead += read;
-
-                                if (canReportProgress)
-                                {
-                                    var progressPercentage = (double)totalRead / totalBytes * 100;
-                                    report(progressPercentage, $"Downloading audio backend files... {progressPercentage:F0}%");
-                                }
-                            }
-                        }
-                        while (isMoreToRead);
-                    }
-                }
+                var report = CreateThrottledProgressReporter();
+                await _download.DownloadToFileAsync(url, tempZipPath, p =>
+                {
+                    if (p >= 0)
+                        report(p, $"Downloading audio backend files... {p:F0}%");
+                });
 
                 await dispatcher.InvokeAsync(() =>
                 {

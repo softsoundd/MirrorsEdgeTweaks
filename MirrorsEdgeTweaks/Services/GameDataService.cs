@@ -15,10 +15,12 @@ namespace MirrorsEdgeTweaks.Services
         event Action? PackagesReloaded;
 
         // Loads Engine.u / TdGame.u, finds all editable offsets, and raises PackagesReloaded.
-        void LoadPackages();
+        // Pass notify: false for intermediate reloads (e.g. re-finding offsets mid-operation)
+        // where the feature-VM refresh fan-out would be premature.
+        void LoadPackages(bool notify = true);
 
         // Short delay + LoadPackages on a background thread (used after on-disk patching).
-        Task ReloadPackagesAsync();
+        Task ReloadPackagesAsync(bool notify = true);
 
         // Recomputes the developer-console install status from the loaded package and config files.
         void UpdateConsoleStatus();
@@ -65,13 +67,13 @@ namespace MirrorsEdgeTweaks.Services
             else dispatcher.Invoke(action);
         }
 
-        public async Task ReloadPackagesAsync()
+        public async Task ReloadPackagesAsync(bool notify = true)
         {
             await Task.Delay(500);
-            await Task.Run(LoadPackages);
+            await Task.Run(() => LoadPackages(notify));
         }
 
-        public void LoadPackages()
+        public void LoadPackages(bool notify = true)
         {
             var config = _session.Config;
             if (string.IsNullOrEmpty(config.GameDirectoryPath)) return;
@@ -104,7 +106,8 @@ namespace MirrorsEdgeTweaks.Services
                 }
 
                 SetupEditors();
-                PackagesReloaded?.Invoke();
+                if (notify)
+                    PackagesReloaded?.Invoke();
             }
             catch (Exception ex)
             {
@@ -320,7 +323,7 @@ namespace MirrorsEdgeTweaks.Services
                 return true;
             }
 
-            _console.ConsoleStatus = "(Status: Offset not found)";
+            Dispatch(() => _console.ConsoleStatus = "(Status: Offset not found)");
             return false;
         }
 

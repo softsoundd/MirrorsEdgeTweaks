@@ -19,6 +19,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IPackageService _packageService;
         private readonly IFileService _fileService;
         private readonly IGameDataService _gameData;
+        private readonly IDownloadService _download;
         private readonly GameSession _session;
         private readonly TweaksScriptsViewModel _tweaksScripts;
 
@@ -27,6 +28,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IPackageService packageService,
             IFileService fileService,
             IGameDataService gameData,
+            IDownloadService download,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -37,6 +39,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _packageService = packageService;
             _fileService = fileService;
             _gameData = gameData;
+            _download = download;
             _session = session;
             _tweaksScripts = tweaksScripts;
         }
@@ -191,38 +194,19 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 await Task.Run(async () =>
                 {
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    var report = CreateThrottledProgressReporter();
+                    bool determinateSet = false;
+                    await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
                     {
-                        response.EnsureSuccessStatusCode();
-                        var totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        if (p < 0)
+                            return;
+                        if (!determinateSet)
                         {
-                            if (totalBytes.HasValue)
-                            {
-                                dispatcher.Invoke(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-
-                                var totalBytesRead = 0L;
-                                var buffer = new byte[8192];
-                                int bytesRead;
-                                var report = CreateThrottledProgressReporter();
-                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
-                                    var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
-
-                                    report(progress, $"Downloading Tweaks Scripts... {progress}%");
-                                }
-                            }
-                            else
-                            {
-                                await stream.CopyToAsync(fileStream);
-                            }
+                            determinateSet = true;
+                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
                         }
-                    }
+                        report(p, $"Downloading Tweaks Scripts... {p:F0}%");
+                    });
 
                     dispatcher.Invoke(() =>
                     {
@@ -457,33 +441,12 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     string tempZipPath = Path.Combine(Path.GetTempPath(), "TweaksScriptsUI.zip");
 
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    var report = CreateThrottledProgressReporter();
+                    await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
                     {
-                        response.EnsureSuccessStatusCode();
-                        long? totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var contentStream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                        {
-                            var buffer = new byte[8192];
-                            long totalRead = 0;
-                            int bytesRead;
-                            var report = CreateThrottledProgressReporter();
-
-                            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                            {
-                                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                totalRead += bytesRead;
-
-                                if (totalBytes.HasValue)
-                                {
-                                    double progress = (double)totalRead / totalBytes.Value * 100;
-                                    report(progress, $"Downloading Tweaks Scripts UI... {progress:F0}%");
-                                }
-                            }
-                        }
-                    }
+                        if (p >= 0)
+                            report(p, $"Downloading Tweaks Scripts UI... {p:F0}%");
+                    });
 
                     _gameStatus.Status = "Extracting Tweaks Scripts UI...";
                     _downloadProgress.IsDownloadProgressIndeterminate = true;
@@ -616,38 +579,22 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                     string tempZipPath = Path.Combine(Path.GetTempPath(), "MirrorsEdgeConsole.zip");
 
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(ConsoleDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    var report = CreateThrottledProgressReporter();
+                    bool determinateSet = false;
+                    await _download.DownloadToFileAsync(ConsoleDownloadUrl, tempZipPath, p =>
                     {
-                        response.EnsureSuccessStatusCode();
-                        var totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        if (p < 0)
                         {
-                            if (!totalBytes.HasValue)
-                            {
-                                dispatcher.Invoke(() => _downloadProgress.IsDownloadProgressIndeterminate = true);
-                                await stream.CopyToAsync(fileStream);
-                            }
-                            else
-                            {
-                                dispatcher.Invoke(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-                                var totalBytesRead = 0L;
-                                var buffer = new byte[8192];
-                                int bytesRead;
-                                var report = CreateThrottledProgressReporter();
-                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
-                                    var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
-
-                                    report(progress, $"Downloading console... {progress}%");
-                                }
-                            }
+                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = true);
+                            return;
                         }
-                    }
+                        if (!determinateSet)
+                        {
+                            determinateSet = true;
+                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
+                        }
+                        report(p, $"Downloading console... {p:F0}%");
+                    });
 
                     dispatcher.Invoke(() =>
                     {
@@ -783,7 +730,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Allows the selection of various TdGame versions.\n\n" +
                 "• Original — Unmodified TdGame and persistent map files.\n\n" +
                 "• TdGame Fix (by Keku) — Modified TdGame and persistent map files that allows loading custom skins, animations, sounds and other miscellaneous mods (Mirror's Edge Tweaks does not require this to be installed with the exception of the Cinematic Faith Model mod).\n\n" +
-                "• Time Trials Timer Fix (by Nulaft) — Fixes the precision errors of the time trial timer and uses a realtime timer (timer is prepended with an \"R\" to indicate this). Useful for speedrunners.\n\n" +
+                "• Time Trials Timer Fix (by Nulaft) — Fixes the precision errors of the time trial timer and uses a realtime timer (timer is prepended with an \"R\" to indicate this). Highly encouraged for speedrunners when submitting times to the leaderboards.\n\n" +
                 "• TdGame Fix + Time Trials Timer Fix — Both versions combined.",
                 DialogMessageType.Information);
         }

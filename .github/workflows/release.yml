@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    env:
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        run: dotnet test MirrorsEdgeTweaks.slnx --configuration Release
+
+      - name: Publish
+        run: dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj --configuration Release --output publish
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath "MirrorsEdgeTweaks-${{ github.ref_name }}.zip"
+
+      - name: Create GitHub release with asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MirrorsEdgeTweaks-${{ github.ref_name }}.zip
+          draft: true
+          generate_release_notes: true

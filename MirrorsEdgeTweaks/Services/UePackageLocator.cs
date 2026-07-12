@@ -14,8 +14,8 @@ namespace MirrorsEdgeTweaks.Services
 
     internal static class UePackageLocator
     {
-        // Loads the package summary plus the name/import/export tables, but doesnt
-        // construct or deserialise the objects (that is what InitializePackage does)
+        // Loads the package summary plus the name/import/export tables, but doesn't
+        // construct or deserialise the objects (that is what InitializePackage does).
         public static UnrealPackage LoadHeader(string path)
         {
             return UnrealLoader.LoadPackage(path, FileAccess.Read)

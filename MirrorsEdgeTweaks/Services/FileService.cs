@@ -22,10 +22,11 @@ namespace MirrorsEdgeTweaks.Services
         bool IsReadOnly(string path);
         void SetReadOnly(string path, bool readOnly);
 
-        // Writes the given lines, clearing the read-only attribute first if set and then
-        // re-applying it afterwards. Mirrors the pattern used for the game's config files
-        // which are kept read-only so the game does not overwrite user changes on launch.
-        void WriteAllLinesPreservingReadOnly(string path, IEnumerable<string> lines);
+        // Writes the given lines, clearing the read-only attribute first if needed, and always
+        // leaves the file read-only afterwards. This is deliberate: the game's config files are
+        // kept locked so the game does not overwrite user changes on launch, and every write via
+        // this method re-establishes that lock (matching the other config writers in the app).
+        void WriteAllLinesAndLock(string path, IEnumerable<string> lines);
     }
 
     public class FileService : IFileService
@@ -123,16 +124,21 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        public void WriteAllLinesPreservingReadOnly(string path, IEnumerable<string> lines)
+        public void WriteAllLinesAndLock(string path, IEnumerable<string> lines)
         {
-            bool wasReadOnly = IsReadOnly(path);
-            if (wasReadOnly)
+            if (IsReadOnly(path))
             {
                 SetReadOnly(path, false);
             }
 
-            File.WriteAllLines(path, lines);
-            SetReadOnly(path, true);
+            try
+            {
+                File.WriteAllLines(path, lines);
+            }
+            finally
+            {
+                SetReadOnly(path, true);
+            }
         }
     }
 }

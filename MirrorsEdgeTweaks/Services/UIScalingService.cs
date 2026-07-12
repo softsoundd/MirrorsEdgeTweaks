@@ -50,32 +50,49 @@ namespace MirrorsEdgeTweaks.Services
 
                 // Script-package (Engine.u/TdGame.u) fix: lies the font ResolutionTestTable + sets
                 // UIStyle_Text scale at runtime per resolution. This is the working high-res fix
-                // (crisp/correct UI; soft-but-fine above 1080p).
+                // (crisp/correct UI; soft-but-fine above 1080p). This is the required core of the
+                // fix - if it fails, the whole apply failed and the user must be told.
                 HighResUIDynamicPatcher.ApplyAll(enginePath, tdGamePath);
+
+                // Secondary layers are best-effort: collect what failed so the result dialog can
+                // mention it rather than silently pretending everything applied.
+                var failedLayers = new List<string>();
 
                 // Layer the canvas/HUD text size fix on top: the UI fix doesn't cover canvas-drawn
                 // HUD text (Canvas.DrawText), which stays small. This exe hook scales it to correct
                 // size; console/debug text (plain UFont) is excluded.
-                TryApplyCanvasTextFix(gameDirectoryPath);
+                if (!TryApplyCanvasTextFix(gameDirectoryPath))
+                    failedLayers.Add("HUD text size");
 
                 // Native exe fix for the ultrawide subtitle bug; pairs with the SubtitleMin/MaxRegion
                 // "set" commands from HighResUIDynamicPatcher.
-                TryApplySubtitleFix(gameDirectoryPath);
+                if (!TryApplySubtitleFix(gameDirectoryPath))
+                    failedLayers.Add("subtitle centring");
 
-                // Todo - better solution needed later: Mouse cursor is size currently edited across every Startup_* localisation
-                TryApplyCursorFix(gameDirectoryPath, height);
+                // TODO: find a better approach - the cursor size is currently edited in every
+                // Startup_* localisation package rather than in one shared place.
+                if (!TryApplyCursorFix(gameDirectoryPath, height))
+                    failedLayers.Add("cursor size");
 
                 if (showDialogs)
                 {
                     beforeShowingDialog?.Invoke();
+                    string message = $"Resolution set to {width} x {height}\nDynamic UI fix applied.";
+                    if (failedLayers.Count > 0)
+                        message += $"\n\nNote: the following optional layers could not be applied: {string.Join(", ", failedLayers)}.";
                     await _dialogService.ShowMessageAsync(
                         "Resolution Updated",
-                        $"Resolution set to {width} x {height}\nDynamic UI fix applied.",
-                        DialogMessageType.Success);
+                        message,
+                        failedLayers.Count == 0 ? DialogMessageType.Success : DialogMessageType.Warning);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                beforeShowingDialog?.Invoke();
+                await _dialogService.ShowMessageAsync(
+                    "UI Fix Failed",
+                    $"The dynamic UI fix could not be applied:\n\n{ex.Message}",
+                    DialogMessageType.Error);
             }
         }
 
@@ -100,8 +117,13 @@ namespace MirrorsEdgeTweaks.Services
                         DialogMessageType.Success);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                beforeShowingDialog?.Invoke();
+                await _dialogService.ShowMessageAsync(
+                    "UI Fix Removal Failed",
+                    $"The dynamic UI fix could not be fully removed:\n\n{ex.Message}",
+                    DialogMessageType.Error);
             }
         }
 
@@ -143,20 +165,21 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // canvas/HUD text size fix (exe DrawString hook)
-        private static void TryApplyCanvasTextFix(string gameDirectoryPath)
+        private static bool TryApplyCanvasTextFix(string gameDirectoryPath)
         {
             try
             {
                 string exePath = ExePath(gameDirectoryPath);
                 if (File.Exists(exePath))
                     MultiFontScalePatcher.Apply(exePath);
+                return true;
             }
             catch
             {
+                return false;
             }
         }
 
-        // Removal of the canvas/HUD text exe hook.
         private static void TryRemoveExeFontHook(string gameDirectoryPath)
         {
             try
@@ -171,20 +194,21 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // Native subtitle-region fix (signed centring offset) for aspect ratios wider than 16:9.
-        private static void TryApplySubtitleFix(string gameDirectoryPath)
+        private static bool TryApplySubtitleFix(string gameDirectoryPath)
         {
             try
             {
                 string exePath = ExePath(gameDirectoryPath);
                 if (File.Exists(exePath))
                     SubtitleRegionPatcher.Apply(exePath);
+                return true;
             }
             catch
             {
+                return false;
             }
         }
 
-        // Restore the stock (unsigned) subtitle centring.
         private static void TryRemoveSubtitleFix(string gameDirectoryPath)
         {
             try
@@ -199,22 +223,25 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // Cursor (Arrow texture) scaling across all Startup_* localisations
-        private void TryApplyCursorFix(string gameDirectoryPath, int height)
+        private bool TryApplyCursorFix(string gameDirectoryPath, int height)
         {
             try
             {
                 string cookedPc = CookedPcPath(gameDirectoryPath);
-                if (!Directory.Exists(cookedPc)) return;
+                if (!Directory.Exists(cookedPc)) return true;
                 foreach (string startup in Directory.GetFiles(cookedPc, "Startup_*"))
                 {
                     try { _decompressionService.RunDecompressor(startup); } catch { }
                 }
                 CursorScalePatcher.Apply(cookedPc, height);
+                return true;
             }
-            catch { }
+            catch
+            {
+                return false;
+            }
         }
 
-        // Restore of the stock cursor size.
         private static void TryRemoveCursorFix(string gameDirectoryPath)
         {
             try { CursorScalePatcher.Remove(CookedPcPath(gameDirectoryPath)); }

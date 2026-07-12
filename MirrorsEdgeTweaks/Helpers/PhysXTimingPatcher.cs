@@ -12,8 +12,8 @@ namespace MirrorsEdgeTweaks.Helpers
         private static string GetEnginePackagePath(string gameDirectoryPath) =>
             Path.Combine(gameDirectoryPath, "TdGame", "CookedPC", "Engine.u");
 
-        // Applies the given PhysX FPS by writing the corresponding cloth TimeStep and a derived
-        // ClothIterations value into Engine.u. Throws on missing file or unlocatable properties.
+        // Both value offsets are located before anything is written, and the file is written
+        // exactly once - a failure can never leave Engine.u with only one of the two values.
         public static void Apply(string gameDirectoryPath, int physxFps)
         {
             string enginePackagePath = GetEnginePackagePath(gameDirectoryPath);
@@ -28,80 +28,50 @@ namespace MirrorsEdgeTweaks.Helpers
             // linear equation for skeletal mesh PhysX iterations - keeps cloth sim somewhat consistent
             int physxIterations = (int)(-0.016 * physxFps + 5.8);
 
-            using var package = UnrealLoader.LoadPackage(enginePackagePath, FileAccess.Read);
-            package?.InitializePackage();
+            byte[] data = File.ReadAllBytes(enginePackagePath);
+            long timeStepValueOffset;
+            long clothIterationsValueOffset;
 
-            if (package == null)
+            // The package reader must be disposed before the file is rewritten below: the
+            // safe-write pipeline replaces the file via rename, which Windows refuses while
+            // another handle is open on it.
+            using (var package = UnrealLoader.LoadPackage(enginePackagePath, FileAccess.Read))
             {
-                throw new InvalidOperationException("Failed to load Engine.u package");
+                package?.InitializePackage();
+
+                if (package == null)
+                {
+                    throw new InvalidOperationException("Failed to load Engine.u package");
+                }
+
+                UObject? worldInfoDefault = FindDefaultObject(package, "WorldInfo");
+                UObject? skeletalMeshDefault = FindDefaultObject(package, "SkeletalMesh");
+
+                // The cloth compartment is the 4th TimeStep property in the WorldInfo default object.
+                timeStepValueOffset = worldInfoDefault != null
+                    ? LocateValueOffset(data, package, worldInfoDefault, "TimeStep", occurrence: 4)
+                    : -1;
+                clothIterationsValueOffset = skeletalMeshDefault != null
+                    ? LocateValueOffset(data, package, skeletalMeshDefault, "ClothIterations", occurrence: 1)
+                    : -1;
             }
 
-            bool timestepModified = false;
-            bool iterationsModified = false;
-
-            var worldInfoClass = package.FindObject<UClass>("WorldInfo");
-            if (worldInfoClass != null)
-            {
-                if (worldInfoClass.Default is UObject defaultObject)
-                {
-                    defaultObject.Load<UObjectRecordStream>();
-
-                    if (defaultObject.ExportTable != null)
-                    {
-                        timestepModified = ModifyPhysicsTimingsTimeStep(enginePackagePath, defaultObject, physxTimestep);
-                    }
-                }
-                else
-                {
-                    string defaultObjectName = "Default__WorldInfo";
-                    var defaultObjectAlt = package.Objects.FirstOrDefault(o => o.Name == defaultObjectName);
-
-                    if (defaultObjectAlt is UObject uObj && uObj.ExportTable != null)
-                    {
-                        uObj.Load<UObjectRecordStream>();
-                        timestepModified = ModifyPhysicsTimingsTimeStep(enginePackagePath, uObj, physxTimestep);
-                    }
-                }
-            }
-
-            var skeletalMeshClass = package.FindObject<UClass>("SkeletalMesh");
-            if (skeletalMeshClass != null)
-            {
-                if (skeletalMeshClass.Default is UObject defaultObject)
-                {
-                    defaultObject.Load<UObjectRecordStream>();
-
-                    if (defaultObject.ExportTable != null)
-                    {
-                        iterationsModified = ModifyClothIterations(enginePackagePath, defaultObject, package, physxIterations);
-                    }
-                }
-                else
-                {
-                    string defaultObjectName = "Default__SkeletalMesh";
-                    var defaultObjectAlt = package.Objects.FirstOrDefault(o => o.Name == defaultObjectName);
-
-                    if (defaultObjectAlt is UObject uObj && uObj.ExportTable != null)
-                    {
-                        uObj.Load<UObjectRecordStream>();
-                        iterationsModified = ModifyClothIterations(enginePackagePath, uObj, package, physxIterations);
-                    }
-                }
-            }
-
-            if (!timestepModified)
+            if (timeStepValueOffset < 0)
             {
                 throw new InvalidOperationException("Failed to locate PhysicsTimings CompartmentTimingCloth TimeStep in Engine.u");
             }
 
-            if (!iterationsModified)
+            if (clothIterationsValueOffset < 0)
             {
                 throw new InvalidOperationException("Failed to locate ClothIterations property in Engine.u");
             }
+
+            BitConverter.GetBytes(physxTimestep).CopyTo(data, timeStepValueOffset);
+            BitConverter.GetBytes(physxIterations).CopyTo(data, clothIterationsValueOffset);
+
+            PatchUtility.WritePreservingAttributes(enginePackagePath, data);
         }
 
-        // Reads the current PhysX FPS from Engine.u (derived from the cloth TimeStep), or null if it
-        // cannot be determined.
         public static int? Read(string? gameDirectoryPath)
         {
             if (string.IsNullOrEmpty(gameDirectoryPath))
@@ -120,20 +90,18 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (package == null)
                     return null;
 
-                var worldInfoClass = package.FindObject<UClass>("WorldInfo");
-                if (worldInfoClass?.Default is UObject defaultObject)
-                {
-                    defaultObject.Load<UObjectRecordStream>();
+                UObject? worldInfoDefault = FindDefaultObject(package, "WorldInfo");
+                if (worldInfoDefault == null)
+                    return null;
 
-                    if (defaultObject.ExportTable != null)
-                    {
-                        float? timestep = ReadPhysicsTimingsTimeStep(enginePackagePath, defaultObject);
-                        if (timestep.HasValue && timestep.Value > 0)
-                        {
-                            return (int)Math.Round(1.0f / timestep.Value);
-                        }
-                    }
-                }
+                byte[] data = File.ReadAllBytes(enginePackagePath);
+                long timeStepValueOffset = LocateValueOffset(data, package, worldInfoDefault, "TimeStep", occurrence: 4);
+                if (timeStepValueOffset < 0)
+                    return null;
+
+                float timestep = BitConverter.ToSingle(data, (int)timeStepValueOffset);
+                if (timestep > 0)
+                    return (int)Math.Round(1.0f / timestep);
             }
             catch
             {
@@ -142,78 +110,48 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        private static bool ModifyPhysicsTimingsTimeStep(string filePath, UObject defaultObject, float timestep)
+        // Resolves the loaded default object (CDO) for a class, falling back to the "Default__X"
+        // object lookup used by some package layouts.
+        private static UObject? FindDefaultObject(UnrealPackage package, string className)
         {
-            using var package = UnrealLoader.LoadPackage(filePath, FileAccess.Read);
-            package?.InitializePackage();
+            var uClass = package.FindObject<UClass>(className);
+            if (uClass == null)
+                return null;
 
-            if (package == null)
-                return false;
-
-            int timeStepNameIndex = package.Names.FindIndex(n => n.ToString() == "TimeStep");
-            if (timeStepNameIndex == -1)
-                return false;
-
-            byte[] timeStepNameBytes = BitConverter.GetBytes((long)timeStepNameIndex);
-            byte[] timestepBytes = BitConverter.GetBytes(timestep);
-
-            var exportTable = defaultObject.ExportTable;
-            if (exportTable == null)
-                return false;
-
-            byte[] data = File.ReadAllBytes(filePath);
-
-            long searchStart = exportTable.SerialOffset;
-            long searchEnd = searchStart + exportTable.SerialSize;
-
-            // looking for 4th occurrence of the TimeStep property (cloth)
-            int occurrences = 0;
-
-            for (long i = searchStart; i < searchEnd - 28; i++)
+            if (uClass.Default is UObject defaultObject)
             {
-                bool nameMatch = true;
-                for (int j = 0; j < 8; j++)
-                {
-                    if (data[i + j] != timeStepNameBytes[j])
-                    {
-                        nameMatch = false;
-                        break;
-                    }
-                }
-
-                if (nameMatch)
-                {
-                    occurrences++;
-
-                    if (occurrences == 4)
-                    {
-                        Array.Copy(timestepBytes, 0, data, i + 24, 4);
-
-                        File.WriteAllBytes(filePath, data);
-                        return true;
-                    }
-                }
+                defaultObject.Load<UObjectRecordStream>();
+                return defaultObject.ExportTable != null ? defaultObject : null;
             }
 
-            return false;
+            var defaultObjectAlt = package.Objects.FirstOrDefault(o => o.Name == $"Default__{className}");
+            if (defaultObjectAlt is UObject uObj && uObj.ExportTable != null)
+            {
+                uObj.Load<UObjectRecordStream>();
+                return uObj;
+            }
+
+            return null;
         }
 
-        private static bool ModifyClothIterations(string filePath, UObject defaultObject, UnrealPackage package, int iterations)
+        // Scans the default object's serialized range for the n-th occurrence of the given
+        // property name index and returns the file offset of its value (name + 24 bytes), or -1.
+        private static long LocateValueOffset(byte[] data, UnrealPackage package, UObject defaultObject, string propertyName, int occurrence)
         {
-            int nameIndex = package.Names.FindIndex(n => n.ToString() == "ClothIterations");
+            int nameIndex = package.Names.FindIndex(n => n.ToString() == propertyName);
             if (nameIndex == -1)
-                return false;
+                return -1;
 
             byte[] nameIndexBytes = BitConverter.GetBytes((long)nameIndex);
 
             var exportTable = defaultObject.ExportTable;
             if (exportTable == null)
-                return false;
-
-            byte[] data = File.ReadAllBytes(filePath);
+                return -1;
 
             long searchStart = exportTable.SerialOffset;
             long searchEnd = searchStart + exportTable.SerialSize;
+
+            int occurrences = 0;
 
             for (long i = searchStart; i < searchEnd - 28; i++)
             {
@@ -227,76 +165,13 @@ namespace MirrorsEdgeTweaks.Helpers
                     }
                 }
 
-                if (nameMatch)
+                if (nameMatch && ++occurrences == occurrence)
                 {
-                    byte[] iterationsBytes = BitConverter.GetBytes(iterations);
-                    Array.Copy(iterationsBytes, 0, data, i + 24, 4);
-
-                    File.WriteAllBytes(filePath, data);
-                    return true;
+                    return i + 24;
                 }
             }
 
-            return false;
-        }
-
-        private static float? ReadPhysicsTimingsTimeStep(string filePath, UObject defaultObject)
-        {
-            try
-            {
-                using var package = UnrealLoader.LoadPackage(filePath, FileAccess.Read);
-                package?.InitializePackage();
-
-                if (package == null)
-                    return null;
-
-                int timeStepNameIndex = package.Names.FindIndex(n => n.ToString() == "TimeStep");
-                if (timeStepNameIndex == -1)
-                    return null;
-
-                byte[] timeStepNameBytes = BitConverter.GetBytes((long)timeStepNameIndex);
-
-                var exportTable = defaultObject.ExportTable;
-                if (exportTable == null)
-                    return null;
-
-                byte[] data = File.ReadAllBytes(filePath);
-
-                long searchStart = exportTable.SerialOffset;
-                long searchEnd = searchStart + exportTable.SerialSize;
-
-                int occurrences = 0;
-
-                for (long i = searchStart; i < searchEnd - 28; i++)
-                {
-                    bool nameMatch = true;
-                    for (int j = 0; j < 8; j++)
-                    {
-                        if (data[i + j] != timeStepNameBytes[j])
-                        {
-                            nameMatch = false;
-                            break;
-                        }
-                    }
-
-                    if (nameMatch)
-                    {
-                        occurrences++;
-
-                        if (occurrences == 4)
-                        {
-                            float timestep = BitConverter.ToSingle(data, (int)(i + 24));
-                            return timestep;
-                        }
-                    }
-                }
-
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
+            return -1;
         }
     }
 }

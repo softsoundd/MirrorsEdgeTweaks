@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
@@ -27,6 +27,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IUIScalingService _uiScaling;
         private readonly IGameDataService _gameData;
         private readonly IAppSettingsService _settings;
+        private readonly IDownloadService _download;
         private readonly GameSession _session;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
@@ -104,6 +105,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IUIScalingService uiScaling,
             IGameDataService gameData,
             IAppSettingsService settings,
+            IDownloadService download,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -115,6 +117,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _uiScaling = uiScaling;
             _gameData = gameData;
             _settings = settings;
+            _download = download;
             _session = session;
             _unlockedConfigs = unlockedConfigs;
 
@@ -203,7 +206,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         PhysX.Index = physx.Equals("True", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
                     string? screenPercentage = _graphics.ReadIniValue(IniPath, "ScreenPercentage");
-                    if (screenPercentage != null && double.TryParse(screenPercentage, out double percentage))
+                    if (screenPercentage != null && double.TryParse(screenPercentage, NumberStyles.Float, CultureInfo.InvariantCulture, out double percentage))
                         RenderResolutionPercent = Math.Round(percentage);
 
                     string? staticDecals = _graphics.ReadIniValue(IniPath, "StaticDecals");
@@ -366,14 +369,14 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         // ---- Anti-aliasing (16xQ confirmation) ----
 
-        partial void OnAntiAliasingIndexChanged(int value) => _ = OnAntiAliasingChangedAsync(value);
+        partial void OnAntiAliasingIndexChanged(int oldValue, int newValue) => _ = OnAntiAliasingChangedAsync(oldValue, newValue);
 
-        private async Task OnAntiAliasingChangedAsync(int index)
+        private async Task OnAntiAliasingChangedAsync(int previousIndex, int index)
         {
             if (_isLoading || index < 0)
                 return;
 
-            if (!EnsureIniExists(() => AntiAliasingIndex = -1))
+            if (!EnsureIniExists(() => AntiAliasingIndex = previousIndex))
                 return;
 
             string level = AaLevels[index];
@@ -387,7 +390,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (!proceed)
                 {
-                    SetSilently(() => AntiAliasingIndex = -1);
+                    SetSilently(() => AntiAliasingIndex = previousIndex);
                     return;
                 }
             }
@@ -400,21 +403,22 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply anti-aliasing: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => AntiAliasingIndex = -1);
+                SetSilently(() => AntiAliasingIndex = previousIndex);
             }
         }
 
         // ---- Streak effect (separate ini + unlocked-configs warning) ----
 
-        partial void OnStreakEffectIndexChanged(int value)
+        partial void OnStreakEffectIndexChanged(int oldValue, int newValue)
         {
-            if (_isLoading || value < 0)
+            if (_isLoading || newValue < 0)
                 return;
 
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
             {
                 _dialogService.ShowMessage("Error", "Please specify the correct game install folder path first.", DialogMessageType.Error);
+                SetSilently(() => StreakEffectIndex = oldValue);
                 return;
             }
 
@@ -422,12 +426,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!File.Exists(defaultHudEffectsPath))
             {
                 _dialogService.ShowMessage("Error", "Cannot toggle streak effect, 'DefaultHudEffects.ini' file not found.", DialogMessageType.Error);
+                SetSilently(() => StreakEffectIndex = oldValue);
                 return;
             }
 
             try
             {
-                bool enabled = value == 0;
+                bool enabled = newValue == 0;
                 _graphics.ApplyStreakEffect(defaultHudEffectsPath, enabled);
 
                 if (!enabled)
@@ -443,20 +448,20 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply streak effect: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => StreakEffectIndex = -1);
+                SetSilently(() => StreakEffectIndex = oldValue);
             }
         }
 
         // ---- Quality presets ----
 
-        partial void OnTextureDetailIndexChanged(int value) => _ = OnTextureDetailChangedAsync(value);
+        partial void OnTextureDetailIndexChanged(int oldValue, int newValue) => _ = OnTextureDetailChangedAsync(oldValue, newValue);
 
-        private async Task OnTextureDetailChangedAsync(int index)
+        private async Task OnTextureDetailChangedAsync(int previousIndex, int index)
         {
             if (_isLoading || index < 0)
                 return;
 
-            if (!EnsureIniExists(() => TextureDetailIndex = -1))
+            if (!EnsureIniExists(() => TextureDetailIndex = previousIndex))
                 return;
 
             if (index == 0) // Custom
@@ -468,7 +473,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (!proceed)
             {
-                SetSilently(() => TextureDetailIndex = -1);
+                SetSilently(() => TextureDetailIndex = previousIndex);
                 return;
             }
 
@@ -482,18 +487,18 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply texture detail preset: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => TextureDetailIndex = -1);
+                SetSilently(() => TextureDetailIndex = previousIndex);
             }
         }
 
-        partial void OnGraphicsQualityIndexChanged(int value) => _ = OnGraphicsQualityChangedAsync(value);
+        partial void OnGraphicsQualityIndexChanged(int oldValue, int newValue) => _ = OnGraphicsQualityChangedAsync(oldValue, newValue);
 
-        private async Task OnGraphicsQualityChangedAsync(int index)
+        private async Task OnGraphicsQualityChangedAsync(int previousIndex, int index)
         {
             if (_isLoading || index < 0)
                 return;
 
-            if (!EnsureIniExists(() => GraphicsQualityIndex = -1))
+            if (!EnsureIniExists(() => GraphicsQualityIndex = previousIndex))
                 return;
 
             if (index == 0) // Custom
@@ -505,7 +510,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (!proceed)
             {
-                SetSilently(() => GraphicsQualityIndex = -1);
+                SetSilently(() => GraphicsQualityIndex = previousIndex);
                 return;
             }
 
@@ -519,7 +524,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply graphics quality preset: {ex.Message}", DialogMessageType.Error);
-                SetSilently(() => GraphicsQualityIndex = -1);
+                SetSilently(() => GraphicsQualityIndex = previousIndex);
             }
         }
 
@@ -620,417 +625,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 SetSilently(() => RenderResolutionPercent = 100);
         }
 
-        // ---- Resolution + High-Res Fix ----
-
-        partial void OnSelectedResolutionChanged(ResolutionHelper.Resolution? value) => _ = OnResolutionChangedAsync(value);
-
-        private async Task OnResolutionChangedAsync(ResolutionHelper.Resolution? selectedResolution)
-        {
-            if (_isLoading || selectedResolution == null)
-                return;
-
-            _gameStatus.IsUiEnabled = false;
-
-            try
-            {
-                bool success = await UpdateResolutionInConfigAsync(selectedResolution.Width, selectedResolution.Height);
-                if (!success)
-                    return;
-
-                bool userWantsUIScaling = false;
-                var gameDir = _session.Config.GameDirectoryPath;
-
-                if (_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
-                {
-                    _gameStatus.IsUiEnabled = true;
-                    userWantsUIScaling = await _uiScaling.AskUserForUIScalingConfirmationAsync();
-                    _gameStatus.IsUiEnabled = false;
-
-                    if (!string.IsNullOrEmpty(gameDir))
-                    {
-                        ShowProgress("Applying UI scaling...", true);
-
-                        await Task.Run(async () =>
-                        {
-                            if (userWantsUIScaling)
-                                await _uiScaling.ApplyUIScalingAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                            else
-                                await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                        });
-                    }
-                }
-                else
-                {
-                    if (!string.IsNullOrEmpty(gameDir))
-                    {
-                        ShowProgress("Resetting UI scaling...", true);
-
-                        await Task.Run(async () =>
-                        {
-                            await _uiScaling.RollbackUIScalingToDefaultsAsync(selectedResolution.Width, selectedResolution.Height, gameDir, () => HideProgress());
-                        });
-                    }
-                }
-
-                UpdateHighResFixStatus(selectedResolution.Width, userWantsUIScaling);
-
-                await Task.Run(ApplyDynamicPatchesForResolution);
-
-                RefreshEnginePatchState();
-            }
-            finally
-            {
-                _gameStatus.IsUiEnabled = true;
-                _gameStatus.Status = "Ready.";
-            }
-        }
-
-        // Ensures the exe render target fix, Engine.u dynamic AR/FOV scaling,
-        // and TdGame.u core compensation patches are applied when resolution changes
-        private void ApplyDynamicPatchesForResolution()
-        {
-            try
-            {
-                string? exePath = GetGameExePath();
-                if (exePath != null)
-                    ExePatcher.Reconcile(exePath);
-            }
-            catch (OoaLicenseNotFoundException ooaEx)
-            {
-                Dispatch(() => _dialogService.ShowMessage("EA App License Required", ooaEx.Message, DialogMessageType.Warning));
-            }
-            catch { }
-
-            try
-            {
-                var enginePath = _session.Config.EnginePackagePath;
-                if (enginePath != null && File.Exists(enginePath))
-                    EnginePatcher.Reconcile(enginePath);
-            }
-            catch { }
-
-            try
-            {
-                var tdGamePath = _session.Config.TdGamePackagePath;
-                if (tdGamePath != null && File.Exists(tdGamePath))
-                {
-                    bool enableSens = false;
-                    bool enableClip = false;
-                    bool enableOnlineSkip = false;
-                    Dispatch(() =>
-                    {
-                        enableSens = FovAgnosticSens;
-                        enableClip = CompensatedClip;
-                        enableOnlineSkip = _session.OnlineSkipEnabled;
-                    });
-                    TdGamePatcher.Reconcile(tdGamePath, enableSens, enableClip, enableOnlineSkip);
-                }
-            }
-            catch { }
-        }
-
-        public void UpdateHighResFixStatus(int width, bool isActive)
-        {
-            if (_session.IsProcessingGameDirectory)
-                return;
-
-            if (width <= 1920)
-            {
-                HighResFixStatus = "High-Res Fix N/A";
-                HighResFixStatusForeground = Brushes.Gray;
-            }
-            else if (isActive)
-            {
-                HighResFixStatus = "High-Res Fix Active";
-                HighResFixStatusForeground = Brushes.Green;
-            }
-            else
-            {
-                HighResFixStatus = "High-Res Fix Inactive";
-                HighResFixStatusForeground = Brushes.Orange;
-            }
-        }
-
-        private async Task<bool> UpdateResolutionInConfigAsync(int width, int height)
-        {
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                return false;
-
-            try
-            {
-                string? engineIniPath = IniPath;
-
-                if (string.IsNullOrEmpty(engineIniPath) || !File.Exists(engineIniPath))
-                {
-                    await _dialogService.ShowMessageAsync("Error", "TdEngine.ini file not found. Please ensure Mirror's Edge has been run at least once to create the config files.", DialogMessageType.Error);
-                    return false;
-                }
-
-                var fileInfo = new FileInfo(engineIniPath);
-
-                try
-                {
-                    if (fileInfo.IsReadOnly)
-                        fileInfo.IsReadOnly = false;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    await _dialogService.ShowMessageAsync("Error", "Unable to access TdEngine.ini. The file may be in use by another program.", DialogMessageType.Error);
-                    return false;
-                }
-                catch (IOException ex)
-                {
-                    await _dialogService.ShowMessageAsync("Error", $"Unable to access TdEngine.ini: {ex.Message}", DialogMessageType.Error);
-                    return false;
-                }
-
-                try
-                {
-                    ConfigFileHelper.ModifyIniFile(engineIniPath, "SystemSettings", "ResX", width.ToString());
-                    ConfigFileHelper.ModifyIniFile(engineIniPath, "SystemSettings", "ResY", height.ToString());
-                }
-                finally
-                {
-                    try
-                    {
-                        if (File.Exists(engineIniPath))
-                            fileInfo.IsReadOnly = true;
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                await _dialogService.ShowMessageAsync("Error", $"Failed to update resolution: {ex.Message}", DialogMessageType.Error);
-                return false;
-            }
-        }
-
-        public void RefreshHighResFix()
-        {
-            var res = SelectedResolution;
-            if (res != null)
-            {
-                bool isCurrentlyActive = false;
-                var gameDir = _session.Config.GameDirectoryPath;
-                if (!string.IsNullOrEmpty(gameDir))
-                {
-                    try
-                    {
-                        isCurrentlyActive = _uiScaling.IsUIScalingActive(gameDir);
-                    }
-                    catch
-                    {
-                        isCurrentlyActive = false;
-                    }
-                }
-
-                UpdateHighResFixStatus(res.Width, isCurrentlyActive);
-                return;
-            }
-
-            HighResFixStatus = "High-Res Fix N/A";
-            HighResFixStatusForeground = Brushes.Gray;
-        }
-
-        public async Task RefreshHighResFixAsync()
-        {
-            var res = SelectedResolution;
-            if (res == null)
-            {
-                HighResFixStatus = "High-Res Fix N/A";
-                HighResFixStatusForeground = Brushes.Gray;
-                return;
-            }
-
-            bool isCurrentlyActive = false;
-            var gameDir = _session.Config.GameDirectoryPath;
-            if (!string.IsNullOrEmpty(gameDir))
-            {
-                isCurrentlyActive = await Task.Run(() =>
-                {
-                    try { return _uiScaling.IsUIScalingActive(gameDir); }
-                    catch { return false; }
-                });
-            }
-
-            UpdateHighResFixStatus(res.Width, isCurrentlyActive);
-        }
-
-        // Reapplies (or rolls back to defaults) the high-res UI scaling fix for the active
-        // resolution. Called by flows that overwrite game files on disk (language pack and TdGame
-        // version installs) so the fix is not lost.
-        public async Task ReapplyHighResUIFixIfNeededAsync(bool? wasUIScalingActiveOverride = null, bool showDialogs = true)
-        {
-            try
-            {
-                var gameDir = _session.Config.GameDirectoryPath;
-                if (string.IsNullOrEmpty(gameDir))
-                    return;
-
-                bool wasUIScalingActive = wasUIScalingActiveOverride ?? _uiScaling.IsUIScalingActive(gameDir);
-
-                ResolutionHelper.Resolution? selectedResolution = SelectedResolution ?? GetCurrentResolutionFromConfig();
-
-                if (selectedResolution == null || !_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
-                {
-                    return;
-                }
-
-                var dispatcher = System.Windows.Application.Current.Dispatcher;
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressIndeterminate = true;
-                    _downloadProgress.IsDownloadProgressVisible = true;
-                    _gameStatus.Status = wasUIScalingActive ? "Reapplying high-res UI fix..." : "Resetting UI scaling...";
-                });
-
-                await Task.Run(async () =>
-                {
-                    if (wasUIScalingActive)
-                    {
-                        await _uiScaling.ApplyUIScalingAsync(
-                            selectedResolution.Width,
-                            selectedResolution.Height,
-                            gameDir,
-                            null,
-                            showDialogs);
-                    }
-                    else
-                    {
-                        await _uiScaling.RollbackUIScalingToDefaultsAsync(
-                            selectedResolution.Width,
-                            selectedResolution.Height,
-                            gameDir,
-                            null,
-                            showDialogs);
-                    }
-                });
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    UpdateHighResFixStatus(selectedResolution.Width, wasUIScalingActive);
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _downloadProgress.IsDownloadProgressIndeterminate = false;
-                });
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to reapply high res UI fix: {ex.Message}");
-            }
-        }
-
-        public void InitializeResolutions()
-        {
-            SetSilently(() =>
-            {
-                Resolutions.Clear();
-                foreach (var resolution in ResolutionHelper.GetAvailableResolutions())
-                    Resolutions.Add(resolution);
-
-                ResolutionHelper.Resolution? match = null;
-                var current = GetCurrentResolutionFromConfig();
-                if (current != null)
-                    match = Resolutions.FirstOrDefault(r => r.Width == current.Width && r.Height == current.Height);
-
-                if (match == null && Resolutions.Count > 0)
-                    match = Resolutions[0];
-
-                SelectedResolution = match;
-            });
-
-            if (SelectedResolution != null)
-            {
-                bool isCurrentlyActive = false;
-                var gameDir = _session.Config.GameDirectoryPath;
-                if (!string.IsNullOrEmpty(gameDir))
-                    isCurrentlyActive = _uiScaling.IsUIScalingActive(gameDir);
-
-                UpdateHighResFixStatus(SelectedResolution.Width, isCurrentlyActive);
-            }
-        }
-
-        public async Task InitializeResolutionsAsync()
-        {
-            ResolutionHelper.Resolution? selected = null;
-            SetSilently(() =>
-            {
-                Resolutions.Clear();
-                foreach (var resolution in ResolutionHelper.GetAvailableResolutions())
-                    Resolutions.Add(resolution);
-
-                ResolutionHelper.Resolution? match = null;
-                var current = GetCurrentResolutionFromConfig();
-                if (current != null)
-                    match = Resolutions.FirstOrDefault(r => r.Width == current.Width && r.Height == current.Height);
-
-                if (match == null && Resolutions.Count > 0)
-                    match = Resolutions[0];
-
-                SelectedResolution = match;
-                selected = match;
-            });
-
-            if (selected != null)
-            {
-                bool isCurrentlyActive = false;
-                var gameDir = _session.Config.GameDirectoryPath;
-                if (!string.IsNullOrEmpty(gameDir))
-                {
-                    isCurrentlyActive = await Task.Run(() =>
-                    {
-                        try { return _uiScaling.IsUIScalingActive(gameDir); }
-                        catch { return false; }
-                    });
-                }
-
-                UpdateHighResFixStatus(selected.Width, isCurrentlyActive);
-            }
-        }
-
-        private ResolutionHelper.Resolution? GetCurrentResolutionFromConfig()
-        {
-            try
-            {
-                string? engineIniPath = IniPath;
-
-                if (string.IsNullOrEmpty(engineIniPath) || !File.Exists(engineIniPath))
-                    return null;
-
-                var lines = File.ReadAllLines(engineIniPath);
-                int resX = -1;
-                int resY = -1;
-
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-
-                    if (trimmedLine.StartsWith("ResX=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (int.TryParse(trimmedLine.Substring(5), out int x))
-                            resX = x;
-                    }
-                    else if (trimmedLine.StartsWith("ResY=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (int.TryParse(trimmedLine.Substring(5), out int y))
-                            resY = y;
-                    }
-                }
-
-                if (resX > 0 && resY > 0)
-                    return new ResolutionHelper.Resolution { Width = resX, Height = resY };
-            }
-            catch (Exception)
-            {
-            }
-
-            return null;
-        }
 
         // ---- FPS limit ----
 
@@ -1329,346 +923,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             return true;
         }
 
-        // ---- Shaders (Tone Mapper) ----
 
-        partial void OnToneMapperIndexChanged(int value) => _ = OnToneMapperChangedAsync(value);
-
-        private async Task OnToneMapperChangedAsync(int index)
-        {
-            if (_isLoading || index < 0)
-                return;
-
-            var gameDir = _session.Config.GameDirectoryPath;
-            if (string.IsNullOrEmpty(gameDir))
-            {
-                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
-                SetSilently(() => ToneMapperIndex = -1);
-                return;
-            }
-
-            string variantName = index == 1 ? "Faithful Luma" : "Original";
-            string zipName = index == 1 ? "FaithfulLumaTonemap.zip" : "OriginalTonemap.zip";
-            string downloadUrl = DownloadUrls.For(zipName);
-            string tempZipPath = Path.Combine(Path.GetTempPath(), zipName);
-
-            _gameStatus.IsUiEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.DownloadProgressValue = 0;
-            _downloadProgress.IsDownloadProgressIndeterminate = true;
-            _gameStatus.Status = $"Downloading {variantName} tone mapper...";
-
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
-
-            try
-            {
-                await Task.Run(async () =>
-                {
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                    {
-                        response.EnsureSuccessStatusCode();
-                        var totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                        {
-                            if (totalBytes.HasValue)
-                            {
-                                dispatcher.Invoke(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-
-                                var totalBytesRead = 0L;
-                                var buffer = new byte[8192];
-                                int bytesRead;
-                                var report = CreateThrottledProgressReporter();
-                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
-                                    var progress = (int)((double)totalBytesRead / totalBytes.Value * 100);
-
-                                    report(progress, $"Downloading {variantName} tone mapper... {progress}%");
-                                }
-                            }
-                            else
-                            {
-                                await stream.CopyToAsync(fileStream);
-                            }
-                        }
-                    }
-
-                    dispatcher.Invoke(() =>
-                    {
-                        _gameStatus.Status = "Extracting shader files...";
-                        _downloadProgress.DownloadProgressValue = 100;
-                        _downloadProgress.IsDownloadProgressIndeterminate = true;
-                    });
-
-                    ZipFile.ExtractToDirectory(tempZipPath, gameDir, true);
-                    File.Delete(tempZipPath);
-                });
-
-                _gameStatus.Status = "Ready.";
-                RefreshToneMapper();
-                await _dialogService.ShowMessageAsync("Success",
-                    $"{variantName} tone mapper successfully downloaded and installed.",
-                    DialogMessageType.Success);
-            }
-            catch (Exception ex)
-            {
-                _gameStatus.Status = "An error occurred during installation.";
-                await _dialogService.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogMessageType.Error);
-                SetSilently(RefreshToneMapper);
-            }
-            finally
-            {
-                _gameStatus.IsUiEnabled = true;
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.DownloadProgressValue = 0;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-            }
-        }
-
-        // Detects the installed tone mapper variant from disk and sets the combo accordingly. The
-        // Faithful Luma shader is identified by a helper function only present in that variant.
-        public void RefreshToneMapper()
-        {
-            var gameDir = _session.Config.GameDirectoryPath;
-            int detected = 0;
-            if (!string.IsNullOrEmpty(gameDir))
-            {
-                string shaderPath = Path.Combine(gameDir, "Engine", "Shaders", "TdToneMappingPixelShader.usf");
-                try
-                {
-                    if (File.Exists(shaderPath) &&
-                        File.ReadAllText(shaderPath).Contains("ApplyWhiteNeutralityCorrection"))
-                        detected = 1;
-                }
-                catch { }
-            }
-
-            SetSilently(() => ToneMapperIndex = detected);
-        }
-
-        // ---- FOV ----
-
-        // Pushes the camera FOV discovered during package offset finding (stored on
-        // GameSession.DetectedCameraFov) into the displayed value, seeding the editable FOV when it
-        // is still at its default. Called from the post-reload fan-out so the package-load service
-        // need not depend on this view model.
-        public void RefreshFovDisplay()
-        {
-            float? detected = _session.DetectedCameraFov;
-            if (detected == null)
-            {
-                CurrentFovValue = "N/A";
-                return;
-            }
-
-            CurrentFovValue = Math.Round(detected.Value).ToString(CultureInfo.InvariantCulture) + "\u00b0 (horizontal)";
-
-            if (string.IsNullOrEmpty(NewFovValue) || NewFovValue == "90" || NewFovValue == "N/A")
-            {
-                NewFovValue = Math.Round(detected.Value).ToString(CultureInfo.InvariantCulture);
-            }
-        }
-
-        partial void OnNewFovValueChanged(string value) => RefreshScalingStatus();
-
-        [RelayCommand]
-        private async Task ApplyFov()
-        {
-            var config = _session.Config;
-
-            if (config.EnginePackagePath == null || config.TdGamePackagePath == null)
-            {
-                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
-                return;
-            }
-
-            if (!float.TryParse(NewFovValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float newFov) || newFov < 80 || newFov > 179)
-            {
-                _dialogService.ShowMessage("Invalid Input", "Please enter a valid number for the FOV (must be between 80 - 179).", DialogMessageType.Warning);
-                return;
-            }
-
-            bool enableSens = FovAgnosticSens;
-            bool enableClip = CompensatedClip;
-            bool enableOnlineSkip = _session.OnlineSkipEnabled;
-
-            _gameStatus.IsUiEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.IsDownloadProgressIndeterminate = true;
-            _gameStatus.Status = "Applying FOV settings...";
-
-            try
-            {
-                await Task.Run(() =>
-                {
-                    _session.Package?.Dispose();
-                    _session.TdGamePackage?.Dispose();
-                    _session.Package = null;
-                    _session.TdGamePackage = null;
-
-                    EnginePatcher.Reconcile(config.EnginePackagePath);
-
-                    TdGamePatcher.Reconcile(config.TdGamePackagePath, enableSens, enableClip, enableOnlineSkip);
-
-                    string? exePath = GetGameExePath();
-                    if (exePath != null)
-                    {
-                        try { ExePatcher.Reconcile(exePath); }
-                        catch (OoaLicenseNotFoundException ooaEx)
-                        {
-                            Dispatch(() => _dialogService.ShowMessage("EA App License Required", ooaEx.Message, DialogMessageType.Warning));
-                        }
-                        catch { }
-                    }
-                });
-
-                await _gameData.ReloadPackagesAsync();
-
-                await Task.Run(() =>
-                {
-                    if (config.EnginePackagePath == null)
-                        return;
-
-                    var offsets = _session.Offsets;
-                    byte[] fovValueBytes = BitConverter.GetBytes(newFov);
-                    using var stream = new FileStream(config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-
-                    if (offsets.PlayerControllerDefaultFovOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerDefaultFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.PlayerControllerDesiredFovOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerDesiredFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.PlayerControllerFovAngleOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerFovAngleOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.CameraFovOffset != -1)
-                    {
-                        stream.Position = offsets.CameraFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.CameraActorFovAngleOffset != -1)
-                    {
-                        stream.Position = offsets.CameraActorFovAngleOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                });
-
-                _session.Config.Fov = NewFovValue;
-                _settings.Save();
-
-                _gameStatus.Status = "Ready.";
-                await _dialogService.ShowMessageAsync("Success", "Successfully applied FOV patches.", DialogMessageType.Success);
-            }
-            catch (Exception ex)
-            {
-                await _dialogService.ShowMessageAsync("Save Error", $"Failed to apply changes: {ex.Message}", DialogMessageType.Error);
-                _gameStatus.Status = "Error applying changes.";
-            }
-            finally
-            {
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-
-                await _gameData.ReloadPackagesAsync();
-
-                _gameStatus.IsUiEnabled = true;
-            }
-        }
-
-        // Re-reads the (expensive) Engine.u dynamic-FOV-scaling patch state from disk into the
-        // cache and refreshes the HOR+/VERT+ label. Call this only when the patch state may have
-        // changed (package reload or resolution reconcile), not on every FOV keystroke.
-        public void RefreshEnginePatchState()
-        {
-            _enginePatchesApplied = false;
-            var enginePath = _session.Config.EnginePackagePath;
-            if (enginePath != null && File.Exists(enginePath))
-            {
-                try { _enginePatchesApplied = EnginePatcher.DetectState(enginePath) == EnginePatchState.FullyPatched; }
-                catch { }
-            }
-
-            RefreshScalingStatus();
-        }
-
-        // Reads the (expensive, Engine.u-loading) dynamic-FOV-scaling patch state off the UI thread,
-        // then applies it on the UI thread so the status-bar progress bar keeps animating.
-        public async Task RefreshEnginePatchStateAsync()
-        {
-            bool applied = false;
-            var enginePath = _session.Config.EnginePackagePath;
-            if (enginePath != null && File.Exists(enginePath))
-            {
-                applied = await Task.Run(() =>
-                {
-                    try { return EnginePatcher.DetectState(enginePath) == EnginePatchState.FullyPatched; }
-                    catch { return false; }
-                });
-            }
-
-            _enginePatchesApplied = applied;
-            RefreshScalingStatus();
-        }
-
-        // Recomputes the HOR+/VERT+ label from the cached engine patch state, the selected
-        // resolution and the entered FOV. Pure arithmetic (no disk I/O), safe to call per keystroke.
-        public void RefreshScalingStatus()
-        {
-            if (!_enginePatchesApplied)
-            {
-                HorPlusStatus = "";
-                return;
-            }
-
-            var res = SelectedResolution;
-            if (res == null || res.Height == 0)
-            {
-                HorPlusStatus = "";
-                return;
-            }
-
-            double ar = (double)res.Width / res.Height;
-            const double baseline = 16.0 / 9.0;
-            const double tolerance = 0.01;
-
-            if (ar > baseline + tolerance)
-            {
-                if (float.TryParse(NewFovValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float baseFov) && baseFov > 0)
-                {
-                    double effectiveFov = ComputeHorPlusFov(baseFov, ar);
-                    HorPlusStatus = $"(HOR+ \u2192 {effectiveFov:F0}°)";
-                }
-                else
-                {
-                    HorPlusStatus = "(HOR+)";
-                }
-            }
-            else if (ar < baseline - tolerance)
-            {
-                HorPlusStatus = "(VERT+)";
-            }
-            else
-            {
-                HorPlusStatus = "";
-            }
-        }
-
-        private static double ComputeHorPlusFov(double baseFov, double aspectRatio)
-        {
-            const double baseline = 16.0 / 9.0;
-            double halfRad = baseFov * Math.PI / 360.0;
-            return Math.Atan(Math.Tan(halfRad) * aspectRatio / baseline) * 360.0 / Math.PI;
-        }
 
         private string? GetGameExePath()
         {
@@ -1678,280 +933,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
             return File.Exists(exePath) ? exePath : null;
-        }
-
-        // ---- Info dialogs ----
-
-        [RelayCommand]
-        private void ShowFovInfo()
-        {
-            _dialogService.ShowMessage("FOV Information",
-                "Default horizontal FOV = 90°.\n\n" +
-                "FOV automatically applies HOR+ scaling at aspect ratios wider than 16:9, and VERT+ scaling at " +
-                "narrower aspect ratios. The aspect ratio is detected from the game resolution, no manual entry is needed.\n\n" +
-                "The FOV value persists after each level load and game restart, scales correctly during cutscenes " +
-                "and camera transitions, and does not break the skybox (unlike the keybind FOV method). " +
-                "It also fixes the FOV being reset to 85° when reloading from deaths, compensates the vertigo " +
-                "zoom effect, and maintains affected ADS FOV with the sniper rifle.\n\n" +
-                "A render target fix is also applied to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution).\n\n" +
-                "Options:\n\n" +
-                "• Compensated near clipping plane: adjusts the near clipping plane based on FOV and aspect ratio " +
-                "to reduce viewmodel/geometry clipping at higher FOVs or wider aspect ratios. Please note that Z-fighting will " +
-                "become more prevalent at more extreme FOVs or wider aspect ratios with this option enabled.\n\n" +
-                "• FOV-agnostic sensitivity: keeps mouse sensitivity consistent across all FOV values, using 90° " +
-                "as the baseline. Weapon zoom sensitivity still tracks the zoomed FOV as normal. Also useful for TAS tools.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowHighResFixInfo()
-        {
-            _dialogService.ShowMessage("Resolution Information",
-                "Mirror's Edge accepts only the resolutions currently available in your system's display settings. However, it is possible to use other software " +
-                "(e.g. Custom Resolution Utility, NVIDIA Control Panel, etc.) to add custom display resolutions. Once these are configured, they will appear here.\n\n" +
-                "Selecting a resolution will also apply the following fixes:\n\n" +
-                "• Removes the hardcoded 16:9 aspect ratio constraint, allowing the game to render correctly at any aspect ratio without letterboxing/pillarboxing.\n\n" +
-                "• Applies a render target fix to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution).\n\n" +
-                "• Enables dynamic FOV scaling so the game automatically applies HOR+ correction at aspect ratios wider than 16:9, and VERT+ at narrower ratios.\n\n" +
-                "• Compensates cutscene zoom rates, vertigo effects, and unzoom timing to work correctly and consistently at any FOV and aspect ratio.\n\n" +
-                "Selecting a resolution with a horizontal pixel count greater than 1920 will also prompt you with the option to fix the blurry in-game text and other UI fixes. " +
-                "Once applied, this fix remains dynamic and further in-game resolution adjustments will self-apply the high-res fix.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowVSyncInfo()
-        {
-            _dialogService.ShowMessage("VSync Information",
-                "Vertical Sync synchronises the frame rate with your monitor's refresh rate to prevent screen tearing. Enabling it may increase input latency.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowFpsLimitInfo()
-        {
-            _dialogService.ShowMessage("FPS Limit Information",
-                "Default = FPS limit of 62.\n\n60-62 FPS limit is a requirement for speedruns to be verified, any other setting is banned. " +
-                "Speedrunning strategies become increasingly more difficult as FPS increases, therefore it is not advised to deviate from the 60-62 FPS limit.\n\n" +
-                "As framerate increases, so does player friction which can alter the speed of certain movement mechanics and make forced slides more difficult to control " +
-                "as framerates exceed 150 FPS (i.e. Chapter 1C RP&A building slide). Enemy accuracy is also increased at higher framerates. " +
-                "Additionally, as load times are tied to framerate, loading times decrease as framerate increases. These effects are otherwise generally not noticeable to casual players " +
-                "and the game can be comfortably played with a higher FPS limit in place.\n\nIf you want to run the game with no FPS limiter at all, click the 'Remove Limit' button.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowAntiAliasingInfo()
-        {
-            _dialogService.ShowMessage("Anti-Aliasing Information",
-                "Anti-aliasing smooths jagged edges in the game. Higher values provide better quality but reduce performance.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowPhysXInfo()
-        {
-            _dialogService.ShowMessage("PhysX Information",
-                "PhysX provides additional physics effects such as detailed debris and cloth simulations, and spawns in extra physics props.\n\n" +
-                "Note: PhysX in Mirror's Edge is hardware accelerated only on CUDA-ready NVIDIA GPUs.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowPhysXFpsInfo()
-        {
-            _dialogService.ShowMessage("PhysX FPS Information",
-                "Applies a PhysX FPS value to cloth simulations (flags, construction tarps, strip curtain doors, etc.). Accepts a minimum of 50 FPS and a maximum of 300 FPS. No effect if PhysX is disabled.\n\n" +
-                "Cloth simulations in Mirror's Edge are simulated at a rate independent of the game's framerate, otherwise known as time-steps. By default, Mirror's Edge uses a value of 50 FPS " +
-                "for PhysX cloth simulations, which can appear choppy when using reaction time or when running the game above the 62 FPS limit.\n\n" +
-                "Suggestions:\n\n• If playing at the default 62 FPS limit, change the PhysX FPS value to 62 FPS to match the simulation rate with the game's framerate. " +
-                "This effectively removes the frame pacing appearance of PhysX cloth.\n\n• If playing at uncapped FPS, set this value to whatever you want (max of 300 FPS).",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowRenderResolutionInfo()
-        {
-            _dialogService.ShowMessage("Render Resolution Information",
-                "Controls the internal rendering resolution relative to your display output.\n\n" +
-                "Below 100%: Renders at a lower resolution and upscales, improving performance on lower-end systems.\n\n" +
-                "Above 100%: Renders at a higher resolution and downscales to your display, producing sharper visuals " +
-                "with reduced aliasing. Setting 200% renders at 4x pixel density.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowTextureDetailInfo()
-        {
-            _dialogService.ShowMessage("Texture Detail Information",
-                "Texture detail controls the resolution/LODs of textures, as well as the level of anisotropic filtering and bicubic filtering to be applied.\n\nThis setting mirrors the in-game video options.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowGraphicsQualityInfo()
-        {
-            _dialogService.ShowMessage("Graphics Quality Information",
-                "Graphics quality controls mesh/shadow quality, as well as various other post-process effects such as bloom, depth of field, lens flares, etc.\n\nThis setting mirrors the in-game video options.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowAnisotropicFilteringInfo()
-        {
-            _dialogService.ShowMessage("Anisotropic Filtering Information",
-                "Anisotropic filtering improves texture quality when viewed at oblique angles. Higher values provide better quality.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowStaticDecalsInfo()
-        {
-            _dialogService.ShowMessage("Static Decals Information",
-                "Static decals are pre-placed decals (runner glyphs, paint/graffiti, etc.).",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowDynamicDecalsInfo()
-        {
-            _dialogService.ShowMessage("Dynamic Decals Information",
-                "Dynamic decals are decals spawned during gameplay (typically bullet holes and explosion effects).",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowRadialBlurInfo()
-        {
-            _dialogService.ShowMessage("Radial Blur Information",
-                "Radial blur is the blurring applied to the edges of the screen when running. It is seperate from the streak effect.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowStreakEffectInfo()
-        {
-            _dialogService.ShowMessage("Streak Effect Information",
-                "When approaching top running speed, streak effects will appear on the edges of the screen which can become more noticeable at higher FOV settings. " +
-                "\n\nDisabling requires the 'Unlocked Configs' patch in the 'Game Tweaks' section.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowBloomDoFInfo()
-        {
-            _dialogService.ShowMessage("Bloom & DoF Information",
-                "Bloom creates a glow effect around bright lights. Depth of Field blurs objects that are out of focus." +
-                "\n\nThe shaders involved for rendering Bloom and Depth of Field are dependent on each other and cannot be individually toggled on/off.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowLensFlareInfo()
-        {
-            _dialogService.ShowMessage("Lens Flare Information",
-                "Allows enabling/disabling the lens flares emitted from the sun and various light sources. In some maps this will also remove the appearance of the sun altogether.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowDynamicLightsInfo()
-        {
-            _dialogService.ShowMessage("Dynamic Lights Information",
-                "Dynamic lights are any light sources that dynamically illuminate the scene and characters. Typical examples include flashlights/cop car lights and ambient character illumination.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowDynamicShadowsInfo()
-        {
-            _dialogService.ShowMessage("Dynamic Shadows Information",
-                "Dynamic shadows are the modulated shadows casted onto the environment from characters. This also includes self-shadowing of characters.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowHqDynamicShadowsInfo()
-        {
-            _dialogService.ShowMessage("HQ Dynamic Shadows Information",
-                "High Quality dynamic shadows doubles the resolution of what's available from the \"Highest\" graphics quality preset, " +
-                "forces the maximum shadow resolution to always be shown, increases the filtering quality, and disables VSM shadowing in favour of the superior-quality PCF shadowing." +
-                "\n\nNote: \"High quality\" dynamic shadows will have no effect if dynamic shadows are disabled.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowLightmapsInfo()
-        {
-            _dialogService.ShowMessage("Lightmaps Information",
-                "Light maps are the pre-baked lighting used to globally illuminate the environment. These light maps can be disabled (for most objects), " +
-                "showing the original textures without the environment's GI and shadow contributions. Note that disabling can also make some vertex-baked objects appear black.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowSunHazeInfo()
-        {
-            _dialogService.ShowMessage("Sun Haze Information",
-                "Toggles the appearance of atmospheric haze around the sun. This haze can bleed through buildings in some scenarios.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowToneMappingInfo()
-        {
-            _dialogService.ShowMessage("Tone Mapping Information",
-                "Tone mapping adjusts the post-process exposure/colour curves, which are applied on a per-map basis. " +
-                "Disabling tone mapping typically makes the image appear brighter and with less contrast.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowTextureManagementInfo()
-        {
-            _dialogService.ShowMessage("Texture Management Information",
-                "The \"Modern\" setting removes the 250MB VRAM allocation limit to textures and forces textures to remain in the texture pool once loaded. " +
-                "This can resolve the random blurry texture bug, and assists with large custom maps that don't utilise level streaming.\n\n" +
-                "If you have a low-end system, it may be more preferable to keep this setting to \"Default\".",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowMinLodInfo()
-        {
-            _dialogService.ShowMessage("Minimum LOD Information",
-                "Minimum LOD size controls the lowest quality texture mipmap that will be loaded. Range: 1-4096 (Unreal Engine 3 has a max limit of 4096).",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowMaxLodInfo()
-        {
-            _dialogService.ShowMessage("Maximum LOD Information",
-                "Maximum LOD size controls the highest quality texture mipmap that will be loaded. Range: 1-4096 (Unreal Engine 3 has a max limit of 4096).",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowLodBiasInfo()
-        {
-            _dialogService.ShowMessage("LOD Bias Information",
-                "Adjusts the distance at which different texture mipmaps are loaded. A higher bias value results in lower resolution texture mipmaps being shown sooner " +
-                "as the player moves away from the texture surface and vice versa. A minimum bias of 0 (highest quality, shows only the maximum resolution LOD) " +
-                "and a maximum bias of 12 (lowest quality) can be entered.",
-                DialogMessageType.Information);
-        }
-
-        [RelayCommand]
-        private void ShowToneMapperInfo()
-        {
-            _dialogService.ShowMessage("Tone Mapper Information",
-                "Replaces the game's post-process tone mapping shaders. Selecting an option downloads and installs the corresponding shader files.\n\n" +
-                "• Original — The game's default tone mapping shaders.\n\n" +
-                "• Faithful Luma — A luminance-preserving tone mapper that better retains highlight detail and colour, while also " +
-                "fixing the black floor level, providing more accurate bloom handling and making the auto-exposure system much more responsive.\n\n" +
-                "Note: Neither tone mapping option will have an effect if the 'Tone Mapping' toggle in the Individual Settings section above is disabled.",
-                DialogMessageType.Information);
         }
     }
 

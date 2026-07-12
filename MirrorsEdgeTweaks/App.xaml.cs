@@ -1,19 +1,44 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.ViewModels;
+using System.IO;
 using System.Windows;
 
 namespace MirrorsEdgeTweaks
 {
-    // Interaction logic for App.xaml. Acts as the composition root: builds the DI
-    // container, wires up the service layer and view models, and resolves the main window.
+    // Composition root: builds the DI container, wires up the service layer and view models,
+    // and resolves the main window. Also owns process-level concerns: single-instance
+    // enforcement and last-chance exception logging.
     public partial class App : System.Windows.Application
     {
-        private IServiceProvider? _services;
+        private const string SingleInstanceMutexName = "MirrorsEdgeTweaks_SingleInstance";
+
+        private ServiceProvider? _services;
+        private Mutex? _singleInstanceMutex;
+
+        private static string CrashLogDirectory => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MirrorsEdgeTweaks", "logs");
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // A second instance racing the first on game files or metweaksconfig.ini can corrupt
+            // both; refuse to start and let the user switch to the running instance.
+            _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool isFirstInstance);
+            if (!isFirstInstance)
+            {
+                System.Windows.MessageBox.Show(
+                    "Mirror's Edge Tweaks is already running.\n\nPlease switch to the existing window.",
+                    "Mirror's Edge Tweaks",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                Shutdown();
+                return;
+            }
+
+            RegisterGlobalExceptionHandlers();
 
             var services = new ServiceCollection();
             ConfigureServices(services);
@@ -23,9 +48,60 @@ namespace MirrorsEdgeTweaks
             window.Show();
         }
 
+        protected override void OnExit(ExitEventArgs e)
+        {
+            _services?.Dispose();
+            _singleInstanceMutex?.Dispose();
+            base.OnExit(e);
+        }
+
+        private void RegisterGlobalExceptionHandlers()
+        {
+            // UI-thread exceptions: log, tell the user, and keep the app alive when possible -
+            // an unhandled binding/command exception should not take down a patching session.
+            DispatcherUnhandledException += (_, args) =>
+            {
+                LogCrash("DispatcherUnhandledException", args.Exception);
+                System.Windows.MessageBox.Show(
+                    $"An unexpected error occurred:\n\n{args.Exception.Message}\n\n" +
+                    $"Details were written to:\n{CrashLogDirectory}",
+                    "Mirror's Edge Tweaks - Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                args.Handled = true;
+            };
+
+            // Non-UI thread exceptions: the process is going down; capture what happened first.
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+                LogCrash("AppDomainUnhandledException", args.ExceptionObject as Exception);
+
+            // Faulted tasks nobody awaited: log and mark observed so they never crash the process.
+            TaskScheduler.UnobservedTaskException += (_, args) =>
+            {
+                LogCrash("UnobservedTaskException", args.Exception);
+                args.SetObserved();
+            };
+        }
+
+        private static void LogCrash(string source, Exception? exception)
+        {
+            try
+            {
+                Directory.CreateDirectory(CrashLogDirectory);
+                string logPath = Path.Combine(CrashLogDirectory, "crash.log");
+                string entry =
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}{Environment.NewLine}" +
+                    $"{exception}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
+                File.AppendAllText(logPath, entry);
+            }
+            catch
+            {
+                // Logging must never introduce its own failure path.
+            }
+        }
+
         private static void ConfigureServices(IServiceCollection services)
         {
-            // Service layer
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IFileService, FileService>();
             services.AddSingleton<IPackageService, PackageService>();
@@ -41,7 +117,6 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<IFolderPickerService, FolderPickerService>();
             services.AddSingleton<IGameProcessMonitor, GameProcessMonitor>();
 
-            // Shared state + view models
             services.AddSingleton<GameSession>();
 
             // Per-feature status view models (shared instances bound by the View and used by feature VMs)
@@ -64,7 +139,6 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<LanguageSettingsViewModel>();
             services.AddSingleton<MainViewModel>();
 
-            // Views
             services.AddSingleton<MainWindow>();
         }
     }

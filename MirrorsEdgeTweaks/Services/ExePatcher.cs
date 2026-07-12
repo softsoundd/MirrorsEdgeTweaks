@@ -95,8 +95,6 @@ namespace MirrorsEdgeTweaks.Services
             PatchUtility.WritePreservingAttributes(exePath, output);
         }
 
-        // Private
-
         struct PeSection
         {
             public string Name;

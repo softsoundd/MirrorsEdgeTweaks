@@ -170,7 +170,6 @@ namespace MirrorsEdgeTweaks.Services
                 // Splice: replace P1_OLD (11 bytes) with P1_NEW (22 bytes)
                 data = PackageSplicer.ReplaceBytes(data, p1Pos, P1_OLD_LEN, r.P1New);
 
-                // Fix export table
                 hdr = PackageSplicer.ParseHeader(data);
                 PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, p1Pos, origLen, PHASE1_NET);
                 origLen = data.Length;
@@ -185,7 +184,6 @@ namespace MirrorsEdgeTweaks.Services
             byte[] bc = new byte[(int)bss];
             Buffer.BlockCopy(data, bcStart, bc, 0, (int)bss);
 
-            // Find variant specific patterns
             var (checkVt, fillCache) = FindPhase2Patterns(bc);
 
             int cvtPos = BytecodeBuilder.FindPattern(data, checkVt, bcStart, bcStart + 500);
@@ -240,7 +238,7 @@ namespace MirrorsEdgeTweaks.Services
             // Phase 3: CameraActor bConstrainAspectRatio = false
             ApplyPhase3(data, hdr);
 
-            File.WriteAllBytes(enginePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
         public static void Remove(string enginePath)
@@ -271,7 +269,6 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] bc = new byte[(int)bss];
                 Buffer.BlockCopy(data, bcStart, bc, 0, (int)bss);
 
-                // Compute blob B size by building it
                 var (checkVt, fillCache) = FindPhase2Patterns(bc);
                 int p2SigPos = BytecodeBuilder.FindPattern(data, r.P2Sig, bcStart, bcStart + (int)bss);
                 // Blob A starts where the P2 signature's GreaterFF condition is in the if-body.
@@ -320,10 +317,8 @@ namespace MirrorsEdgeTweaks.Services
                 int exportStart = r.SerialOffset;
                 int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
 
-                // Flip bConstrainAspectRatio back to true
                 data[bcStart + BC_BOOL] = BytecodeBuilder.OP_TRUE;
 
-                // Find P1_NEW and replace with stock P1_OLD
                 int p1Pos = BytecodeBuilder.FindPattern(data, r.P1New, bcStart);
                 byte[] stockAr = BytecodeBuilder.BuildStockArAssignment(r.ArPropertyToken);
                 data = PackageSplicer.ReplaceBytes(data, p1Pos, r.P1New.Length, stockAr);
@@ -346,7 +341,7 @@ namespace MirrorsEdgeTweaks.Services
                 PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, p1Pos, origLen, -PHASE1_NET);
             }
 
-            File.WriteAllBytes(enginePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
         // Engine.u patches are always on
@@ -368,7 +363,7 @@ namespace MirrorsEdgeTweaks.Services
             byte[] before = (byte[])data.Clone();
             ApplyPhase3(data, hdr);
             if (!data.AsSpan().SequenceEqual(before))
-                File.WriteAllBytes(enginePath, data);
+                Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
         // Private helpers
@@ -423,7 +418,7 @@ namespace MirrorsEdgeTweaks.Services
                 BitConverter.GetBytes(0), BitConverter.GetBytes(0), BitConverter.GetBytes(1));
 
             int idx = BytecodeBuilder.FindPattern(data, patternTrue);
-            if (idx == -1) return; // already false or not found
+            if (idx == -1) return;
 
             int boolOffset = idx + 24;
             BitConverter.GetBytes(0).CopyTo(data, boolOffset);
@@ -443,7 +438,7 @@ namespace MirrorsEdgeTweaks.Services
                 BitConverter.GetBytes(0), BitConverter.GetBytes(0), BitConverter.GetBytes(0));
 
             int idx = BytecodeBuilder.FindPattern(data, patternFalse);
-            if (idx == -1) return; // already true or not found
+            if (idx == -1) return;
 
             int boolOffset = idx + 24;
             BitConverter.GetBytes(1).CopyTo(data, boolOffset);

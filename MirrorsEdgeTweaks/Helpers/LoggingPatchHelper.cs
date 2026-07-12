@@ -53,7 +53,6 @@ namespace MirrorsEdgeTweaks.Helpers
             if (!addrs.Hooks.TryGetValue("execLog", out var execDef))
                 return LoggingPatchState.Unknown;
 
-            // Try pattern scan for unpatched hook site
             try
             {
                 uint hookVa = VersionAddressTable.ResolveHook(data, execDef);
@@ -231,7 +230,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return AppInitRestore.Unrestored;
         }
 
-        // Detour target (VA) at a hook site or null if the site isn't detoured
         private static uint? FindDetourTarget(byte[] data, HookDefinition hdef)
         {
             int foff = FindHookSiteOff(data, hdef);
@@ -720,7 +718,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
             Add(0x5E); // pop esi
 
-            // .done
             int done = code.Count;
             byte[] jeRel = new byte[4];
             BinaryPrimitives.WriteInt32LittleEndian(jeRel, done - (jeSkipPos + 6));

@@ -60,7 +60,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             byte[] data = File.ReadAllBytes(enginePath);
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return; // already patched
+                return;
 
             EngineRefs r;
             int serialOffset, insertBc;
@@ -94,14 +94,14 @@ namespace MirrorsEdgeTweaks.Services
             var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, insertFile, origLen, blob.Length);
 
-            File.WriteAllBytes(enginePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
         public static void RemoveEngine(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) == -1)
-                return; // not patched
+                return;
 
             EngineRefs r;
             int serialOffset;
@@ -134,7 +134,7 @@ namespace MirrorsEdgeTweaks.Services
             var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, blobPos, origLen, -blob.Length);
 
-            File.WriteAllBytes(enginePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
         // TdGame.u : TdSPHUD.DrawLivingHUD (dynamic crosshair scaling)
@@ -203,7 +203,7 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             if (BytecodeBuilder.FindPattern(data, CrosshairSig(r)) != -1)
-                return; // already patched
+                return;
 
             byte[] blob = CrosshairBlob(r);
             int exportStart = serialOffset;
@@ -217,7 +217,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateExportsStructural(data, hdr,
                 new List<(int, int, int)> { (exportStart, blob.Length, exportIndex) });
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         public static void RemoveCrosshair(string tdGamePath)
@@ -242,7 +242,7 @@ namespace MirrorsEdgeTweaks.Services
             int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
 
             int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
-            if (blobPos == -1) return; // not patched
+            if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
             ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
@@ -253,7 +253,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateExportsStructural(data, hdr,
                 new List<(int, int, int)> { (exportStart, -blob.Length, exportIndex) });
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         // TdGame.u : TdUIScene_VideoSettingsPC.ApplyVideoSettings
@@ -262,7 +262,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return; // already patched
+                return;
 
             TdGameRefs r;
             int serialOffset, exportIndex, insertBc;
@@ -292,14 +292,14 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateExportsStructural(data, hdr,
                 new List<(int, int, int)> { (exportStart, blob.Length, exportIndex) });
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         public static void RemoveTdGame(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
             if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) == -1)
-                return; // not patched
+                return;
 
             TdGameRefs r;
             int serialOffset, exportIndex;
@@ -333,7 +333,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateExportsStructural(data, hdr,
                 new List<(int, int, int)> { (exportStart, -blob.Length, exportIndex) });
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         sealed class TdGameRefs

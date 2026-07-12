@@ -130,23 +130,7 @@ namespace MirrorsEdgeTweaks.Helpers
         }
 
         private static int FindPattern(byte[] data, int start, int end, byte[] pattern)
-        {
-            int limit = end - pattern.Length;
-            for (int i = start; i <= limit; i++)
-            {
-                bool match = true;
-                for (int j = 0; j < pattern.Length; j++)
-                {
-                    if (data[i + j] != pattern[j])
-                    {
-                        match = false;
-                        break;
-                    }
-                }
-                if (match) return i;
-            }
-            return -1;
-        }
+            => PatternHelper.FindPattern(data, pattern, start, end);
 
         private static uint ParseAddr(JsonElement el)
         {

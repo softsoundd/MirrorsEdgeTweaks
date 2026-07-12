@@ -1,4 +1,4 @@
-using MirrorsEdgeTweaks.Services;
+﻿using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.IO;
 using System.Text;
@@ -21,13 +21,12 @@ namespace MirrorsEdgeTweaks.Helpers
         private const int BranchLength = 43;
         private const int EmptyGapBytes = 2;
         private const int EmptySpanBytes = 8;
-        private const uint ExecuteSectionFlag = 0x20000000;
         private static readonly byte[] BranchPrefix = Convert.FromHexString("83C40885C0740768");
 
         public static CommandLineUnlockMode GetUnlockMode(string exePath)
         {
             byte[] buffer = File.ReadAllBytes(exePath);
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
+            PeImageLayout image = PeImageLayout.Parse(buffer);
 
             if (TryDerivePersistentLayout(image, buffer, out _))
             {
@@ -45,7 +44,7 @@ namespace MirrorsEdgeTweaks.Helpers
         public static bool IsUnlocked(string exePath)
         {
             byte[] buffer = File.ReadAllBytes(exePath);
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
+            PeImageLayout image = PeImageLayout.Parse(buffer);
 
             if (TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
             {
@@ -65,7 +64,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
                 byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
                 OoaService.DecryptSections(buffer, key);
-                image = ExecutableImageLayout.Parse(buffer);
+                image = PeImageLayout.Parse(buffer);
 
                 if (!TryDerivePersistentLayout(image, buffer, out layout))
                 {
@@ -96,7 +95,7 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] originalBuffer = File.ReadAllBytes(exePath);
             byte[] buffer = (byte[])originalBuffer.Clone();
 
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
+            PeImageLayout image = PeImageLayout.Parse(buffer);
             if (TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
             {
                 PatchBranch(buffer, image, layout, unlock);
@@ -124,7 +123,7 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             PatchUtility.OoaSession session = PatchUtility.BeginOoa(buffer);
 
-            ExecutableImageLayout image = ExecutableImageLayout.Parse(buffer);
+            PeImageLayout image = PeImageLayout.Parse(buffer);
             if (!TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
             {
                 throw new InvalidOperationException(
@@ -148,7 +147,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         // Branch + string patching
 
-        private static void PatchBranch(byte[] buffer, ExecutableImageLayout image, CommandLineUnlockLayout layout, bool unlock)
+        private static void PatchBranch(byte[] buffer, PeImageLayout image, CommandLineUnlockLayout layout, bool unlock)
         {
             if (layout.BranchOffset < 0)
             {
@@ -190,7 +189,7 @@ namespace MirrorsEdgeTweaks.Helpers
             stockBranch.AsSpan().CopyTo(buffer.AsSpan(layout.BranchOffset, BranchLength));
         }
 
-        private static void PatchStrings(byte[] buffer, ExecutableImageLayout image, CommandLineUnlockLayout layout)
+        private static void PatchStrings(byte[] buffer, PeImageLayout image, CommandLineUnlockLayout layout)
         {
             WriteSpan(buffer, image, layout.MarkerVa, checked((int)(layout.FlybyCommandLineVa - layout.MarkerVa)), EncodeUtf16Le(StockMarker));
             WriteSpan(buffer, image, layout.FlybyCommandLineVa, checked((int)(layout.NoStartupMoviesTokenVa - layout.FlybyCommandLineVa)), EncodeUtf16Le(StockFlybyCommandLine));
@@ -199,7 +198,7 @@ namespace MirrorsEdgeTweaks.Helpers
             WriteSpan(buffer, image, layout.EmptyVa, checked((int)(layout.ErrorHistoryVa - layout.EmptyVa)), new byte[] { 0x00, 0x00 });
         }
 
-        private static void WriteSpan(byte[] buffer, ExecutableImageLayout image, uint va, int spanSize, byte[] payload)
+        private static void WriteSpan(byte[] buffer, PeImageLayout image, uint va, int spanSize, byte[] payload)
         {
             if (payload.Length > spanSize)
             {
@@ -214,7 +213,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         // Layout derivation
 
-        private static bool TryDerivePersistentLayout(ExecutableImageLayout image, byte[] buffer, out CommandLineUnlockLayout layout)
+        private static bool TryDerivePersistentLayout(PeImageLayout image, byte[] buffer, out CommandLineUnlockLayout layout)
         {
             int markerSpan = EncodeUtf16Le(StockMarker).Length;
             int flybySpan = EncodeUtf16Le(StockFlybyCommandLine).Length;
@@ -224,7 +223,15 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] markerBytes = EncodeUtf16Le(StockMarker);
             foreach (int markerOffset in FindAllOffsets(buffer, markerBytes))
             {
-                uint markerVa = image.OffsetToVa(markerOffset);
+                // A marker match outside any mapped section (headers, appended data) cannot be the
+                // referenced string; skip it rather than fault.
+                uint? markerVaMaybe = image.TryOffsetToVa(markerOffset);
+                if (markerVaMaybe == null)
+                {
+                    continue;
+                }
+
+                uint markerVa = markerVaMaybe.Value;
                 byte[] codeReference = new byte[6];
                 codeReference[0] = 0x68;
                 WriteUInt32(codeReference, 1, markerVa);
@@ -303,7 +310,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 current[42] == 0x50;
         }
 
-        private static byte[] BuildStockBranch(ExecutableImageLayout image, CommandLineUnlockLayout layout)
+        private static byte[] BuildStockBranch(PeImageLayout image, CommandLineUnlockLayout layout)
         {
             byte[] branch = new byte[BranchLength];
             BranchPrefix.AsSpan().CopyTo(branch);
@@ -336,7 +343,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return branch;
         }
 
-        private static bool TryFindParseParamLikeTarget(ExecutableImageLayout image, byte[] buffer, int referenceOffset, int branchOffset, out uint targetVa)
+        private static bool TryFindParseParamLikeTarget(PeImageLayout image, byte[] buffer, int referenceOffset, int branchOffset, out uint targetVa)
         {
             targetVa = 0;
 
@@ -356,7 +363,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return false;
         }
 
-        private static bool TryResolveCallTarget(ExecutableImageLayout image, byte[] buffer, int callOpcodeOffset, out uint targetVa)
+        private static bool TryResolveCallTarget(PeImageLayout image, byte[] buffer, int callOpcodeOffset, out uint targetVa)
         {
             targetVa = 0;
 
@@ -380,39 +387,10 @@ namespace MirrorsEdgeTweaks.Helpers
         // Utility
 
         private static IEnumerable<int> FindAllOffsets(byte[] buffer, byte[] pattern)
-        {
-            if (pattern.Length == 0 || buffer.Length < pattern.Length)
-            {
-                yield break;
-            }
-
-            for (int offset = 0; offset <= buffer.Length - pattern.Length; offset++)
-            {
-                if (buffer.AsSpan(offset, pattern.Length).SequenceEqual(pattern))
-                {
-                    yield return offset;
-                }
-            }
-        }
+            => PatternHelper.FindAll(buffer, pattern);
 
         private static int FindPattern(byte[] buffer, byte[] pattern, int startOffset, int endExclusive)
-        {
-            if (pattern.Length == 0 || startOffset < 0)
-            {
-                return -1;
-            }
-
-            int lastPossibleStart = Math.Min(buffer.Length - pattern.Length, endExclusive - pattern.Length);
-            for (int offset = startOffset; offset <= lastPossibleStart; offset++)
-            {
-                if (buffer.AsSpan(offset, pattern.Length).SequenceEqual(pattern))
-                {
-                    return offset;
-                }
-            }
-
-            return -1;
-        }
+            => PatternHelper.FindPattern(buffer, pattern, startOffset, endExclusive);
 
         private static byte[] EncodeUtf16Le(string text)
         {
@@ -442,11 +420,6 @@ namespace MirrorsEdgeTweaks.Helpers
         private static uint ReadUInt32(byte[] buffer, int offset)
         {
             return BinaryPrimitives.ReadUInt32LittleEndian(ReadSpan(buffer, offset, sizeof(uint)));
-        }
-
-        private static ulong ReadUInt64(byte[] buffer, int offset)
-        {
-            return BinaryPrimitives.ReadUInt64LittleEndian(ReadSpan(buffer, offset, sizeof(ulong)));
         }
 
         private static int ReadInt32(byte[] buffer, int offset)
@@ -491,167 +464,5 @@ namespace MirrorsEdgeTweaks.Helpers
             public uint BranchVa { get; }
         }
 
-        private sealed class ExecutableImageLayout
-        {
-            private readonly List<SectionInfo> _sections;
-
-            private ExecutableImageLayout(uint imageBase, List<SectionInfo> sections)
-            {
-                ImageBase = imageBase;
-                _sections = sections;
-            }
-
-            public uint ImageBase { get; }
-
-            public static ExecutableImageLayout Parse(byte[] buffer)
-            {
-                if (buffer.Length < 0x40 || buffer[0] != 'M' || buffer[1] != 'Z')
-                {
-                    throw new InvalidDataException("The selected file is not a valid PE executable.");
-                }
-
-                int peHeaderOffset = ReadInt32(buffer, 0x3C);
-                if (peHeaderOffset < 0 || peHeaderOffset + 24 > buffer.Length)
-                {
-                    throw new InvalidDataException("The selected executable has an invalid PE header.");
-                }
-
-                if (!ReadSpan(buffer, peHeaderOffset, 4).SequenceEqual(new byte[] { 0x50, 0x45, 0x00, 0x00 }))
-                {
-                    throw new InvalidDataException("The selected executable has an invalid PE signature.");
-                }
-
-                ushort sectionCount = ReadUInt16(buffer, peHeaderOffset + 6);
-                ushort optionalHeaderSize = ReadUInt16(buffer, peHeaderOffset + 20);
-                int optionalHeaderOffset = peHeaderOffset + 24;
-                ushort optionalHeaderMagic = ReadUInt16(buffer, optionalHeaderOffset);
-
-                uint imageBase = optionalHeaderMagic switch
-                {
-                    0x10B => ReadUInt32(buffer, optionalHeaderOffset + 28),
-                    0x20B => checked((uint)ReadUInt64(buffer, optionalHeaderOffset + 24)),
-                    _ => throw new InvalidDataException("Unsupported PE optional header format.")
-                };
-
-                int sectionTableOffset = optionalHeaderOffset + optionalHeaderSize;
-                int requiredSectionBytes = checked(sectionCount * 40);
-                if (sectionTableOffset < 0 || sectionTableOffset + requiredSectionBytes > buffer.Length)
-                {
-                    throw new InvalidDataException("The executable section table is incomplete.");
-                }
-
-                List<SectionInfo> sections = new List<SectionInfo>(sectionCount);
-                for (int index = 0; index < sectionCount; index++)
-                {
-                    int sectionOffset = sectionTableOffset + (index * 40);
-                    string name = ReadSectionName(buffer, sectionOffset);
-                    sections.Add(new SectionInfo(
-                        name,
-                        ReadUInt32(buffer, sectionOffset + 12),
-                        ReadUInt32(buffer, sectionOffset + 8),
-                        ReadUInt32(buffer, sectionOffset + 20),
-                        ReadUInt32(buffer, sectionOffset + 16),
-                        ReadUInt32(buffer, sectionOffset + 36)));
-                }
-
-                return new ExecutableImageLayout(imageBase, sections);
-            }
-
-            public uint OffsetToVa(int offset)
-            {
-                SectionInfo section = FindSectionByRawOffset(offset);
-                uint rva = section.VirtualAddress + checked((uint)(offset - section.PointerToRawData));
-                return ImageBase + rva;
-            }
-
-            public int VaToOffset(uint va)
-            {
-                uint rva = checked(va - ImageBase);
-                SectionInfo section = FindSectionByRva(rva);
-                return checked((int)(section.PointerToRawData + (rva - section.VirtualAddress)));
-            }
-
-            public bool IsExecutableOffset(int offset)
-            {
-                uint rva = checked(OffsetToVa(offset) - ImageBase);
-                SectionInfo section = FindSectionByRva(rva);
-                return (section.Characteristics & ExecuteSectionFlag) != 0;
-            }
-
-            public bool IsExecutableVa(uint va)
-            {
-                uint rva = checked(va - ImageBase);
-                SectionInfo section = FindSectionByRva(rva);
-                return (section.Characteristics & ExecuteSectionFlag) != 0;
-            }
-
-            private SectionInfo FindSectionByRawOffset(int offset)
-            {
-                foreach (SectionInfo section in _sections)
-                {
-                    if (section.SizeOfRawData == 0)
-                    {
-                        continue;
-                    }
-
-                    uint start = section.PointerToRawData;
-                    uint end = start + section.SizeOfRawData;
-                    if ((uint)offset >= start && (uint)offset < end)
-                    {
-                        return section;
-                    }
-                }
-
-                throw new InvalidDataException($"Could not map file offset 0x{offset:X} into a PE section.");
-            }
-
-            private SectionInfo FindSectionByRva(uint rva)
-            {
-                foreach (SectionInfo section in _sections)
-                {
-                    uint size = Math.Max(section.VirtualSize, section.SizeOfRawData);
-                    uint start = section.VirtualAddress;
-                    uint end = start + size;
-                    if (rva >= start && rva < end)
-                    {
-                        return section;
-                    }
-                }
-
-                throw new InvalidDataException($"Could not map RVA 0x{rva:X} into a PE section.");
-            }
-
-            private static string ReadSectionName(byte[] buffer, int sectionOffset)
-            {
-                ReadOnlySpan<byte> nameBytes = ReadSpan(buffer, sectionOffset, 8);
-                int zeroIndex = nameBytes.IndexOf((byte)0);
-                if (zeroIndex >= 0)
-                {
-                    nameBytes = nameBytes[..zeroIndex];
-                }
-
-                return Encoding.ASCII.GetString(nameBytes);
-            }
-        }
-
-        private readonly struct SectionInfo
-        {
-            public SectionInfo(string name, uint virtualAddress, uint virtualSize, uint pointerToRawData, uint sizeOfRawData, uint characteristics)
-            {
-                Name = name;
-                VirtualAddress = virtualAddress;
-                VirtualSize = virtualSize;
-                PointerToRawData = pointerToRawData;
-                SizeOfRawData = sizeOfRawData;
-                Characteristics = characteristics;
-            }
-
-            public string Name { get; }
-            public uint VirtualAddress { get; }
-            public uint VirtualSize { get; }
-            public uint PointerToRawData { get; }
-            public uint SizeOfRawData { get; }
-            public uint Characteristics { get; }
-        }
     }
 }

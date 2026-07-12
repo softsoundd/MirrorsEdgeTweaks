@@ -16,6 +16,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     {
         private readonly IDialogService _dialogService;
         private readonly IDecompressionService _decompressionService;
+        private readonly IDownloadService _download;
         private readonly IUIScalingService _uiScaling;
         private readonly IGameDataService _gameData;
         private readonly IPackageService _packageService;
@@ -31,6 +32,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         public TdGameVersionViewModel(
             IDialogService dialogService,
             IDecompressionService decompressionService,
+            IDownloadService download,
             IUIScalingService uiScaling,
             IGameDataService gameData,
             IPackageService packageService,
@@ -44,6 +46,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService = dialogService;
             _decompressionService = decompressionService;
+            _download = download;
             _uiScaling = uiScaling;
             _gameData = gameData;
             _packageService = packageService;
@@ -88,9 +91,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        partial void OnSelectedVersionIndexChanged(int value) => _ = OnSelectedVersionChangedAsync(value);
+        partial void OnSelectedVersionIndexChanged(int oldValue, int newValue) => _ = OnSelectedVersionChangedAsync(oldValue, newValue);
 
-        private async Task OnSelectedVersionChangedAsync(int value)
+        private async Task OnSelectedVersionChangedAsync(int previousIndex, int value)
         {
             string? selectedVersionName = TdGameVersionCatalog.NameAt(value);
             if (_isUpdatingComboBoxProgrammatically || selectedVersionName == null)
@@ -113,6 +116,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 await DownloadAndExtractTdGameAsync(selectedVersionName, touchpointSnapshot);
             }
+            else
+            {
+                // The user declined the download, so the combo must go back to reflecting the
+                // version actually installed on disk instead of the aborted selection.
+                SetVersionIndexSilently(previousIndex);
+            }
         }
 
         private async Task DownloadAndExtractTdGameAsync(string selectedVersionName, TdGameTouchpointSnapshot touchpointSnapshot)
@@ -121,6 +130,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (string.IsNullOrEmpty(config.GameDirectoryPath))
             {
                 _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Warning);
+                DetectVersion();
                 return;
             }
 
@@ -130,6 +140,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 _dialogService.ShowMessage("URL Error", "Could not determine the download URL for the selected game version and TdGame variant.", DialogMessageType.Error);
+                DetectVersion();
                 return;
             }
 
@@ -145,56 +156,37 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                using (var client = new HttpClient())
+                string tempZipPath = Path.Combine(Path.GetTempPath(), "temp_tdgame.zip");
+
+                var report = CreateThrottledProgressReporter();
+                await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
                 {
-                    string tempZipPath = Path.Combine(Path.GetTempPath(), "temp_tdgame.zip");
-
-                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    if (p < 0)
                     {
-                        response.EnsureSuccessStatusCode();
-                        var totalBytes = response.Content.Headers.ContentLength;
-
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                        Post(() =>
                         {
-                            if (totalBytes.HasValue)
-                            {
-                                var totalBytesRead = 0L;
-                                var buffer = new byte[8192];
-                                int bytesRead;
-                                var report = CreateThrottledProgressReporter();
-                                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
-                                    var progressPercentage = (int)((double)totalBytesRead / totalBytes.Value * 100);
-                                    report(progressPercentage, $"Downloading... {progressPercentage}%");
-                                }
-                            }
-                            else
-                            {
-                                _gameStatus.Status = "Downloading... (size unknown)";
-                                _downloadProgress.IsDownloadProgressIndeterminate = true;
-                                await stream.CopyToAsync(fileStream);
-                                _downloadProgress.IsDownloadProgressIndeterminate = false;
-                            }
-                        }
+                            _gameStatus.Status = "Downloading... (size unknown)";
+                            _downloadProgress.IsDownloadProgressIndeterminate = true;
+                        });
+                        return;
                     }
+                    report(p, $"Downloading... {p:F0}%");
+                });
+                _downloadProgress.IsDownloadProgressIndeterminate = false;
 
-                    _gameStatus.Status = "Extracting...";
-                    _downloadProgress.DownloadProgressValue = 100;
+                _gameStatus.Status = "Extracting...";
+                _downloadProgress.DownloadProgressValue = 100;
 
-                    string tdGamePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
-                    string extractDir = config.GameDirectoryPath;
+                string tdGamePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
+                string extractDir = config.GameDirectoryPath;
 
-                    await Task.Run(() =>
-                    {
-                        ZipFile.ExtractToDirectory(tempZipPath, extractDir, true);
-                        Post(() => _gameStatus.Status = "Decompressing new package...");
-                        _decompressionService.RunDecompressor(tdGamePackagePath);
-                        File.Delete(tempZipPath);
-                    });
-                }
+                await Task.Run(() =>
+                {
+                    ZipFile.ExtractToDirectory(tempZipPath, extractDir, true);
+                    Post(() => _gameStatus.Status = "Decompressing new package...");
+                    _decompressionService.RunDecompressor(tdGamePackagePath);
+                    File.Delete(tempZipPath);
+                });
 
                 installSucceeded = true;
             }
@@ -244,6 +236,13 @@ namespace MirrorsEdgeTweaks.ViewModels
                     {
                         await Task.Delay(500);
                         await Task.Run(() => _gameData.LoadPackages());
+                    }
+
+                    if (!installSucceeded)
+                    {
+                        // Failed download/extraction: re-detect from disk so the combo reflects
+                        // whatever TdGame.u is actually installed, not the failed selection.
+                        DetectVersion();
                     }
 
                     if (installSucceeded && _session.Package != null && _session.TdGamePackage != null)

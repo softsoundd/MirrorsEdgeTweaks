@@ -223,7 +223,6 @@ namespace MirrorsEdgeTweaks.Services
                 data = PackageSplicer.InsertBytes(data, scInsertFile, onlineSkipBlob);
             }
 
-            // Fix export table
             var modifications = new List<(int, int, int)>();
             if (clipNet != 0) modifications.Add((tzsSo, clipNet, resolved.TzsExportIndex));
             if (sensNet != 0) modifications.Add((piSo, sensNet, resolved.PiExportIndex));
@@ -235,7 +234,7 @@ namespace MirrorsEdgeTweaks.Services
             var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsStructural(data, hdr, modifications);
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         public static void Remove(string tdGamePath)
@@ -258,7 +257,6 @@ namespace MirrorsEdgeTweaks.Services
             // This ensures each removal doesn't shift offsets for the others.
             var ops = new List<RemovalOp>();
 
-            // Analyse each patched function and compute the removal operation
             AnalyzeOnlineSkipRemoval(data, resolved, state, ops);
             AnalyzeSetFovRemoval(data, resolved, ops);
             AnalyzeUnzoomRemoval(data, resolved, ops);
@@ -271,7 +269,6 @@ namespace MirrorsEdgeTweaks.Services
             // Sort by file position descending so we remove from end to start
             ops.Sort((a, b) => b.FilePos.CompareTo(a.FilePos));
 
-            // Apply all removals/replacements to the data
             foreach (var op in ops)
             {
                 int bcStart = op.ExportSerialOffset + BytecodeBuilder.SCRIPT_HDR;
@@ -295,19 +292,18 @@ namespace MirrorsEdgeTweaks.Services
                     data = PackageSplicer.RemoveBytes(data, op.FilePos, op.RemoveCount);
             }
 
-            // Fix export table in one pass
             var modifications = ops.Select(op =>
                 (op.OriginalSerialOffset, op.BssDelta, op.ExportIndex)).ToList();
             var hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsStructural(data, hdr, modifications);
 
-            File.WriteAllBytes(tdGamePath, data);
+            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
         }
 
         struct RemovalOp
         {
-            public int FilePos; // where to remove/replace in the file
-            public int RemoveCount; // bytes to remove
+            public int FilePos;
+            public int RemoveCount;
             public byte[]? ReplacementBytes; // null = pure removal, non-null = replacement
             public int BssDelta; // net change to BSS (negative)
             public int ExportSerialOffset; // current serial offset of the containing export
@@ -424,7 +420,6 @@ namespace MirrorsEdgeTweaks.Services
 
             int vertigoNet = -(vertigoReplacement.Length - stockZoomFov.Length);
 
-            // Find the skip-size position to fix
             int skipFixPos = -1;
             for (int i = sigPos - 1; i >= Math.Max(smBcStart, sigPos - 20); i--)
             {
@@ -546,7 +541,6 @@ namespace MirrorsEdgeTweaks.Services
 
         class ResolvedIndices
         {
-            // Export serial offsets and indices
             public int TzsSerialOffset, TzsExportIndex;
             public int PiSerialOffset, PiExportIndex;
             public int SmSerialOffset, SmExportIndex;
@@ -554,10 +548,8 @@ namespace MirrorsEdgeTweaks.Services
             public int SfSerialOffset, SfExportIndex;
             public int ScSerialOffset, ScExportIndex;  // StartConnection
 
-            // Import package indices
             public int SizexImp, SizeyImp, MyhudImp;
 
-            // Token arrays extracted from bytecodes
             public byte[] SncpVfunc = Array.Empty<byte>();
             public byte[] InstPawn = Array.Empty<byte>();
             public byte[] InstWeapon = Array.Empty<byte>();
@@ -588,7 +580,6 @@ namespace MirrorsEdgeTweaks.Services
         {
             var r = new ResolvedIndices();
 
-            // HUD imports
             r.SizexImp = UePackageLocator.FindImportObjRef(pkg, "SizeX", "FloatProperty");
             r.SizeyImp = UePackageLocator.FindImportObjRef(pkg, "SizeY", "FloatProperty");
             r.MyhudImp = UePackageLocator.FindImportObjRef(pkg, "myHUD", "ObjectProperty");
@@ -614,7 +605,6 @@ namespace MirrorsEdgeTweaks.Services
             r.UzSerialOffset = uz.SerialOffset; r.UzExportIndex = uz.ExportIndex;
             r.SfSerialOffset = sf.SerialOffset; r.SfExportIndex = sf.ExportIndex;
 
-            // Function bodies used to harvest raw token spans located via the token stream.
             byte[] tzsBc = Body(data, tzs.SerialOffset);
             byte[] piBc = Body(data, pi.SerialOffset);
             byte[] smBc = Body(data, sm.SerialOffset);
@@ -683,7 +673,6 @@ namespace MirrorsEdgeTweaks.Services
             return r;
         }
 
-        // Reads a function body (bytecode) slice from the package bytes.
         static byte[] Body(byte[] data, int serialOffset)
         {
             int bcStart = serialOffset + BytecodeBuilder.SCRIPT_HDR;
@@ -693,7 +682,6 @@ namespace MirrorsEdgeTweaks.Services
             return bc;
         }
 
-        // Harvests the 5-byte InstanceVariable token for a named property
         static byte[] HarvestInst(IList<Token> tokens, byte[] bc, string name)
         {
             foreach (var t in tokens)
@@ -702,7 +690,6 @@ namespace MirrorsEdgeTweaks.Services
             return Array.Empty<byte>();
         }
 
-        // Harvests the 9-byte VirtualFunction name token for a named call (empty if absent).
         static byte[] HarvestVFunc(IList<Token> tokens, byte[] bc, string name)
         {
             foreach (var t in tokens)

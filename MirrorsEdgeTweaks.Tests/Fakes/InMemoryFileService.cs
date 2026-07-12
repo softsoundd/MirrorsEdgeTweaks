@@ -34,6 +34,6 @@ namespace MirrorsEdgeTweaks.Tests.Fakes
         public string CombinePaths(params string[] paths) => Path.Combine(paths);
         public bool IsReadOnly(string path) => false;
         public void SetReadOnly(string path, bool readOnly) { }
-        public void WriteAllLinesPreservingReadOnly(string path, IEnumerable<string> lines) => WriteAllLines(path, lines);
+        public void WriteAllLinesAndLock(string path, IEnumerable<string> lines) => WriteAllLines(path, lines);
     }
 }
