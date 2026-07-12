@@ -464,7 +464,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!EnsureIniExists(() => TextureDetailIndex = previousIndex))
                 return;
 
-            if (index == 0) // Custom
+            if (index == 0) // "Custom" is a detected state, not an applicable preset
                 return;
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
@@ -501,7 +501,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!EnsureIniExists(() => GraphicsQualityIndex = previousIndex))
                 return;
 
-            if (index == 0) // Custom
+            if (index == 0) // "Custom" is a detected state, not an applicable preset
                 return;
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
@@ -548,10 +548,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             ApplyRenderResolution();
         }
 
-        // Called by the window's slider Thumb.DragStarted handler.
         public void BeginRenderResolutionDrag() => _isRenderResolutionDragging = true;
 
-        // Called by the window's slider Thumb.DragCompleted handler.
         public void EndRenderResolutionDrag()
         {
             _isRenderResolutionDragging = false;

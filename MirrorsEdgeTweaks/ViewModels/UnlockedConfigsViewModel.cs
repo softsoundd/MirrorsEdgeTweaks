@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Status of the unlocked-configs exe patch (Game Tweaks tab).
     public partial class UnlockedConfigsViewModel : ObservableObject
     {
         [ObservableProperty] private string _unlockedConfigsStatus = "N/A";

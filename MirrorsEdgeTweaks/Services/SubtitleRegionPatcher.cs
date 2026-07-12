@@ -101,7 +101,6 @@ namespace MirrorsEdgeTweaks.Services
                 JgeOffset = jgeOffset;
             }
 
-            // Single match offset in [start, end), or -1 if zero or ambiguous (caller refuses to patch).
             public int FindUnique(byte[] data, int start, int end)
             {
                 int found = -1;

@@ -164,7 +164,6 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        // canvas/HUD text size fix (exe DrawString hook)
         private static bool TryApplyCanvasTextFix(string gameDirectoryPath)
         {
             try
@@ -193,7 +192,6 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        // Native subtitle-region fix (signed centring offset) for aspect ratios wider than 16:9.
         private static bool TryApplySubtitleFix(string gameDirectoryPath)
         {
             try
@@ -222,7 +220,6 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        // Cursor (Arrow texture) scaling across all Startup_* localisations
         private bool TryApplyCursorFix(string gameDirectoryPath, int height)
         {
             try

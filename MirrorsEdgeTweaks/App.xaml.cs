@@ -119,7 +119,6 @@ namespace MirrorsEdgeTweaks
 
             services.AddSingleton<GameSession>();
 
-            // Per-feature status view models (shared instances bound by the View and used by feature VMs)
             services.AddSingleton<GameStatusViewModel>();
             services.AddSingleton<ConsoleViewModel>();
             services.AddSingleton<TweaksScriptsViewModel>();

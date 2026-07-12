@@ -367,7 +367,6 @@ namespace MirrorsEdgeTweaks.Services
             return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height);
         }
 
-        // Insertion point = byte offset just after the closing EndFunctionParms of the named call.
         static int FindAfterCall(IList<Token> tokens, string funcName)
         {
             for (int i = 0; i < tokens.Count; i++)
@@ -444,7 +443,6 @@ namespace MirrorsEdgeTweaks.Services
             return positions;
         }
 
-        // Shifts the u16 code-offset (at jumpBc+1) of each real jump whose target is >= thresholdBc.
         static void ShiftJumpTargets(byte[] data, int bcStart, List<int> jumpPositions, int thresholdBc, int delta)
         {
             foreach (int bcPos in jumpPositions)

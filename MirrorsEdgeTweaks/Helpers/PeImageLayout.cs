@@ -144,7 +144,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // True when the VA lies inside a section marked executable (IMAGE_SCN_MEM_EXECUTE).
         public bool IsExecutableVa(uint va)
         {
             uint rva = checked(va - ImageBase);
@@ -171,8 +170,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return false;
         }
 
-        // Maps a raw file offset back to a VA, or null when the offset is not inside any
-        // section's raw data (e.g. headers or appended data).
         public uint? TryOffsetToVa(int offset)
         {
             uint uoff = (uint)offset;

@@ -125,7 +125,6 @@ namespace MirrorsEdgeTweaks.Services
             int vertigoOrigSize = 5; // InstanceVar(ZoomFOV)
             int vertigoNet = vertigoReplacement.Length - vertigoOrigSize;
 
-            // Update context skip-size
             int smSkipsizeAdj = smBcStart + smStartzoomOff - 4;
             ushort oldSkip = BitConverter.ToUInt16(data, smSkipsizeAdj);
             BitConverter.GetBytes((ushort)(oldSkip + vertigoNet)).CopyTo(data, smSkipsizeAdj);
@@ -312,8 +311,6 @@ namespace MirrorsEdgeTweaks.Services
             public int SkipSizeFixPos; // -1 if no skip-size fix needed
             public int JumpFixThresholdBc; // 0 (default) to derive from FilePos, > 0 to use directly
         }
-
-        // Removal analysis - compute what to remove without modifying data
 
         static void AnalyzeOnlineSkipRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
         {
@@ -537,8 +534,6 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        // Index resolution
-
         class ResolvedIndices
         {
             public int TzsSerialOffset, TzsExportIndex;
@@ -612,7 +607,6 @@ namespace MirrorsEdgeTweaks.Services
             byte[] sfBc = Body(data, sf.SerialOffset);
             byte[] ezBc = Body(data, ez.SerialOffset);
 
-            // Precompute patch point locations from the decompiled token streams.
             r.ClipResult = ExtractContextCall(tzs.Tokens, tzsBc, 10.0f)
                 ?? ExtractContextCall(tzs.Tokens, tzsBc, null);
             r.FovResult = FindFovScaleLet(pi.Tokens, piBc);
@@ -620,7 +614,6 @@ namespace MirrorsEdgeTweaks.Services
             r.UnzoomResult = FindUnzoomPatches(uz.Tokens, uzBc);
             r.SetFovResult = FindSetFovInsertion(sf.Tokens, sfBc);
 
-            // SetNearClippingPlane vfunc token
             r.SncpVfunc = r.ClipResult != null
                 ? r.ClipResult.Value.vfunc
                 : HarvestVFunc(tzs.Tokens, tzsBc, "SetNearClippingPlane");
@@ -636,7 +629,6 @@ namespace MirrorsEdgeTweaks.Services
             if (sm.Tokens.Count >= 2 && sm.Tokens[0] is ContextToken && sm.Tokens[1] is DynamicCastToken)
                 r.ControllerCtx = UePackageLocator.Harvest(smBc, sm.Tokens[1], 20);
 
-            // InstanceVar(ZoomFOV)
             byte[] zoomFov = HarvestInst(sm.Tokens, smBc, "ZoomFOV");
             if (zoomFov.Length == 5)
             {
@@ -649,7 +641,6 @@ namespace MirrorsEdgeTweaks.Services
                     r.InstZoomFov = BytecodeBuilder.InstVar(zoomFovIdx);
             }
 
-            // Online skip: StartConnection + OnPlayOffline delegate.
             var sc = UePackageLocator.FindFunction(pkg, "TdOnlineLoginHandler", "StartConnection");
             if (sc != null)
             {
@@ -857,7 +848,6 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // Online skip
         // The 6-byte BoolVar(InstanceVar(ConnectionRequired)) operand from the LetBool that
         // stores the function's ConnectionRequired parameter into the instance variable
         static byte[]? FindConnectionRequiredBoolvar(IList<Token> tokens, byte[] bc)
@@ -883,8 +873,6 @@ namespace MirrorsEdgeTweaks.Services
                     return (UePackageLocator.Pos(j), j.CodeOffset);
             return null;
         }
-
-        // Utility
 
         static TdGamePatchState DetectStateCore(byte[] data, UnrealPackage pkg)
         {

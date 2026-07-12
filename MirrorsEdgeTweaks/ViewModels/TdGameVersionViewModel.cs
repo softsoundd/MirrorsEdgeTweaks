@@ -69,7 +69,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Detects the installed TdGame.u variant and selects it in the combo without re-triggering a download.
         public void DetectVersion()
         {
             var path = _session.Config.TdGamePackagePath;

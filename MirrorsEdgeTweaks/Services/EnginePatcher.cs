@@ -24,7 +24,6 @@ namespace MirrorsEdgeTweaks.Services
             (0x26C, 0x02D5),
         };
 
-        // Per file resolved object references and the patterns built from them.
         sealed class Resolved
         {
             public int SerialOffset;
@@ -87,7 +86,6 @@ namespace MirrorsEdgeTweaks.Services
             r.LocalBlendPct = BytecodeBuilder.LocalVar(blendPct);
             r.LocalNewPov = BytecodeBuilder.LocalVar(newPov);
 
-            // Index dependent patterns rebuilt from the resolved object references.
             r.ArPropertyToken = BytecodeBuilder.InstVar(car);
             r.P1Old = BytecodeBuilder.Concat(
                 new byte[] { BytecodeBuilder.OP_LET }, r.ArPropertyToken,
@@ -221,7 +219,6 @@ namespace MirrorsEdgeTweaks.Services
 
             PackageSplicer.WriteBSS(data, exportStart, (uint)(bss + totalP2));
 
-            // Splice: insert blob A at pointA, blob B at pointB
             var buf = new byte[data.Length + totalP2];
             Buffer.BlockCopy(data, 0, buf, 0, pointAFile);
             Buffer.BlockCopy(blobA, 0, buf, pointAFile, blobA.Length);
@@ -365,8 +362,6 @@ namespace MirrorsEdgeTweaks.Services
             if (!data.AsSpan().SequenceEqual(before))
                 Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
-
-        // Private helpers
 
         static (byte[] checkVt, byte[] fillCache) FindPhase2Patterns(byte[] bc)
         {

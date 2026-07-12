@@ -14,8 +14,6 @@ namespace MirrorsEdgeTweaks.ViewModels
     // Resolution selection, dynamic high-res UI fix orchestration and per-resolution patch reconcile.
     public partial class GraphicsTweaksViewModel
     {
-        // ---- Resolution + High-Res Fix ----
-
         partial void OnSelectedResolutionChanged(ResolutionHelper.Resolution? value) => _ = OnResolutionChangedAsync(value);
 
         private async Task OnResolutionChangedAsync(ResolutionHelper.Resolution? selectedResolution)
@@ -79,8 +77,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Ensures the exe render target fix, Engine.u dynamic AR/FOV scaling,
-        // and TdGame.u core compensation patches are applied when resolution changes
         private void ApplyDynamicPatchesForResolution()
         {
             try
@@ -255,9 +251,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             UpdateHighResFixStatus(res.Width, isCurrentlyActive);
         }
 
-        // Reapplies (or rolls back to defaults) the high-res UI scaling fix for the active
-        // resolution. Called by flows that overwrite game files on disk (language pack and TdGame
-        // version installs) so the fix is not lost.
+        // Called by flows that overwrite game files on disk (language pack and TdGame version
+        // installs) so the high-res UI scaling fix is not lost.
         public async Task ReapplyHighResUIFixIfNeededAsync(bool? wasUIScalingActiveOverride = null, bool showDialogs = true)
         {
             try

@@ -6,8 +6,6 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // A single keybind row: its display label, captured key (DisplayKey), the click-to-capture
-    // command and the info command, plus the static KeybindInfo metadata and info-dialog text.
     // Rendered by the shared keybind-row DataTemplate in MainWindow.xaml.
     public partial class KeybindEntryViewModel : ObservableObject
     {
@@ -66,7 +64,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         public KeybindEntryViewModel ScrollDownMacro { get; }
         public KeybindEntryViewModel ScrollUpMacro { get; }
 
-        // Section collections rendered by the shared keybind-row DataTemplate (ItemsControl).
         public IReadOnlyList<KeybindEntryViewModel> CustomKeybinds { get; }
         public IReadOnlyList<KeybindEntryViewModel> CheatTrainerKeybinds { get; }
         public IReadOnlyList<KeybindEntryViewModel> MacroKeybinds { get; }
@@ -174,8 +171,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public void ShowInfo(KeybindEntryViewModel entry) =>
             _dialogService.ShowMessage(entry.InfoTitle, entry.InfoBody, DialogMessageType.Information);
-
-        // ---- Capture + dispatch ----
 
         public async Task CaptureAsync(KeybindEntryViewModel entry)
         {
@@ -356,8 +351,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _isLoading = false;
             }
         }
-
-        // ---- Standard apply / remove ----
 
         private async Task UpdateKeybind(KeybindEntryViewModel entry, string command, string key)
         {

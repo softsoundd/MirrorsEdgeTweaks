@@ -69,7 +69,6 @@ namespace MirrorsEdgeTweaks.Services
             return false;
         }
 
-        // Returns null if the .ooa section is absent or the file doesn't exist on disk.
         public static string? FindLicensePath(byte[] data)
         {
             string? contentId = ExtractContentId(data);

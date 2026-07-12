@@ -2,8 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Shared status-bar / shell state: selected directory, detected game version, config
-    // detection, the status line, and the coarse UI-enabled switches.
     public partial class GameStatusViewModel : ObservableObject
     {
         [ObservableProperty] private string _gameDirectoryPath = "No valid directory selected.";

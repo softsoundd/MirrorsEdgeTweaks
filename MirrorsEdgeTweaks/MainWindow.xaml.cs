@@ -32,8 +32,6 @@ namespace MirrorsEdgeTweaks
 
         private void Window_Loaded(object sender, RoutedEventArgs e) => _ = _viewModel.InitializeAsync();
 
-        // Forward the render-resolution slider's Thumb drag events to the GraphicsTweaksViewModel,
-        // which owns the drag-deferred apply logic.
         private void RenderResolutionSlider_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
             => _viewModel.Graphics.BeginRenderResolutionDrag();
 

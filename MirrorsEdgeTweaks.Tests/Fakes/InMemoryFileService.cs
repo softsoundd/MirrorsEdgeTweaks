@@ -2,9 +2,7 @@ using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Tests.Fakes
 {
-    // In-memory IFileService for tests. Backs the line-based members (FileExists/ReadAllLines/
-    // WriteAllLines) with a dictionary; the byte/async/directory members throw because no current
-    // test exercises them.
+    // The byte/async/directory members throw because no current test exercises them.
     public sealed class InMemoryFileService : IFileService
     {
         private readonly Dictionary<string, string[]> _files = new(StringComparer.Ordinal);

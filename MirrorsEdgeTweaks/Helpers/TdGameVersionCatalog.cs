@@ -8,10 +8,10 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         public static readonly IReadOnlyList<string> Names = new[]
         {
-            "Original",                          // 0
-            "TdGame Fix (by Keku)",              // 1
-            "Time Trials Timer Fix (by Nulaft)", // 2
-            "TdGame Fix + Time Trials Timer Fix" // 3
+            "Original",
+            "TdGame Fix (by Keku)",
+            "Time Trials Timer Fix (by Nulaft)",
+            "TdGame Fix + Time Trials Timer Fix"
         };
 
         public static int IndexOf(string? versionName)

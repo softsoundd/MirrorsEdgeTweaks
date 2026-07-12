@@ -9,20 +9,13 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IGameDataService
     {
-        // Raised on the calling thread after a successful LoadPackages so the shell can run the
-        // feature-VM refresh fan-out (Patches / Mods / Graphics / Init) without this service
-        // depending on the feature view models (which would create a DI cycle).
         event Action? PackagesReloaded;
 
-        // Loads Engine.u / TdGame.u, finds all editable offsets, and raises PackagesReloaded.
-        // Pass notify: false for intermediate reloads (e.g. re-finding offsets mid-operation)
-        // where the feature-VM refresh fan-out would be premature.
+        // Pass notify: false for intermediate reloads where the feature-VM refresh fan-out
+        // (raised via PackagesReloaded) would be premature.
         void LoadPackages(bool notify = true);
 
-        // Short delay + LoadPackages on a background thread (used after on-disk patching).
         Task ReloadPackagesAsync(bool notify = true);
-
-        // Recomputes the developer-console install status from the loaded package and config files.
         void UpdateConsoleStatus();
     }
 

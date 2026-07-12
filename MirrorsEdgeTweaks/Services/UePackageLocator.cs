@@ -7,7 +7,7 @@ namespace MirrorsEdgeTweaks.Services
 {
     internal sealed class UeFunctionInfo
     {
-        public int SerialOffset;   // file offset of the export's serial data
+        public int SerialOffset;
         public int ExportIndex;    // 1-based package export index (objref)
         public IList<Token> Tokens = Array.Empty<Token>();
     }
@@ -89,7 +89,6 @@ namespace MirrorsEdgeTweaks.Services
             return export == null ? -1 : (int)export.SerialOffset;
         }
 
-        // Returns the UObject so callers can read both its own object reference and its outer's
         public static UObject? FindExportObject(UnrealPackage package, string name, string outerName)
         {
             return package.Objects.FirstOrDefault(o => (int)o.PackageIndex > 0
@@ -114,7 +113,6 @@ namespace MirrorsEdgeTweaks.Services
             return package.Names.FindIndex(n => n.ToString() == name);
         }
 
-        // Bytecode offset of a token relative to the function body start.
         public static int Pos(Token t) => t.StoragePosition;
 
         public static byte[] Harvest(byte[] bc, Token t, int length)

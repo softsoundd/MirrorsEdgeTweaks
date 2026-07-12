@@ -1,7 +1,5 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Snapshot of FOV-related dynamic patch state captured before swapping the TdGame
-    // package, so the settings can be re-applied afterwards.
     internal sealed class TdGameFovTouchpointSnapshot
     {
         public bool DynamicPatchesApplied { get; set; }
@@ -24,7 +22,6 @@ namespace MirrorsEdgeTweaks.Helpers
         public bool HasRestartTimeTrialKeybind { get; set; }
     }
 
-    // Result of re-applying a TdGameTouchpointSnapshot after a package swap.
     internal sealed class TdGameTouchpointReapplyResult
     {
         public List<string> ReappliedSettings { get; } = new List<string>();

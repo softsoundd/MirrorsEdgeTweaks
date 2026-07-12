@@ -38,7 +38,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _session = session;
         }
 
-        // Keep the shared config (the persistence source of truth) in sync with the entered text.
         partial void OnLaunchArgumentsChanged(string value) => _session.Config.LaunchArguments = value ?? string.Empty;
 
         private void SetPatchStatus(string status, Brush foreground)
@@ -140,7 +139,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Sets a transient "checking" patch status while the game directory is loading.
         public void SetChecking() => SetPatchStatus("Checking executable...", Brushes.Gray);
 
         [RelayCommand]

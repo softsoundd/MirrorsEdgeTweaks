@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Status of the Tweaks Scripts package and its optional UI companion (Mods tab).
     public partial class TweaksScriptsViewModel : ObservableObject
     {
         [ObservableProperty] private string _tweaksScriptsStatus = "Not Installed";

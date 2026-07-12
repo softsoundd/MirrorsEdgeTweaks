@@ -13,7 +13,6 @@ namespace MirrorsEdgeTweaks.Helpers
         const int ArrowBaseSize = 32;
         const double AuthoredHeight = 1080.0;
 
-        // Scale to base * max(1, height/1080) (clamped so <=1080p stays stock).
         public static void Apply(string cookedPcPath, int height)
         {
             int target = (int)Math.Round(ArrowBaseSize * Math.Max(1.0, height / AuthoredHeight));

@@ -170,8 +170,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private void ParsePe()
         {
-            // Header parsing is delegated to the shared PE reader; CaveSection keeps only the
-            // raw header offsets it needs for its own section-table edits.
             var pe = PeImageLayout.Parse(_peData);
 
             _peOffset = pe.PeOffset;

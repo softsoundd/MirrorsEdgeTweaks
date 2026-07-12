@@ -197,8 +197,6 @@ namespace MirrorsEdgeTweaks.Helpers
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
-        // Installs the hook set into an in-memory PE image tagging the cave
-        // with the detected version and returns the patched image
         private static byte[] ApplyToImage(byte[] data, string versionTag)
         {
             var pe = PeImageLayout.Parse(data);

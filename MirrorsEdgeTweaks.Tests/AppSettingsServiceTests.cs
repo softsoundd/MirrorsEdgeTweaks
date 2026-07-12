@@ -90,7 +90,6 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void Save_ThenLoad_RoundTripsThroughTheRealStore()
         {
-            // AppSettingsService -> real SettingsStore -> in-memory IFileService and back.
             var fileService = new InMemoryFileService();
             var store = new SettingsStore(fileService);
 

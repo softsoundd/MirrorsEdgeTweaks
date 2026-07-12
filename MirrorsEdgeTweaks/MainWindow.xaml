@@ -193,7 +193,6 @@
                                     IsEnabled="{Binding GameStatus.IsGameTweaksEnabled}"
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
 
-                            <!-- Mods Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Mods" FontWeight="Bold" FontSize="16" 
@@ -343,7 +342,6 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Patches Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Patches" FontWeight="Bold" FontSize="16" 
@@ -447,7 +445,6 @@
                                 </Grid>
                             </StackPanel>
 
-                            <!-- Other Patches -->
                             <Expander Margin="0,25,0,0"
                                       IsExpanded="False"
                                       HorizontalAlignment="Stretch"
@@ -462,7 +459,6 @@
                                 </Expander.Header>
                                 <StackPanel Margin="0,10,0,0">
 
-                                    <!-- Enable Logging -->
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="190"/>
@@ -496,7 +492,6 @@
                                         </Button>
                                     </Grid>
 
-                                    <!-- Multi-instance -->
                                     <Grid Margin="0,15,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="190"/>
@@ -530,7 +525,6 @@
                                         </Button>
                                     </Grid>
 
-                                    <!-- Ambiguous Bypass -->
                                     <Grid Margin="0,15,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="190"/>
@@ -569,14 +563,12 @@
                             
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <!-- Audio Settings Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Audio Settings" FontWeight="Bold" FontSize="16" 
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <!-- Game Language Setting -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -613,7 +605,6 @@
                                 </Button>
                             </Grid>
                             
-                            <!-- Audio Backend Setting -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -695,7 +686,6 @@
                         <StackPanel TextElement.Foreground="Black" Margin="0,0,15,0" 
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
                             
-                            <!-- Video Settings Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,40">
                                 <TextBlock Text="Video Settings" FontWeight="Bold" FontSize="16" 
@@ -803,7 +793,6 @@
                                 </Button>
                             </Grid>
 
-                            <!-- Render Resolution Slider -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -828,7 +817,6 @@
                                 </Button>
                             </Grid>
 
-                            <!-- VSync -->
                             <controls:SettingRow Margin="0,15,0,0" Label="VSync:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="VSync">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.VSync.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -836,7 +824,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- FPS Limit -->
                             <StackPanel Margin="0,20,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -879,7 +866,6 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <!-- Anti-Aliasing -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Anti-Aliasing:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="AntiAliasing">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.AntiAliasingIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Off"/>
@@ -891,7 +877,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- PhysX -->
                             <controls:SettingRow Margin="0,15,0,0" Label="PhysX:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="PhysX">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.PhysX.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -899,7 +884,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- PhysX FPS -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -927,7 +911,6 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Quality Presets Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,5">
                                 <TextBlock Text="Quality Presets" FontWeight="Bold" FontSize="16" 
@@ -936,7 +919,6 @@
                             <TextBlock Text="Note: Selecting a preset will override any custom individual settings you have applied." 
                                        FontSize="12" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,10"/>
 
-                            <!-- Texture Detail Preset -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -965,7 +947,6 @@
                                 </Button>
                             </Grid>
 
-                            <!-- Graphics Quality Preset -->
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="190"/>
@@ -995,7 +976,6 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Individual Settings Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,5">
                                 <TextBlock Text="Individual Settings" FontWeight="Bold" FontSize="16" 
@@ -1004,7 +984,6 @@
                             <TextBlock Text="Note: Modifying these settings may cause the in-game video options to display 'Medium' as a fallback label. This does not indicate your settings have been changed to medium quality." 
                                        FontSize="12" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
 
-                            <!-- Anisotropic Filtering -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Anisotropic Filtering:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="AnisotropicFiltering">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.Anisotropic.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Off"/>
@@ -1015,7 +994,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Static Decals -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Static Decals:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="StaticDecals">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.StaticDecals.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1023,7 +1001,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Dynamic Decals -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Decals:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicDecals">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicDecals.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1031,7 +1008,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Radial Blur -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Radial Blur:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="RadialBlur">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.RadialBlur.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1039,7 +1015,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Streak Effect -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Streak Effect:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="StreakEffect">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.StreakEffectIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1047,7 +1022,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Bloom & DoF -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Bloom &amp; DoF:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="BloomDoF">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.BloomDoF.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1055,7 +1029,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Lens Flare -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Lens Flare:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="LensFlare">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.LensFlare.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1063,7 +1036,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Dynamic Lights -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Lights:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicLights">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicLights.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1071,7 +1043,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Dynamic Shadows -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Dynamic Shadows:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="DynamicShadows">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.DynamicShadows.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1079,7 +1050,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- HQ Dynamic Shadows -->
                             <controls:SettingRow Margin="0,15,0,0" Label="HQ Dynamic Shadows:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="HqDynamicShadows">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.HqDynamicShadows.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1087,7 +1057,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Lightmaps -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Lightmaps:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="Lightmaps">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.Lightmaps.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1095,7 +1064,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Sun Haze -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Sun Haze:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="SunHaze">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.SunHaze.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1103,7 +1071,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Tone Mapping -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Tone Mapping:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ToneMapping">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ToneMapping.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>
@@ -1111,7 +1078,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Texture Management -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Texture Management:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="TextureManagement">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.TextureManagement.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Modern"/>
@@ -1121,7 +1087,6 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- LOD Settings Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="LOD Settings" FontWeight="Bold" FontSize="16" 
@@ -1211,14 +1176,12 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Shaders Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Shaders" FontWeight="Bold" FontSize="16" 
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
 
-                            <!-- Tone Mapper -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Tone Mapper:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ToneMapper">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ToneMapperIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Original"/>
@@ -1280,7 +1243,6 @@
                             </Style>
                         </ScrollViewer.Style>
                         <StackPanel Margin="0,0,15,0" Focusable="False" KeyboardNavigation.TabNavigation="None">
-                            <!-- Input Settings Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Input Settings" FontWeight="Bold" FontSize="16" 
@@ -1350,10 +1312,8 @@
                                 </ComboBox>
                             </controls:SettingRow>
                             
-                            <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <!-- Custom Keybinds Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Custom Keybinds" FontWeight="Bold" FontSize="16" 
@@ -1362,10 +1322,8 @@
                             
                             <ItemsControl ItemsSource="{Binding Keybinds.CustomKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
                             
-                            <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <!-- Cheat/Trainer Keybinds Section Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Cheat/Trainer Keybinds" FontWeight="Bold" FontSize="16" 
@@ -1376,7 +1334,6 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Macro Keybinds Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,15">
                                 <TextBlock Text="Macro Keybinds (Softimer)" FontWeight="Bold" FontSize="16" 
@@ -1385,17 +1342,14 @@
 
                             <ItemsControl ItemsSource="{Binding Keybinds.MacroKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
                             
-                            <!-- Separator -->
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <!-- Initialisation Settings Section Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
                                 <TextBlock Text="Initialisation Settings" FontWeight="Bold" FontSize="16" 
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
                             
-                            <!-- Intro Video Setting -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Intro Video:" Foreground="Black" InfoCommand="{Binding Init.ShowIntroVideoInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.IntroVideoIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
@@ -1403,7 +1357,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
                             
-                            <!-- Main Menu Delay Setting -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Main Menu Delay:" Foreground="Black" InfoCommand="{Binding Init.ShowMainMenuDelayInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.MainMenuDelayIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
@@ -1411,7 +1364,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
                             
-                            <!-- Time Trial Countdown Setting -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Time Trial Countdown:" Foreground="Black" InfoCommand="{Binding Init.ShowTimeTrialCountdownInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.TimeTrialCountdownIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="4 seconds (default)" Foreground="Black"/>
@@ -1421,7 +1373,6 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <!-- Skip Online Check Setting -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Skip Online Check:" Foreground="Black" InfoCommand="{Binding Init.ShowSkipOnlineCheckInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.SkipOnlineIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>
@@ -1431,14 +1382,12 @@
 
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <!-- Community Mods Header -->
                             <Border Background="{DynamicResource PrimaryHueLightBrush}" 
                                     CornerRadius="4" Padding="10,5" Margin="0,0,0,15">
                                 <TextBlock Text="Community Mods" FontWeight="Bold" FontSize="16" 
                                            Foreground="White" VerticalAlignment="Center"/>
                             </Border>
 
-                            <!-- Cinematic Faith Model Setting -->
                             <controls:SettingRow Margin="0,15,0,0" Label="Cinematic Faith Model:" Foreground="Black" InfoCommand="{Binding CommunityMods.ShowCinematicFaithInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding CommunityMods.CinematicFaithIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Disabled" Foreground="Black"/>

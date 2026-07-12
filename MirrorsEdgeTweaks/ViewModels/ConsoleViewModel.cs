@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Status of the developer-console install (Mods tab).
     public partial class ConsoleViewModel : ObservableObject
     {
         [ObservableProperty] private string _consoleStatus = "Not Installed";

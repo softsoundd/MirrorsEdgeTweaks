@@ -52,7 +52,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
                 byte[] data = File.ReadAllBytes(tsLocFilePath);
 
-                // find 2nd occurrence of gamepad pattern
                 int startIndex = 0;
                 bool patternFound = true;
                 for (int occurrence = 0; occurrence < 2; occurrence++)

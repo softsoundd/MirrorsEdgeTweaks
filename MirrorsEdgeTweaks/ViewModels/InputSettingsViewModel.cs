@@ -19,9 +19,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private bool _isLoading;
 
-        [ObservableProperty] private int _mouseSmoothingIndex = -1;   // 0 = Enabled, 1 = Disabled
-        [ObservableProperty] private int _uniformSensitivityIndex = -1; // 0 = Enabled, 1 = Disabled
-        [ObservableProperty] private int _gamepadButtonsIndex = -1;   // 0 = Xbox, 1 = PS3
+        [ObservableProperty] private int _mouseSmoothingIndex = -1;
+        [ObservableProperty] private int _uniformSensitivityIndex = -1;
+        [ObservableProperty] private int _gamepadButtonsIndex = -1;
         [ObservableProperty] private string _dpi = "";
         [ObservableProperty] private string _cm360 = "";
 

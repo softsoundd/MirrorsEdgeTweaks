@@ -5,12 +5,7 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IGameLauncher
     {
-        // Launches the game executable, trying several start strategies. Throws
-        // InvalidOperationException if every strategy fails.
         void Launch(string exePath, string arguments);
-
-        // True if the executable matches the known Steam build (used to warn the user that
-        // launching outside Steam may fail).
         bool IsSteamVersionExecutable(string exePath);
     }
 

@@ -497,7 +497,6 @@ namespace MirrorsEdgeTweaks.Helpers
             int jnzParsed2 = code.Count;
             Add(0x75, 0x00);
 
-            // Default filename
             Add(0xBA); AddU32(dataDefault);
             int jmpCreate = code.Count;
             Add(0xEB, 0x00);
@@ -593,7 +592,6 @@ namespace MirrorsEdgeTweaks.Helpers
                 int jnzP2 = code.Count;
                 Add(0x75, 0x00);
 
-                // Default filename
                 Add(0xBA); AddU32(defaultFilenameVa);
                 int jmpCreate = code.Count;
                 Add(0xEB, 0x00);

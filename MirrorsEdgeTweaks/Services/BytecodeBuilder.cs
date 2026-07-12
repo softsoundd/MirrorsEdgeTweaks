@@ -152,7 +152,6 @@ namespace MirrorsEdgeTweaks.Services
             return Context(pcOwner, (ushort)inner.Length, 4, inner);
         }
 
-        // StructMember access: struct.field via TPOV/FOV import indices.
         public static byte[] StructMemberFov(byte[] impFov, byte[] impTpov, byte[] localVar)
         {
             var b = new List<byte> { OP_STRUCT_MEMBER };
@@ -175,8 +174,6 @@ namespace MirrorsEdgeTweaks.Services
             b.AddRange(EndFP());
             return b.ToArray();
         }
-
-        // Engine.u blob builders (phase 2)
 
         // Point A: save/restore original DefaultFOV via DefaultAspectRatio (40 bytes).
         public static byte[] BuildBlobA(int insertBc, byte[] instDefaultFov, byte[] instDefaultAr)
@@ -288,7 +285,6 @@ namespace MirrorsEdgeTweaks.Services
             byte[] innerThen = Concat(vfunc, fminExpr, EndFP());
             byte[] thenCall = Context(Concat(dcast, powner), (ushort)innerThen.Length, 0, innerThen);
 
-            // Else-branch (original: SetNearClippingPlane(10))
             byte[] innerElse = Concat(vfunc, FloatConst(10.0f), EndFP());
             byte[] elseCall = Context(Concat(dcast, powner), (ushort)innerElse.Length, 0, innerElse);
 
@@ -777,8 +773,6 @@ namespace MirrorsEdgeTweaks.Services
             byte[] target = Context(InstVar(firstTextureRef), (ushort)sizeMember.Length, 4, sizeMember);
             return Concat(new byte[] { OP_LET }, target);
         }
-
-        // Utility
 
         public static byte[] Concat(params byte[][] arrays)
         {

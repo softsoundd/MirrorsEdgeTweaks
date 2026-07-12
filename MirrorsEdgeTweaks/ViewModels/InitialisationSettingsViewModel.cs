@@ -18,10 +18,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private bool _isLoading;
 
-        [ObservableProperty] private int _introVideoIndex = -1;        // 0 = Enabled, 1 = Disabled
-        [ObservableProperty] private int _mainMenuDelayIndex = -1;     // 0 = Enabled, 1 = Disabled
+        [ObservableProperty] private int _introVideoIndex = -1;
+        [ObservableProperty] private int _mainMenuDelayIndex = -1;
         [ObservableProperty] private int _timeTrialCountdownIndex = -1;
-        [ObservableProperty] private int _skipOnlineIndex = -1;        // 0 = Disabled, 1 = Enabled
+        [ObservableProperty] private int _skipOnlineIndex = -1;
 
         public InitialisationSettingsViewModel(
             IDialogService dialogService,

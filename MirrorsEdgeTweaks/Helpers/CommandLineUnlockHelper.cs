@@ -145,8 +145,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return true;
         }
 
-        // Branch + string patching
-
         private static void PatchBranch(byte[] buffer, PeImageLayout image, CommandLineUnlockLayout layout, bool unlock)
         {
             if (layout.BranchOffset < 0)
@@ -210,8 +208,6 @@ namespace MirrorsEdgeTweaks.Helpers
             payload.AsSpan().CopyTo(paddedPayload);
             paddedPayload.AsSpan().CopyTo(buffer.AsSpan(offset, spanSize));
         }
-
-        // Layout derivation
 
         private static bool TryDerivePersistentLayout(PeImageLayout image, byte[] buffer, out CommandLineUnlockLayout layout)
         {
@@ -279,8 +275,6 @@ namespace MirrorsEdgeTweaks.Helpers
             layout = default;
             return false;
         }
-
-        // Branch construction
 
         private static byte[] BuildUnlockedBranch(CommandLineUnlockLayout layout)
         {
@@ -384,8 +378,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return true;
         }
 
-        // Utility
-
         private static IEnumerable<int> FindAllOffsets(byte[] buffer, byte[] pattern)
             => PatternHelper.FindAll(buffer, pattern);
 
@@ -426,8 +418,6 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             return BinaryPrimitives.ReadInt32LittleEndian(ReadSpan(buffer, offset, sizeof(int)));
         }
-
-        // Types
 
         private readonly struct CommandLineUnlockLayout
         {

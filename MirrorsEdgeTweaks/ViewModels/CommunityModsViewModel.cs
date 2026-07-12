@@ -22,7 +22,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private bool _isLoading;
 
-        [ObservableProperty] private int _cinematicFaithIndex = -1; // 0 = Disabled, 1 = Enabled
+        [ObservableProperty] private int _cinematicFaithIndex = -1;
 
         public CommunityModsViewModel(
             IDialogService dialogService,

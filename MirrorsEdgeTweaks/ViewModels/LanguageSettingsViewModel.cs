@@ -17,20 +17,20 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private static readonly string[] LanguageNames =
         {
-            "Čeština (CZE)",   // 0
-            "Deutsch (DEU)",   // 1
-            "English (INT)",   // 2
-            "Español (ESN)",   // 3
-            "Français (FRA)",  // 4
-            "Italiano (ITA)",  // 5
-            "Magyar (HUN)",    // 6
-            "Polski (POL)",    // 7
-            "Português (POR)", // 8
-            "Русский (RUS)",   // 9
-            "한국어 (KOR)",       // 10
-            "台灣繁體中文 (CHT)",  // 11
-            "日本語 (JPN)",      // 12
-            "简体中文 (CHS)",     // 13
+            "Čeština (CZE)",
+            "Deutsch (DEU)",
+            "English (INT)",
+            "Español (ESN)",
+            "Français (FRA)",
+            "Italiano (ITA)",
+            "Magyar (HUN)",
+            "Polski (POL)",
+            "Português (POR)",
+            "Русский (RUS)",
+            "한국어 (KOR)",
+            "台灣繁體中文 (CHT)",
+            "日本語 (JPN)",
+            "简体中文 (CHS)",
         };
 
         private readonly IDialogService _dialogService;

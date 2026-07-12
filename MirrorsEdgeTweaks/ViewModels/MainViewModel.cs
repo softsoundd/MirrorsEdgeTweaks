@@ -121,7 +121,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         // ---- Startup ----
 
-        // Entry point invoked from the window's Loaded event.
         public async Task InitializeAsync()
         {
             LoadSettings();

@@ -8,9 +8,8 @@ namespace MirrorsEdgeTweaks.Services
         Task<byte[]> DownloadFileAsync(string url, IProgress<int>? progress = null);
         Task DownloadAndExtractZipAsync(string url, string extractPath, IProgress<int>? progress = null);
 
-        // Streams the response directly to a file. onProgress receives 0-100 while the content
-        // length is known, or a single -1 when the server does not report a length (callers can
-        // switch their progress bar to indeterminate).
+        // onProgress receives 0-100, or a single -1 when the server reports no content length
+        // (callers can switch their progress bar to indeterminate).
         Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default);
     }
 
