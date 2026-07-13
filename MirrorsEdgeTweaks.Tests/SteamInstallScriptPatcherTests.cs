@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Tests
