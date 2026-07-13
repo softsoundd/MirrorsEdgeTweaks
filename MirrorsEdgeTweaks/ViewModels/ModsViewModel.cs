@@ -8,13 +8,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 {
     public partial class ModsViewModel : BusyViewModel
     {
-        private const string ConsoleDownloadUrl = DownloadUrls.AssetBase + "MirrorsEdgeConsole.zip";
-
         private readonly IDialogService _dialogService;
         private readonly IPackageService _packageService;
         private readonly IFileService _fileService;
         private readonly IGameDataService _gameData;
         private readonly IDownloadService _download;
+        private readonly IAssetUrlProvider _assetUrls;
         private readonly TweaksScriptsViewModel _tweaksScripts;
 
         public ModsViewModel(
@@ -23,6 +22,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IFileService fileService,
             IGameDataService gameData,
             IDownloadService download,
+            IAssetUrlProvider assetUrls,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -34,6 +34,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _fileService = fileService;
             _gameData = gameData;
             _download = download;
+            _assetUrls = assetUrls;
             _tweaksScripts = tweaksScripts;
         }
 
@@ -172,114 +173,92 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            const string downloadUrl = DownloadUrls.AssetBase + "MirrorsEdgeTweaksScripts.zip";
-            string tempZipPath = Path.Combine(Path.GetTempPath(), "MirrorsEdgeTweaksScripts.zip");
-
             _gameStatus.IsGameTweaksEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.DownloadProgressValue = 0;
-            _downloadProgress.IsDownloadProgressIndeterminate = true;
-            _gameStatus.Status = "Downloading Tweaks Scripts...";
-
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
 
             try
             {
-                await Task.Run(async () =>
-                {
-                    var report = CreateThrottledProgressReporter();
-                    bool determinateSet = false;
-                    await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
+                await _assetUrls.EnsureLoadedAsync();
+                string downloadUrl = _assetUrls.For("MirrorsEdgeTweaksScripts.zip");
+
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    gameDir,
+                    "Tweaks Scripts",
+                    customExtract: (tempZipPath, dest) => Task.Run(() =>
                     {
-                        if (p < 0)
-                            return;
-                        if (!determinateSet)
+                        string binariesPath = Path.Combine(dest, "Binaries");
+                        string settingsPath = Path.Combine(binariesPath, "TweaksScriptsSettings");
+                        Dictionary<string, string> existingSettings = new Dictionary<string, string>();
+
+                        if (File.Exists(settingsPath))
                         {
-                            determinateSet = true;
-                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-                        }
-                        report(p, $"Downloading Tweaks Scripts... {p:F0}%");
-                    });
-
-                    dispatcher.Invoke(() =>
-                    {
-                        _gameStatus.Status = "Extracting files...";
-                        _downloadProgress.DownloadProgressValue = 100;
-                    });
-
-                    string binariesPath = Path.Combine(gameDir, "Binaries");
-                    string settingsPath = Path.Combine(binariesPath, "TweaksScriptsSettings");
-                    Dictionary<string, string> existingSettings = new Dictionary<string, string>();
-
-                    if (File.Exists(settingsPath))
-                    {
-                        var lines = File.ReadAllLines(settingsPath);
-                        foreach (var line in lines)
-                        {
-                            var trimmedLine = line.Trim();
-                            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//")) continue;
-
-                            var parts = trimmedLine.Split(new[] { ' ' }, 2);
-                            if (parts.Length > 0)
+                            var lines = File.ReadAllLines(settingsPath);
+                            foreach (var line in lines)
                             {
-                                string key = parts[0];
-                                string value = parts.Length > 1 ? parts[1] : string.Empty;
-                                existingSettings[key] = value;
-                            }
-                        }
-                    }
+                                var trimmedLine = line.Trim();
+                                if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//")) continue;
 
-                    ZipFile.ExtractToDirectory(tempZipPath, gameDir, true);
-                    File.Delete(tempZipPath);
-
-                    if (existingSettings.Count > 0 && File.Exists(settingsPath))
-                    {
-                        var newLines = File.ReadAllLines(settingsPath).ToList();
-                        var updatedLines = new List<string>();
-
-                        foreach (var line in newLines)
-                        {
-                            var trimmedLine = line.Trim();
-                            if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//"))
-                            {
-                                updatedLines.Add(line);
-                                continue;
-                            }
-
-                            var parts = trimmedLine.Split(new[] { ' ' }, 2);
-                            if (parts.Length > 0)
-                            {
-                                string key = parts[0];
-                                if (existingSettings.ContainsKey(key))
+                                var parts = trimmedLine.Split(new[] { ' ' }, 2);
+                                if (parts.Length > 0)
                                 {
-                                    string oldValue = existingSettings[key];
-                                    string newLine = string.IsNullOrEmpty(oldValue) ? key : $"{key} {oldValue}";
-                                    updatedLines.Add(newLine);
+                                    string key = parts[0];
+                                    string value = parts.Length > 1 ? parts[1] : string.Empty;
+                                    existingSettings[key] = value;
+                                }
+                            }
+                        }
+
+                        ZipFile.ExtractToDirectory(tempZipPath, dest, true);
+
+                        if (existingSettings.Count > 0 && File.Exists(settingsPath))
+                        {
+                            var newLines = File.ReadAllLines(settingsPath).ToList();
+                            var updatedLines = new List<string>();
+
+                            foreach (var line in newLines)
+                            {
+                                var trimmedLine = line.Trim();
+                                if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//"))
+                                {
+                                    updatedLines.Add(line);
+                                    continue;
+                                }
+
+                                var parts = trimmedLine.Split(new[] { ' ' }, 2);
+                                if (parts.Length > 0)
+                                {
+                                    string key = parts[0];
+                                    if (existingSettings.ContainsKey(key))
+                                    {
+                                        string oldValue = existingSettings[key];
+                                        string newLine = string.IsNullOrEmpty(oldValue) ? key : $"{key} {oldValue}";
+                                        updatedLines.Add(newLine);
+                                    }
+                                    else
+                                    {
+                                        updatedLines.Add(line);
+                                    }
                                 }
                                 else
                                 {
                                     updatedLines.Add(line);
                                 }
                             }
-                            else
-                            {
-                                updatedLines.Add(line);
-                            }
+
+                            File.WriteAllLines(settingsPath, updatedLines);
                         }
 
-                        File.WriteAllLines(settingsPath, updatedLines);
-                    }
+                        string exePath = Path.Combine(dest, "Binaries", "MirrorsEdge.exe");
+                        if (SetCommandPatchHelper.IsDlcVersion(exePath))
+                        {
+                            Post(() => _gameStatus.Status = "Applying DLC set/setnopec fix...");
+                        }
 
-                    string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
-                    if (SetCommandPatchHelper.IsDlcVersion(exePath))
-                    {
-                        dispatcher.Invoke(() => _gameStatus.Status = "Applying DLC set/setnopec fix...");
-                    }
+                        SetCommandPatchHelper.EnsurePatchedIfApplicable(exePath);
+                    }));
 
-                    SetCommandPatchHelper.EnsurePatchedIfApplicable(exePath);
-                });
-
-                _gameStatus.Status = "Ready.";
                 RefreshTweaksScriptsStatus();
                 await _dialogService.ShowMessageAsync("Success",
                     "Tweaks Scripts successfully downloaded and installed.",
@@ -293,10 +272,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally
             {
                 _gameStatus.IsGameTweaksEnabled = true;
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.DownloadProgressValue = 0;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-
                 RefreshTweaksScriptsStatus();
             }
         }
@@ -413,10 +388,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task InstallTweaksScriptsUICoreAsync(bool isMEMM)
         {
-            string downloadUrl = isMEMM
-                ? DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI_MEMM_compatible.zip"
-                : DownloadUrls.AssetBase + "MirrorsEdgeTweaksScriptsUI.zip";
-
             try
             {
                 string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -439,45 +410,28 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 }
 
-                ShowProgress("Downloading Tweaks Scripts UI...", false);
+                await _assetUrls.EnsureLoadedAsync();
+                string zipName = isMEMM
+                    ? "MirrorsEdgeTweaksScriptsUI_MEMM_compatible.zip"
+                    : "MirrorsEdgeTweaksScriptsUI.zip";
+                string downloadUrl = _assetUrls.For(zipName);
 
-                try
-                {
-                    string tempZipPath = Path.Combine(Path.GetTempPath(), "TweaksScriptsUI.zip");
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    publishedPath,
+                    "Tweaks Scripts UI");
 
-                    var report = CreateThrottledProgressReporter();
-                    await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
-                    {
-                        if (p >= 0)
-                            report(p, $"Downloading Tweaks Scripts UI... {p:F0}%");
-                    });
+                string versionName = isMEMM ? "MEMM-Compatible" : "Regular";
+                _dialogService.ShowMessage("Success",
+                    $"Tweaks Scripts UI ({versionName}) installed successfully!",
+                    DialogMessageType.Success);
 
-                    _gameStatus.Status = "Extracting Tweaks Scripts UI...";
-                    _downloadProgress.IsDownloadProgressIndeterminate = true;
-
-                    await Task.Run(() =>
-                    {
-                        ZipFile.ExtractToDirectory(tempZipPath, publishedPath, true);
-                        File.Delete(tempZipPath);
-                    });
-
-                    HideProgress();
-
-                    string versionName = isMEMM ? "MEMM-Compatible" : "Regular";
-                    _dialogService.ShowMessage("Success",
-                        $"Tweaks Scripts UI ({versionName}) installed successfully!",
-                        DialogMessageType.Success);
-
-                    RefreshTweaksScriptsUIStatus();
-                }
-                finally
-                {
-                    HideProgress();
-                }
+                RefreshTweaksScriptsUIStatus();
             }
             catch (Exception ex)
             {
-                HideProgress();
                 _dialogService.ShowMessage("Error",
                     $"Failed to install Tweaks Scripts UI: {ex.Message}",
                     DialogMessageType.Error);
@@ -572,48 +526,28 @@ namespace MirrorsEdgeTweaks.ViewModels
             long consoleHeightOffset = offsets.ConsoleHeightOffset;
 
             _gameStatus.IsGameTweaksEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.DownloadProgressValue = 0;
-
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
 
             try
             {
-                await Task.Run(async () =>
+                await Task.Run(() =>
                 {
-                    dispatcher.Invoke(() => _gameStatus.Status = "Installing console...");
                     ConfigFileHelper.ModifyIniFile(tdEngineIni, "Engine.Engine", "ConsoleClassName", "MirrorsEdgeConsole.MirrorsEdgeConsole");
                     ConfigFileHelper.ModifyIniFile(tdInputIni, "Engine.Console", "TypeKey", "Tab");
+                });
 
-                    string tempZipPath = Path.Combine(Path.GetTempPath(), "MirrorsEdgeConsole.zip");
+                await _assetUrls.EnsureLoadedAsync();
+                string downloadUrl = _assetUrls.For("MirrorsEdgeConsole.zip");
 
-                    var report = CreateThrottledProgressReporter();
-                    bool determinateSet = false;
-                    await _download.DownloadToFileAsync(ConsoleDownloadUrl, tempZipPath, p =>
-                    {
-                        if (p < 0)
-                        {
-                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = true);
-                            return;
-                        }
-                        if (!determinateSet)
-                        {
-                            determinateSet = true;
-                            Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-                        }
-                        report(p, $"Downloading console... {p:F0}%");
-                    });
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    gameDir,
+                    "console");
 
-                    dispatcher.Invoke(() =>
-                    {
-                        _gameStatus.Status = "Extracting console files...";
-                        _downloadProgress.IsDownloadProgressIndeterminate = true;
-                    });
-
-                    ZipFile.ExtractToDirectory(tempZipPath, gameDir, true);
-                    File.Delete(tempZipPath);
-
-                    dispatcher.Invoke(() => _gameStatus.Status = "Patching Engine.u...");
+                await Task.Run(() =>
+                {
+                    Post(() => _gameStatus.Status = "Patching Engine.u...");
 
                     _packageService.DisposePackage(_session.Package);
                     _session.Package = null;
@@ -627,7 +561,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
                     if (SetCommandPatchHelper.IsDlcVersion(exePath))
                     {
-                        dispatcher.Invoke(() => _gameStatus.Status = "Applying DLC set/setnopec fix...");
+                        Post(() => _gameStatus.Status = "Applying DLC set/setnopec fix...");
                     }
 
                     SetCommandPatchHelper.EnsurePatchedIfApplicable(exePath);
@@ -651,8 +585,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             finally
             {
-                _downloadProgress.IsDownloadProgressVisible = false;
-
                 await _gameData.ReloadPackagesAsync();
             }
         }

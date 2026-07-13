@@ -1,12 +1,12 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Central definition of where Tweaks' runtime download ZIPs are hosted.
-    // ZIPs are published as GitHub Release assets under the "runtime-assets" tag
-    // Changing the host only requires editing AssetBase here
+    // Baked-in defaults used when the remote manifest cannot be fetched.
+    // Runtime asset hosting is resolved by IAssetUrlProvider (see AssetUrlProvider).
     public static class DownloadUrls
     {
-        public const string AssetBase = "https://github.com/softsoundd/MirrorsEdgeTweaks/releases/download/runtime-assets/";
+        public const string DefaultAssetBase = "https://github.com/softsoundd/MirrorsEdgeTweaks/releases/download/runtime-assets/";
 
-        public static string For(string fileName) => AssetBase + fileName;
+        public const string ManifestBootstrapUrl =
+            "https://raw.githubusercontent.com/softsoundd/MirrorsEdgeTweaks/main/assets-manifest.json";
     }
 }

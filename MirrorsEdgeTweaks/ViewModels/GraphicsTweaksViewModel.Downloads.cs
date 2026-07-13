@@ -1,7 +1,5 @@
-using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
-using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -24,47 +22,21 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             string variantName = index == 1 ? "Faithful Luma" : "Original";
             string zipName = index == 1 ? "FaithfulLumaTonemap.zip" : "OriginalTonemap.zip";
-            string downloadUrl = DownloadUrls.For(zipName);
-            string tempZipPath = Path.Combine(Path.GetTempPath(), zipName);
 
             _gameStatus.IsUiEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.DownloadProgressValue = 0;
-            _downloadProgress.IsDownloadProgressIndeterminate = true;
-            _gameStatus.Status = $"Downloading {variantName} tone mapper...";
-
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
 
             try
             {
-                var report = CreateThrottledProgressReporter();
-                bool determinateSet = false;
-                await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
-                {
-                    if (p < 0)
-                        return;
-                    if (!determinateSet)
-                    {
-                        determinateSet = true;
-                        Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
-                    }
-                    report(p, $"Downloading {variantName} tone mapper... {p:F0}%");
-                });
+                await _assetUrls.EnsureLoadedAsync();
+                string downloadUrl = _assetUrls.For(zipName);
 
-                dispatcher.Invoke(() =>
-                {
-                    _gameStatus.Status = "Extracting shader files...";
-                    _downloadProgress.DownloadProgressValue = 100;
-                    _downloadProgress.IsDownloadProgressIndeterminate = true;
-                });
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    gameDir,
+                    $"{variantName} tone mapper");
 
-                await Task.Run(() =>
-                {
-                    ZipFile.ExtractToDirectory(tempZipPath, gameDir, true);
-                    File.Delete(tempZipPath);
-                });
-
-                _gameStatus.Status = "Ready.";
                 RefreshToneMapper();
                 await _dialogService.ShowMessageAsync("Success",
                     $"{variantName} tone mapper successfully downloaded and installed.",
@@ -79,9 +51,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally
             {
                 _gameStatus.IsUiEnabled = true;
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.DownloadProgressValue = 0;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
             }
         }
 

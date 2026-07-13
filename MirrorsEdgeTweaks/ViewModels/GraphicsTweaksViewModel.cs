@@ -21,6 +21,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameDataService _gameData;
         private readonly IAppSettingsService _settings;
         private readonly IDownloadService _download;
+        private readonly IFileService _fileService;
+        private readonly IAssetUrlProvider _assetUrls;
         private readonly UnlockedConfigsViewModel _unlockedConfigs;
 
         private bool _isLoading;
@@ -89,6 +91,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             IGameDataService gameData,
             IAppSettingsService settings,
             IDownloadService download,
+            IFileService fileService,
+            IAssetUrlProvider assetUrls,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -101,6 +105,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameData = gameData;
             _settings = settings;
             _download = download;
+            _fileService = fileService;
+            _assetUrls = assetUrls;
             _unlockedConfigs = unlockedConfigs;
 
             VSync = new GraphicsOption((o, v) => ApplyStandard(o, v, "VSync", () => _graphics.ApplyVSync(IniPath!, v == 0)));

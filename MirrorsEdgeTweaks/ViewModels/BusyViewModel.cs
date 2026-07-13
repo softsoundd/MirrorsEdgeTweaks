@@ -1,4 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using MirrorsEdgeTweaks.Services;
+using System.IO;
+using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -119,6 +122,66 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 });
             };
+        }
+
+        protected async Task RunDownloadAndExtractAsync(
+            IDownloadService download,
+            IFileService fileService,
+            string url,
+            string extractPath,
+            string statusPrefix,
+            Func<string, string, Task>? customExtract = null,
+            Func<Task>? afterExtract = null,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(url);
+            ArgumentException.ThrowIfNullOrWhiteSpace(extractPath);
+
+            string tempZipPath = Path.Combine(fileService.GetTempPath(), $"metweaks_{Guid.NewGuid():N}.zip");
+
+            try
+            {
+                ShowProgress($"Downloading {statusPrefix}...", true);
+
+                var report = CreateThrottledProgressReporter();
+                bool determinateSet = false;
+                await download.DownloadToFileAsync(url, tempZipPath, p =>
+                {
+                    if (p < 0)
+                    {
+                        Post(() => _downloadProgress.IsDownloadProgressIndeterminate = true);
+                        return;
+                    }
+
+                    if (!determinateSet)
+                    {
+                        determinateSet = true;
+                        Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
+                    }
+
+                    report(p, $"Downloading {statusPrefix}... {p:F0}%");
+                }, cancellationToken);
+
+                ShowProgress($"Extracting {statusPrefix}...", true);
+
+                if (customExtract != null)
+                {
+                    await customExtract(tempZipPath, extractPath);
+                }
+                else
+                {
+                    await Task.Run(() => ZipFile.ExtractToDirectory(tempZipPath, extractPath, overwriteFiles: true), cancellationToken);
+                }
+
+                if (afterExtract != null)
+                    await afterExtract();
+            }
+            finally
+            {
+                HideProgress();
+                if (fileService.FileExists(tempZipPath))
+                    fileService.DeleteFile(tempZipPath);
+            }
         }
     }
 }

@@ -3,17 +3,15 @@ using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
-using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
     public partial class CommunityModsViewModel : BusyViewModel
     {
-        private const string OriginalModelUrl = DownloadUrls.AssetBase + "FaithModelOriginal.zip";
-        private const string CinematicModelUrl = DownloadUrls.AssetBase + "FaithModelCinematic.zip";
-
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
+        private readonly IFileService _fileService;
+        private readonly IAssetUrlProvider _assetUrls;
         private bool _isLoading;
 
         protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
@@ -23,6 +21,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         public CommunityModsViewModel(
             IDialogService dialogService,
             IDownloadService download,
+            IFileService fileService,
+            IAssetUrlProvider assetUrls,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
@@ -30,6 +30,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService = dialogService;
             _download = download;
+            _fileService = fileService;
+            _assetUrls = assetUrls;
         }
 
         partial void OnCinematicFaithIndexChanged(int oldValue, int newValue) => EnqueueApply(() => OnCinematicFaithChangedAsync(oldValue, newValue));
@@ -69,9 +71,16 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _gameStatus.IsUiEnabled = false;
 
-                string downloadUrl = enabled ? CinematicModelUrl : OriginalModelUrl;
+                await _assetUrls.EnsureLoadedAsync();
+                string fileName = enabled ? "FaithModelCinematic.zip" : "FaithModelOriginal.zip";
+                string downloadUrl = _assetUrls.For(fileName);
 
-                await DownloadAndExtractCinematicFaithFiles(downloadUrl);
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    _session.Config.GameDirectoryPath,
+                    "Cinematic Faith Model files");
             }
             catch (Exception ex)
             {
@@ -83,47 +92,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally
             {
                 _gameStatus.IsUiEnabled = true;
-            }
-        }
-
-        private async Task DownloadAndExtractCinematicFaithFiles(string downloadUrl)
-        {
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                throw new InvalidOperationException("Game directory path is not set.");
-
-            string tempZipPath = Path.Combine(Path.GetTempPath(), "CinematicFaith_temp.zip");
-
-            try
-            {
-                _gameStatus.Status = "Downloading Cinematic Faith Model files...";
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-                _downloadProgress.IsDownloadProgressVisible = true;
-
-                var report = CreateThrottledProgressReporter();
-                await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
-                {
-                    if (p >= 0)
-                        report(p, $"Downloading Cinematic Faith Model files... {p:F0}%");
-                });
-
-                _gameStatus.Status = "Extracting Cinematic Faith Model files...";
-                _downloadProgress.IsDownloadProgressIndeterminate = true;
-
-                string extractPath = _session.Config.GameDirectoryPath;
-                await Task.Run(() => ZipFile.ExtractToDirectory(tempZipPath, extractPath, overwriteFiles: true));
-
-                _gameStatus.Status = "Ready.";
-            }
-            finally
-            {
-                _downloadProgress.IsDownloadProgressVisible = false;
-                _downloadProgress.DownloadProgressValue = 0;
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-
-                if (File.Exists(tempZipPath))
-                {
-                    File.Delete(tempZipPath);
-                }
             }
         }
 

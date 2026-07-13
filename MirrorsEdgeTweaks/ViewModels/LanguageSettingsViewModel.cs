@@ -1,9 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
-using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -29,6 +27,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
+        private readonly IFileService _fileService;
+        private readonly IAssetUrlProvider _assetUrls;
         private readonly GraphicsTweaksViewModel _graphics;
         private readonly ISteamService _steamService;
 
@@ -41,6 +41,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         public LanguageSettingsViewModel(
             IDialogService dialogService,
             IDownloadService download,
+            IFileService fileService,
+            IAssetUrlProvider assetUrls,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
@@ -50,6 +52,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService = dialogService;
             _download = download;
+            _fileService = fileService;
+            _assetUrls = assetUrls;
             _graphics = graphics;
             _steamService = steamService;
         }
@@ -235,7 +239,14 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 });
 
-                await DownloadAndExtractLanguageFiles(languageConfig.DownloadUrl);
+                await _assetUrls.EnsureLoadedAsync();
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    _assetUrls.For(languageConfig.ZipFileName),
+                    _session.Config.GameDirectoryPath!,
+                    "language files",
+                    afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
 
                 SteamInstallScriptFixResult steamFixResult = await Task.Run(() =>
                     _steamService.ApplyLanguageFix(_session.Config.GameDirectoryPath!));
@@ -279,7 +290,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private class LanguageConfig
         {
-            public string DownloadUrl { get; set; } = "";
+            public string ZipFileName { get; set; } = "";
             public string RegistryLanguage { get; set; } = "";
             public string Locale { get; set; } = "";
             public string TdEngineLanguage { get; set; } = "";
@@ -291,98 +302,98 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 "Čeština (CZE)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("CZE.zip"),
+                    ZipFileName = "CZE.zip",
                     RegistryLanguage = "Czech",
                     Locale = "cs",
                     TdEngineLanguage = "cze"
                 },
                 "Deutsch (DEU)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("DEU.zip"),
+                    ZipFileName = "DEU.zip",
                     RegistryLanguage = "German",
                     Locale = "de_DE",
                     TdEngineLanguage = "deu"
                 },
                 "English (INT)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("INT.zip"),
+                    ZipFileName = "INT.zip",
                     RegistryLanguage = "English",
                     Locale = "en_UK",
                     TdEngineLanguage = "int"
                 },
                 "Español (ESN)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("ESN.zip"),
+                    ZipFileName = "ESN.zip",
                     RegistryLanguage = "Spanish",
                     Locale = "es_ES",
                     TdEngineLanguage = "esn"
                 },
                 "Français (FRA)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("FRA.zip"),
+                    ZipFileName = "FRA.zip",
                     RegistryLanguage = "French",
                     Locale = "fr_FR",
                     TdEngineLanguage = "fra"
                 },
                 "Italiano (ITA)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("ITA.zip"),
+                    ZipFileName = "ITA.zip",
                     RegistryLanguage = "Italian",
                     Locale = "it_IT",
                     TdEngineLanguage = "ita"
                 },
                 "Magyar (HUN)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("HUN.zip"),
+                    ZipFileName = "HUN.zip",
                     RegistryLanguage = "Hungarian",
                     Locale = "hu_HU",
                     TdEngineLanguage = "hun"
                 },
                 "Polski (POL)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("POL.zip"),
+                    ZipFileName = "POL.zip",
                     RegistryLanguage = "Polish",
                     Locale = "pl_PL",
                     TdEngineLanguage = "pol"
                 },
                 "Português (POR)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("POR.zip"),
+                    ZipFileName = "POR.zip",
                     RegistryLanguage = "Portuguese Brazil",
                     Locale = "pt_PT",
                     TdEngineLanguage = "por"
                 },
                 "Русский (RUS)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("RUS.zip"),
+                    ZipFileName = "RUS.zip",
                     RegistryLanguage = "Russian",
                     Locale = "ru_RU",
                     TdEngineLanguage = "rus"
                 },
                 "한국어 (KOR)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("KOR.zip"),
+                    ZipFileName = "KOR.zip",
                     RegistryLanguage = "Korean",
                     Locale = "ko_KR",
                     TdEngineLanguage = "kor"
                 },
                 "台灣繁體中文 (CHT)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("CHT.zip"),
+                    ZipFileName = "CHT.zip",
                     RegistryLanguage = "Traditional Chinese Taiwan",
                     Locale = "zh-TW",
                     TdEngineLanguage = "cht"
                 },
                 "日本語 (JPN)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("JPN.zip"),
+                    ZipFileName = "JPN.zip",
                     RegistryLanguage = "Japanese",
                     Locale = "ja_JP",
                     TdEngineLanguage = "jpn"
                 },
                 "简体中文 (CHS)" => new LanguageConfig
                 {
-                    DownloadUrl = DownloadUrls.For("CHS.zip"),
+                    ZipFileName = "CHS.zip",
                     RegistryLanguage = "Simplified Chinese",
                     Locale = "zh_CN",
                     TdEngineLanguage = "chs"
@@ -406,66 +417,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     key.SetValue(valueName, newValue, Microsoft.Win32.RegistryValueKind.String);
                 }
-            }
-        }
-
-        private async Task DownloadAndExtractLanguageFiles(string url)
-        {
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
-
-            try
-            {
-                if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                    return;
-
-                string tempZipPath = Path.Combine(Path.GetTempPath(), $"MELanguage_{Guid.NewGuid()}.zip");
-                string extractPath = _session.Config.GameDirectoryPath;
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressIndeterminate = false;
-                    _downloadProgress.DownloadProgressValue = 0;
-                    _downloadProgress.IsDownloadProgressVisible = true;
-                    _gameStatus.Status = "Downloading language files...";
-                });
-
-                var report = CreateThrottledProgressReporter();
-                await _download.DownloadToFileAsync(url, tempZipPath, p =>
-                {
-                    if (p >= 0)
-                        report(p, $"Downloading language files... {p:F0}%");
-                });
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressIndeterminate = true;
-                    _gameStatus.Status = "Extracting language files...";
-                });
-
-                await Task.Run(() =>
-                {
-                    ZipFile.ExtractToDirectory(tempZipPath, extractPath, true);
-                });
-
-                File.Delete(tempZipPath);
-
-                await _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false);
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _gameStatus.Status = "Ready.";
-                });
-            }
-            catch (Exception ex)
-            {
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _gameStatus.Status = "Ready.";
-                });
-                _dialogService.ShowMessage("Error", $"Failed to download or extract language files:\n\n{ex.Message}", DialogMessageType.Error);
-                throw;
             }
         }
 

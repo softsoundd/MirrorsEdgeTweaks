@@ -11,6 +11,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDialogService _dialogService;
         private readonly IDecompressionService _decompressionService;
         private readonly IDownloadService _download;
+        private readonly IFileService _fileService;
+        private readonly IAssetUrlProvider _assetUrls;
         private readonly IUIScalingService _uiScaling;
         private readonly IGameDataService _gameData;
         private readonly IPackageService _packageService;
@@ -28,6 +30,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             IDialogService dialogService,
             IDecompressionService decompressionService,
             IDownloadService download,
+            IFileService fileService,
+            IAssetUrlProvider assetUrls,
             IUIScalingService uiScaling,
             IGameDataService gameData,
             IPackageService packageService,
@@ -42,6 +46,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             _dialogService = dialogService;
             _decompressionService = decompressionService;
             _download = download;
+            _fileService = fileService;
+            _assetUrls = assetUrls;
             _uiScaling = uiScaling;
             _gameData = gameData;
             _packageService = packageService;
@@ -125,7 +131,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             string gameVersion = _gameStatus.GameVersion;
-            string? downloadUrl = GameVersionHelper.GetDownloadUrl(gameVersion, selectedVersionName);
+            await _assetUrls.EnsureLoadedAsync();
+            string? downloadUrl = GameVersionHelper.GetDownloadUrl(gameVersion, selectedVersionName, _assetUrls);
 
             if (string.IsNullOrEmpty(downloadUrl))
             {
@@ -136,9 +143,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             _gameStatus.IsUiEnabled = false;
             _gameStatus.IsGameTweaksEnabled = false;
-            _downloadProgress.IsDownloadProgressVisible = true;
-            _downloadProgress.IsDownloadProgressIndeterminate = false;
-            _gameStatus.Status = $"Downloading '{selectedVersionName}'...";
 
             bool installSucceeded = false;
             bool packagesLoadedAtEnd = false;
@@ -146,37 +150,21 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string tempZipPath = Path.Combine(Path.GetTempPath(), "temp_tdgame.zip");
-
-                var report = CreateThrottledProgressReporter();
-                await _download.DownloadToFileAsync(downloadUrl, tempZipPath, p =>
-                {
-                    if (p < 0)
-                    {
-                        Post(() =>
-                        {
-                            _gameStatus.Status = "Downloading... (size unknown)";
-                            _downloadProgress.IsDownloadProgressIndeterminate = true;
-                        });
-                        return;
-                    }
-                    report(p, $"Downloading... {p:F0}%");
-                });
-                _downloadProgress.IsDownloadProgressIndeterminate = false;
-
-                _gameStatus.Status = "Extracting...";
-                _downloadProgress.DownloadProgressValue = 100;
-
                 string tdGamePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
                 string extractDir = config.GameDirectoryPath;
 
-                await Task.Run(() =>
-                {
-                    ZipFile.ExtractToDirectory(tempZipPath, extractDir, true);
-                    Post(() => _gameStatus.Status = "Decompressing new package...");
-                    _decompressionService.RunDecompressor(tdGamePackagePath);
-                    File.Delete(tempZipPath);
-                });
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    extractDir,
+                    $"'{selectedVersionName}'",
+                    customExtract: (tempZipPath, dest) => Task.Run(() =>
+                    {
+                        ZipFile.ExtractToDirectory(tempZipPath, dest, true);
+                        Post(() => _gameStatus.Status = "Decompressing new package...");
+                        _decompressionService.RunDecompressor(tdGamePackagePath);
+                    }));
 
                 installSucceeded = true;
             }
@@ -189,10 +177,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 try
                 {
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _downloadProgress.DownloadProgressValue = 0;
-                    _downloadProgress.IsDownloadProgressIndeterminate = false;
-
                     if (installSucceeded)
                     {
                         try

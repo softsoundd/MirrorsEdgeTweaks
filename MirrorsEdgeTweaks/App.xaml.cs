@@ -103,6 +103,7 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<IFileService, FileService>();
             services.AddSingleton<IPackageService, PackageService>();
             services.AddSingleton<IDownloadService, DownloadService>();
+            services.AddSingleton<IAssetUrlProvider, AssetUrlProvider>();
             services.AddSingleton<IDecompressionService, DecompressionService>();
             services.AddSingleton<IOffsetFinderService, OffsetFinderService>();
             services.AddSingleton<IUIScalingService, UIScalingService>();

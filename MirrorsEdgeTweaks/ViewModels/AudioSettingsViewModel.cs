@@ -1,9 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
-using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -12,6 +10,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDialogService _dialogService;
         private readonly IFileService _fileService;
         private readonly IDownloadService _download;
+        private readonly IAssetUrlProvider _assetUrls;
         private bool _isLoading;
 
         protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
@@ -23,6 +22,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IDialogService dialogService,
             IFileService fileService,
             IDownloadService download,
+            IAssetUrlProvider assetUrls,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
@@ -31,6 +31,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _dialogService = dialogService;
             _fileService = fileService;
             _download = download;
+            _assetUrls = assetUrls;
         }
 
         public void RefreshAudioBackendSetting()
@@ -120,24 +121,24 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string downloadUrl;
+                string fileName;
                 int maxChannels;
                 string deviceName;
 
                 switch (selectedIndex)
                 {
                     case 0:
-                        downloadUrl = DownloadUrls.AssetBase + "OpenAL.zip";
+                        fileName = "OpenAL.zip";
                         maxChannels = 32;
                         deviceName = "Generic Hardware";
                         break;
                     case 1:
-                        downloadUrl = DownloadUrls.AssetBase + "OpenALSoft.zip";
+                        fileName = "OpenALSoft.zip";
                         maxChannels = 256;
                         deviceName = "OpenAL Soft";
                         break;
                     case 2:
-                        downloadUrl = DownloadUrls.AssetBase + "OpenALSoftHRTF.zip";
+                        fileName = "OpenALSoftHRTF.zip";
                         maxChannels = 256;
                         deviceName = "OpenAL Soft";
                         break;
@@ -145,7 +146,15 @@ namespace MirrorsEdgeTweaks.ViewModels
                         return;
                 }
 
-                await DownloadAndExtractAudioBackendFiles(downloadUrl);
+                await _assetUrls.EnsureLoadedAsync();
+                string downloadUrl = _assetUrls.For(fileName);
+
+                await RunDownloadAndExtractAsync(
+                    _download,
+                    _fileService,
+                    downloadUrl,
+                    _session.Config.GameDirectoryPath!,
+                    "audio backend files");
 
                 if (selectedIndex != 2)
                     CleanupHrtfFiles();
@@ -241,64 +250,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     RefreshAudioBackendSetting();
                 }
                 _gameStatus.IsUiEnabled = true;
-            }
-        }
-
-        private async Task DownloadAndExtractAudioBackendFiles(string url)
-        {
-            var dispatcher = System.Windows.Application.Current.Dispatcher;
-
-            try
-            {
-                if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                    return;
-
-                string tempZipPath = Path.Combine(Path.GetTempPath(), $"MEAudioBackend_{Guid.NewGuid()}.zip");
-                string extractPath = _session.Config.GameDirectoryPath;
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressIndeterminate = false;
-                    _downloadProgress.DownloadProgressValue = 0;
-                    _downloadProgress.IsDownloadProgressVisible = true;
-                    _gameStatus.Status = "Downloading audio backend files...";
-                });
-
-                var report = CreateThrottledProgressReporter();
-                await _download.DownloadToFileAsync(url, tempZipPath, p =>
-                {
-                    if (p >= 0)
-                        report(p, $"Downloading audio backend files... {p:F0}%");
-                });
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressIndeterminate = true;
-                    _gameStatus.Status = "Extracting audio backend files...";
-                });
-
-                await Task.Run(() =>
-                {
-                    ZipFile.ExtractToDirectory(tempZipPath, extractPath, true);
-                });
-
-                File.Delete(tempZipPath);
-
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _gameStatus.Status = "Ready.";
-                });
-            }
-            catch (Exception ex)
-            {
-                await dispatcher.InvokeAsync(() =>
-                {
-                    _downloadProgress.IsDownloadProgressVisible = false;
-                    _gameStatus.Status = "Ready.";
-                });
-                _dialogService.ShowMessage("Error", $"Failed to download or extract audio backend files:\n\n{ex.Message}", DialogMessageType.Error);
-                throw;
             }
         }
 

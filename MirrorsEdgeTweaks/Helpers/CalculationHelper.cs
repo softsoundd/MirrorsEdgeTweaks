@@ -1,4 +1,5 @@
 using MirrorsEdgeTweaks.Models;
+using MirrorsEdgeTweaks.Services;
 using System.Runtime.InteropServices;
 using UELib;
 using UELib.Core;
@@ -76,17 +77,17 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        public static string? GetDownloadUrl(string gameVersionInfo, string selectedFix)
+        public static string? GetDownloadUrl(string gameVersionInfo, string selectedFix, IAssetUrlProvider assetUrls)
         {
             string baseUrl;
 
             if (gameVersionInfo.Contains("1.0.0.0") || gameVersionInfo.Contains("1.0.1.0"))
             {
-                baseUrl = DownloadUrls.AssetBase + "Base_";
+                baseUrl = assetUrls.AssetBase + "Base_";
             }
             else if (gameVersionInfo.Contains("1.1.0.0"))
             {
-                baseUrl = DownloadUrls.AssetBase + "DLC_";
+                baseUrl = assetUrls.AssetBase + "DLC_";
             }
             else
             {

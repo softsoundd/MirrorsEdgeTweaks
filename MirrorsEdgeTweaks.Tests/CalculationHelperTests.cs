@@ -1,4 +1,5 @@
 using MirrorsEdgeTweaks.Helpers;
+using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -61,6 +62,8 @@ namespace MirrorsEdgeTweaks.Tests
 
     public class GameVersionHelperTests
     {
+        private static readonly IAssetUrlProvider AssetUrls = new AssetUrlProvider();
+
         [Theory]
         [InlineData("Game Version: 1.0.0.0", "Original", "Base_TdGame.zip")]
         [InlineData("Game Version: 1.0.1.0", "TdGame Fix (by Keku)", "Base_TdGameFix.zip")]
@@ -68,7 +71,7 @@ namespace MirrorsEdgeTweaks.Tests
         [InlineData("Game Version: 1.1.0.0 (DLC)", "TdGame Fix + Time Trials Timer Fix", "DLC_TdGameFix+TimerFix.zip")]
         public void GetDownloadUrl_MapsVersionAndFixToAsset(string versionInfo, string fix, string expectedFile)
         {
-            string? url = GameVersionHelper.GetDownloadUrl(versionInfo, fix);
+            string? url = GameVersionHelper.GetDownloadUrl(versionInfo, fix, AssetUrls);
 
             Assert.NotNull(url);
             Assert.EndsWith(expectedFile, url);
@@ -77,13 +80,13 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void GetDownloadUrl_UnknownGameVersionReturnsNull()
         {
-            Assert.Null(GameVersionHelper.GetDownloadUrl("Game Version: 2.0.0.0", "Original"));
+            Assert.Null(GameVersionHelper.GetDownloadUrl("Game Version: 2.0.0.0", "Original", AssetUrls));
         }
 
         [Fact]
         public void GetDownloadUrl_UnknownFixReturnsNull()
         {
-            Assert.Null(GameVersionHelper.GetDownloadUrl("Game Version: 1.0.0.0", "Nonexistent Fix"));
+            Assert.Null(GameVersionHelper.GetDownloadUrl("Game Version: 1.0.0.0", "Nonexistent Fix", AssetUrls));
         }
 
         [Fact]
