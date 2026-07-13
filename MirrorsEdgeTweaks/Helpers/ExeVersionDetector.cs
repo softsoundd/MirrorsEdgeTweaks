@@ -52,6 +52,22 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
+        public static bool IsSteamExecutable(string exePath)
+        {
+            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                return false;
+
+            try
+            {
+                byte[] data = File.ReadAllBytes(exePath);
+                return DetectVersion(data, exePath) == "steam";
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static string? ReadCaveVersionTag(byte[] d)
         {
             if (d.Length < 0x40 || d[0] != (byte)'M' || d[1] != (byte)'Z')

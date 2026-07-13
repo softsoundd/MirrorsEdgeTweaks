@@ -107,6 +107,7 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<IOffsetFinderService, OffsetFinderService>();
             services.AddSingleton<IUIScalingService, UIScalingService>();
             services.AddSingleton<IGraphicsSettingsService, GraphicsSettingsService>();
+            services.AddSingleton<ISteamService, SteamService>();
             services.AddSingleton<IGameLauncher, GameLauncherService>();
             services.AddSingleton<ISettingsStore, SettingsStore>();
             services.AddSingleton<IAppSettingsService, AppSettingsService>();

@@ -9,8 +9,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 {
     public partial class LanguageSettingsViewModel : BusyViewModel
     {
-        private const long SteamMirrorsEdgeExeSize = 31946072;
-
         private static readonly string[] LanguageNames =
         {
             "Čeština (CZE)",
@@ -32,6 +30,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
         private readonly GraphicsTweaksViewModel _graphics;
+        private readonly ISteamService _steamService;
 
         private bool _isLoading;
 
@@ -45,12 +44,14 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
-            GraphicsTweaksViewModel graphics)
+            GraphicsTweaksViewModel graphics,
+            ISteamService steamService)
             : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
             _download = download;
             _graphics = graphics;
+            _steamService = steamService;
         }
 
         public void Refresh()
@@ -110,6 +111,24 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _isLoading = false;
             }
+
+            TryReapplySteamLanguageFix();
+        }
+
+        private void TryReapplySteamLanguageFix()
+        {
+            string? gameDirectory = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDirectory))
+                return;
+
+            try
+            {
+                _steamService.ApplyLanguageFix(gameDirectory);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to re-apply Steam language fix: {ex.Message}");
+            }
         }
 
         private void SetLanguageIndexSilently(int index)
@@ -153,23 +172,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string exePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "MirrorsEdge.exe");
-                if (File.Exists(exePath))
-                {
-                    var exeFileInfo = new FileInfo(exePath);
-                    if (exeFileInfo.Length == SteamMirrorsEdgeExeSize) // Steam version
-                    {
-                        _dialogService.ShowMessage("Warning",
-                            $"You're currently using the Steam version of Mirror's Edge, which does not support language changes made outside the Steam client. " +
-                            $"Each time the game is launched via Steam, the language will automatically revert to the setting configured in your Steam client. " +
-                            $"If you want the language changes made with Mirror's Edge Tweaks to remain, you will need to either:\n\n" +
-                            $"1. Launch Mirror's Edge with one of the Launch Game buttons at the top of the window\n\n" +
-                            $"2. Launch the Mirror's Edge executable directly (found here: \"{exePath}\"), or\n\n" +
-                            $"3. Add the aforementioned executable as a Non-Steam game.",
-                            DialogMessageType.Warning);
-                    }
-                }
-
                 UpdateRegistryValue(@"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge", "Language", languageConfig.RegistryLanguage);
                 UpdateRegistryValue(@"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge", "Locale", languageConfig.Locale);
 
@@ -234,6 +236,18 @@ namespace MirrorsEdgeTweaks.ViewModels
                 });
 
                 await DownloadAndExtractLanguageFiles(languageConfig.DownloadUrl);
+
+                SteamInstallScriptFixResult steamFixResult = await Task.Run(() =>
+                    _steamService.ApplyLanguageFix(_session.Config.GameDirectoryPath!));
+
+                if (steamFixResult.AnyFailed)
+                {
+                    _dialogService.ShowMessage(
+                        "Warning",
+                        "Game language was updated, but one or more Steam install scripts could not be updated. " +
+                        "Language changes may revert when launching via Steam.",
+                        DialogMessageType.Warning);
+                }
 
                 switched = true;
                 _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);

@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.Diagnostics;
 using System.IO;
 
@@ -6,56 +7,90 @@ namespace MirrorsEdgeTweaks.Services
     public interface IGameLauncher
     {
         void Launch(string exePath, string arguments);
-        bool IsSteamVersionExecutable(string exePath);
     }
 
     public class GameLauncherService : IGameLauncher
     {
-        private const long SteamMirrorsEdgeExeSize = 31946072;
+        private readonly ISteamService _steamService;
+
+        public GameLauncherService(ISteamService steamService)
+        {
+            _steamService = steamService;
+        }
 
         public void Launch(string exePath, string arguments)
         {
+            if (ExeVersionDetector.IsSteamExecutable(exePath))
+            {
+                LaunchViaSteam(arguments);
+                return;
+            }
+
             string? workingDirectory = Path.GetDirectoryName(exePath);
             if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
             {
                 throw new InvalidOperationException("Could not determine a valid game working directory.");
             }
 
+            StartProcessWithFallbacks(
+                exePath,
+                arguments,
+                workingDirectory,
+                includeCmdFallback: true,
+                "All launch strategies failed.");
+        }
+
+        internal static string BuildSteamApplaunchArguments(string gameArguments)
+        {
+            string args = $"-applaunch {SteamInstallScriptPatcher.MirrorsEdgeAppId}";
+            string trimmed = gameArguments.Trim();
+            if (trimmed.Length > 0)
+                args += " " + trimmed;
+            return args;
+        }
+
+        private void LaunchViaSteam(string gameArguments)
+        {
+            string? steamExe = _steamService.GetSteamExecutablePath();
+            if (string.IsNullOrWhiteSpace(steamExe))
+            {
+                throw new InvalidOperationException(
+                    "Could not locate Steam. Ensure Steam is installed and its install path is registered in the Windows Registry.");
+            }
+
+            string? steamDirectory = Path.GetDirectoryName(steamExe);
+            if (string.IsNullOrWhiteSpace(steamDirectory) || !Directory.Exists(steamDirectory))
+            {
+                throw new InvalidOperationException("Could not determine a valid Steam working directory.");
+            }
+
+            StartProcessWithFallbacks(
+                steamExe,
+                BuildSteamApplaunchArguments(gameArguments),
+                steamDirectory,
+                includeCmdFallback: false,
+                "Failed to launch Mirror's Edge via Steam.");
+        }
+
+        private static void StartProcessWithFallbacks(
+            string exePath,
+            string arguments,
+            string workingDirectory,
+            bool includeCmdFallback,
+            string failureMessage)
+        {
             List<string> launchErrors = new List<string>();
 
             if (TryStartProcess(exePath, arguments, workingDirectory, useShellExecute: false, launchErrors))
-            {
                 return;
-            }
 
             if (TryStartProcess(exePath, arguments, workingDirectory, useShellExecute: true, launchErrors))
-            {
                 return;
-            }
 
-            if (TryStartViaCmd(exePath, arguments, workingDirectory, launchErrors))
-            {
+            if (includeCmdFallback && TryStartViaCmd(exePath, arguments, workingDirectory, launchErrors))
                 return;
-            }
 
-            throw new InvalidOperationException($"All launch strategies failed. {string.Join(" | ", launchErrors)}");
-        }
-
-        public bool IsSteamVersionExecutable(string exePath)
-        {
-            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
-            {
-                return false;
-            }
-
-            try
-            {
-                return new FileInfo(exePath).Length == SteamMirrorsEdgeExeSize;
-            }
-            catch
-            {
-                return false;
-            }
+            throw new InvalidOperationException($"{failureMessage} {string.Join(" | ", launchErrors)}");
         }
 
         private static bool TryStartProcess(

@@ -1,0 +1,194 @@
+"installscript"
+{
+	"registry"
+	{
+		"HKEY_CURRENT_USER\\Software\\EA Games\\Mirror's Edge"
+		{
+		}
+		"HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Mirror's Edge"
+		{
+			"string"
+			{
+				"CD Drive"		"%INSTALLDIR%"
+				"DisplayName"		"Mirror's Edge"
+				"Install Dir"		"%INSTALLDIR%"
+				"Installed From"		"%INSTALLDIR%"
+				"ProductName"		"Mirror's Edge"
+				"Registration"		"Software\\Electronic Arts\\EA Games\\Mirror's Edge\\ergc"
+				"Suppression Exe"		""
+				"english"
+				{
+					"Language"		"English (UK)"
+					"Locale"		"en_UK"
+				}
+				"french"
+				{
+					"Language"		"French"
+					"Locale"		"fr_FR"
+				}
+				"german"
+				{
+					"Language"		"German"
+					"Locale"		"de_DE"
+				}
+				"italian"
+				{
+					"Language"		"Italian"
+					"Locale"		"it_IT"
+				}
+				"spanish"
+				{
+					"Language"		"Spanish"
+					"Locale"		"es_ES"
+				}
+				"czech"
+				{
+					"Language"		"Czech"
+					"Locale"		"cs"
+				}
+				"russian"
+				{
+					"Language"		"Russian"
+					"Locale"		"ru_RU"
+				}
+				"polish"
+				{
+					"Language"		"Polish"
+					"Locale"		"pl_PL"
+				}
+				"hungarian"
+				{
+					"Language"		"Hungarian"
+					"Locale"		"hu_HU"
+				}
+				"portuguese"
+				{
+					"Language"		"Portuguese"
+					"Locale"		"pt_PT"
+				}
+			}
+		}
+		"HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Mirror's Edge\\1.0"
+		{
+			"string"
+			{
+				"DisplayName"		"Mirror's Edge"
+				"english"
+				{
+					"Language"		"English (UK)"
+				}
+				"french"
+				{
+					"Language"		"French"
+				}
+				"german"
+				{
+					"Language"		"German"
+				}
+				"italian"
+				{
+					"Language"		"Italian"
+				}
+				"spanish"
+				{
+					"Language"		"Spanish"
+				}
+				"czech"
+				{
+					"Language"		"Czech"
+				}
+				"russian"
+				{
+					"Language"		"Russian"
+				}
+				"polish"
+				{
+					"Language"		"Polish"
+				}
+				"hungarian"
+				{
+					"Language"		"Hungarian"
+				}
+				"portuguese"
+				{
+					"Language"		"Portuguese"
+				}
+			}
+		}
+		"HKEY_LOCAL_MACHINE\\SOFTWARE\\Electronic Arts\\EA Core\\Installed Games\\mirrors_edge_eu"
+		{
+		}
+	}
+	"run process"
+	{
+		"DirectX"
+		{
+			"process 1"		"%INSTALLDIR%\\DirectX\\DXSETUP.exe"
+			"command 1"		"/silent"
+			"NoCleanUp"		"1"
+		}
+		"PhysX Version"
+		{
+			"HasRunKey"		"HKEY_LOCAL_MACHINE\\SOFTWARE\\AGEIA Technologies"
+			"process 1"		"%INSTALLDIR%\\PhysX\\PhysX_SystemSoftware.exe"
+			"NoCleanUp"		"1"
+			"MinimumHasRunValue"		"81017"
+		}
+		"vcredist"
+		{
+			"process 1"		"%INSTALLDIR%\\Redistributable\\vcredist_x86_en.exe"
+			"command 1"		"/q:a"
+			"NoCleanUp"		"1"
+		}
+	}
+	"EA OREG"
+	{
+		"string"
+		{
+			"english"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=en_US"
+			}
+			"french"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=fr_FR"
+			}
+			"german"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=de_DE"
+			}
+			"italian"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=it_IT"
+			}
+			"spanish"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=es_ES"
+			}
+			"russian"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=ru_RU"
+			}
+			"polish"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=pl_PL"
+			}
+			"portuguese"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=pt_PT"
+			}
+			"hungarian"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=hu_HU"
+			}
+			"czech"
+			{
+				"URL"		"https://ea.onlineregister.com/?LOCALE=cz_CZ"
+			}
+		}
+	}
+}
+"kvsignatures"
+{
+	"installscript"		"50586d9bd8ff073c77cdd3ff5365ab04e8f429b4c212e1d390502bf2caa9ccab934489607d5d1d2ad774ba41021d3e8fb01e922de5cb3e20baad386531ec497494bf22ab8f6d8f26a1651b55aefead6196dea762034bd8aabd02c4e2552c624f518a13c65b570809863788454d63dab03e0c5be097e664f40600ac498ab13ebe"
+}

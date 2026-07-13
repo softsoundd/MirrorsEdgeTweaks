@@ -18,6 +18,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IFileService _fileService;
         private readonly IFolderPickerService _folderPicker;
         private readonly IGameProcessMonitor _processMonitor;
+        private readonly ISteamService _steamService;
 
         public GameSession Session { get; }
 
@@ -65,7 +66,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             IDecompressionService decompressionService,
             IFileService fileService,
             IFolderPickerService folderPicker,
-            IGameProcessMonitor processMonitor)
+            IGameProcessMonitor processMonitor,
+            ISteamService steamService)
         {
             Session = session;
             GameStatus = gameStatus;
@@ -94,6 +96,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _fileService = fileService;
             _folderPicker = folderPicker;
             _processMonitor = processMonitor;
+            _steamService = steamService;
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
             _processMonitor.RunningStateChanged += OnGameRunningChanged;
@@ -192,6 +195,22 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 GameStatus.Status = "Loading package data...";
                 await Task.Run(() => _gameData.LoadPackages());
+
+                if (_steamService.IsSteamGameDirectory(path))
+                {
+                    GameStatus.Status = "Applying Steam language fix...";
+                    SteamInstallScriptFixResult steamFixResult = await Task.Run(() => _steamService.ApplyLanguageFix(path));
+                    if (steamFixResult.AnyFailed)
+                    {
+                        string failedPaths = string.Join(Environment.NewLine, steamFixResult.FailedFiles.Select(f => f.Path));
+                        _dialogService.ShowMessage(
+                            "Steam Language Fix",
+                            "Mirror's Edge Tweaks could not update one or more Steam install scripts. " +
+                            "Language changes may revert when launching via Steam.\n\n" +
+                            failedPaths,
+                            DialogMessageType.Warning);
+                    }
+                }
 
                 GameStatus.Status = "Refreshing status indicators...";
                 CheckForConfigFiles();
@@ -471,7 +490,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     return;
                 }
 
-                ShowSteamLaunchWarningIfNeeded(exePath);
                 _gameLauncher.Launch(exePath, string.Empty);
             }
             catch (Exception ex)
@@ -523,28 +541,12 @@ namespace MirrorsEdgeTweaks.ViewModels
                     return;
                 }
 
-                ShowSteamLaunchWarningIfNeeded(exePath);
                 _gameLauncher.Launch(exePath, launchArguments);
             }
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to launch game with arguments: {ex.Message}", DialogMessageType.Error);
             }
-        }
-
-        private void ShowSteamLaunchWarningIfNeeded(string exePath)
-        {
-            if (!_gameLauncher.IsSteamVersionExecutable(exePath))
-            {
-                return;
-            }
-
-            _dialogService.ShowMessage(
-                "Steam Launch Warning",
-                "You are playing the Steam version of the game.\n\n" +
-                "Launching the game outside of the Steam client may present you with the \"Application load error\" message.\n\n" +
-                "Please note that launching the game via Tweaks is not required; you may launch the game in Steam as normal.",
-                DialogMessageType.Warning);
         }
 
         [RelayCommand]

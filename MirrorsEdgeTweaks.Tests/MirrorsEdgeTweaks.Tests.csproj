@@ -31,4 +31,10 @@
         <Using Include="System.IO" />
     </ItemGroup>
 
+    <ItemGroup>
+        <None Update="Fixtures\17410_install.vdf">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
 </Project>
