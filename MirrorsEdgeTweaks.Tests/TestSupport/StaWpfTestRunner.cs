@@ -24,13 +24,6 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
                 {
                     failure = ex;
                 }
-                finally
-                {
-                    if (Application.Current is not null)
-                    {
-                        Application.Current.Shutdown();
-                    }
-                }
             });
 
             thread.SetApartmentState(ApartmentState.STA);
@@ -45,12 +38,43 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
 
         public static void RunWithAppResources(Action<Application> action)
         {
-            Run(() =>
+            Exception? failure = null;
+
+            var thread = new Thread(() =>
             {
-                var app = new App();
-                app.InitializeComponent();
-                app.Dispatcher.Invoke(DispatcherPriority.Send, () => action(app));
+                App? app = null;
+
+                try
+                {
+                    lock (Sync)
+                    {
+                        app = new App();
+                        app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                        app.InitializeComponent();
+                        action(app);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+                finally
+                {
+                    if (app is not null)
+                    {
+                        app.Dispatcher.InvokeShutdown();
+                    }
+                }
             });
+
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            if (failure is not null)
+            {
+                throw failure;
+            }
         }
     }
 }
