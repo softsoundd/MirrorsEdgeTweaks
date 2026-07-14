@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Tests.TestSupport;
 using System.Windows;
 using System.Windows.Controls;
