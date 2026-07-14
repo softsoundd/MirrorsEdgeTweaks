@@ -1,4 +1,4 @@
-﻿<Application x:Class="MirrorsEdgeTweaks.App"
+<Application x:Class="MirrorsEdgeTweaks.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
@@ -11,6 +11,8 @@
                 <materialDesign:CustomColorTheme BaseTheme="Light"
                                                  PrimaryColor="#cd2129"
                                                  SecondaryColor="Red" />
+
+                <ResourceDictionary Source="Themes/SectionExpander.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BoolToVis" />

@@ -1,6 +1,9 @@
+using MaterialDesignThemes.Wpf;
+using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace MirrorsEdgeTweaks
 {
@@ -30,7 +33,49 @@ namespace MirrorsEdgeTweaks
             EventManager.RegisterClassHandler(typeof(ComboBoxItem), System.Windows.Input.Mouse.PreviewMouseUpEvent, new System.Windows.Input.MouseButtonEventHandler(OnComboBoxItemMouseUp), true);
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e) => _ = _viewModel.InitializeAsync();
+        private void Window_Loaded(object sender, RoutedEventArgs e) => _ = RunStartupAsync();
+
+        private async Task RunStartupAsync()
+        {
+            await Task.WhenAll(
+                _viewModel.InitializeAsync(),
+                PreWarmTabLayoutsAfterShowAsync());
+        }
+
+        private async Task PreWarmTabLayoutsAfterShowAsync()
+        {
+            await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.Loaded);
+            await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                bool previousDisableTransitions = TransitionAssist.GetDisableTransitions(MainTabControl);
+                bool previousDisableRipple = RippleAssist.GetIsDisabled(MainTabControl);
+                double previousOpacity = MainTabControl.Opacity;
+
+                TransitionAssist.SetDisableTransitions(MainTabControl, true);
+                RippleAssist.SetIsDisabled(MainTabControl, true);
+                MainTabControl.Opacity = 0;
+
+                try
+                {
+                    TabLayoutPreWarmer.PreWarm(MainTabControl, this);
+                }
+                finally
+                {
+                    MainTabControl.UpdateLayout();
+                    MainTabControl.Opacity = previousOpacity;
+
+                    _ = Dispatcher.InvokeAsync(
+                        () =>
+                        {
+                            TransitionAssist.SetDisableTransitions(MainTabControl, previousDisableTransitions);
+                            RippleAssist.SetIsDisabled(MainTabControl, previousDisableRipple);
+                        },
+                        DispatcherPriority.Render);
+                }
+            }, DispatcherPriority.Background);
+        }
 
         private void RenderResolutionSlider_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
             => _viewModel.Graphics.BeginRenderResolutionDrag();

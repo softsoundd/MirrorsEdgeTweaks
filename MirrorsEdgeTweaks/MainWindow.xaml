@@ -48,7 +48,6 @@
                     </b:Interaction.Triggers>
                 </TextBox>
                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                        ToolTip="Information"
                         Margin="5,0,0,0"
                         Command="{Binding ShowInfoCommand}">
                     <materialDesign:PackIcon Kind="Information" />
@@ -148,7 +147,7 @@
         </StackPanel>
 
         <Border Grid.Row="3" BorderBrush="LightGray" BorderThickness="0,2,0,0" Margin="0,0,0,0">
-            <TabControl Margin="0,0,0,10"
+            <TabControl x:Name="MainTabControl" Margin="0,0,0,10"
                     BorderThickness="0"
                     Padding="0"
                     IsEnabled="{Binding GameStatus.IsMainTabEnabled}"
@@ -193,11 +192,12 @@
                                     IsEnabled="{Binding GameStatus.IsGameTweaksEnabled}"
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Mods" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Mods" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
 
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
@@ -218,7 +218,6 @@
                                     <ComboBoxItem Content="TdGame Fix + Time Trials Timer Fix"/>
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Mods.ShowTdGameVersionInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -250,7 +249,6 @@
                                     </Border>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Mods.ShowConsoleInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -289,7 +287,6 @@
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                                ToolTip="Information"
                                                 Margin="5,0,0,0"
                                                 Command="{Binding Mods.ShowTweaksScriptsInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
@@ -325,7 +322,6 @@
                                                 </Border>
                                             </StackPanel>
                                             <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                                    ToolTip="Information"
                                                     Margin="5,0,0,0"
                                                     Command="{Binding Mods.ShowTweaksScriptsUIInfoCommand}">
                                                 <materialDesign:PackIcon Kind="Information" />
@@ -340,13 +336,18 @@
                                 </StackPanel>
                             </Border>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Patches" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Patches" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
 
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
@@ -375,7 +376,6 @@
                                     </Border>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Patches.ShowUnlockedConfigsInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -415,7 +415,6 @@
                                                 Width="87"/>
                                     </StackPanel>
                                     <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                            ToolTip="Information"
                                             Margin="5,0,0,0"
                                             Command="{Binding LaunchArguments.ShowLaunchArgumentsInfoCommand}">
                                         <materialDesign:PackIcon Kind="Information" />
@@ -445,17 +444,9 @@
                                 </Grid>
                             </StackPanel>
 
-                            <Expander Margin="0,25,0,0"
-                                      IsExpanded="False"
-                                      HorizontalAlignment="Stretch"
-                                      Background="Transparent"
-                                      BorderThickness="0"
-                                      Style="{StaticResource MaterialDesignExpander}"
-                                      materialDesign:ExpanderAssist.HorizontalHeaderPadding="0">
+                            <Expander Style="{StaticResource SubSectionExpander}">
                                 <Expander.Header>
-                                    <TextBlock Text="Other Patches"
-                                               FontWeight="SemiBold" FontSize="13"
-                                               Foreground="{DynamicResource MaterialDesignBodyDark}"/>
+                                    <TextBlock Text="Other Patches" Style="{StaticResource SubSectionExpanderHeaderText}" />
                                 </Expander.Header>
                                 <StackPanel Margin="0,10,0,0">
 
@@ -485,7 +476,6 @@
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                                ToolTip="Information"
                                                 Margin="5,0,0,0"
                                                 Command="{Binding Patches.ShowLoggingInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
@@ -518,7 +508,6 @@
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                                ToolTip="Information"
                                                 Margin="5,0,0,0"
                                                 Command="{Binding Patches.ShowMultiInstanceInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
@@ -551,7 +540,6 @@
                                             </Border>
                                         </StackPanel>
                                         <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                                ToolTip="Information"
                                                 Margin="5,0,0,0"
                                                 Command="{Binding Patches.ShowAmbiguousBypassInfoCommand}">
                                             <materialDesign:PackIcon Kind="Information" />
@@ -560,14 +548,19 @@
 
                                 </StackPanel>
                             </Expander>
+
+                            </StackPanel>
+
+                            </Expander>
                             
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Audio Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Audio Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
                             
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
@@ -598,7 +591,6 @@
                                     <ComboBoxItem Content="简体中文 (CHS)" Foreground="Black"/>
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Language.ShowGameLanguageInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -623,12 +615,15 @@
                                     <ComboBoxItem Content="OpenAL Soft (HRTF)" Foreground="Black"/>
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Audio.ShowAudioBackendInfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
+
+                            </StackPanel>
+
+                            </Expander>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">
@@ -686,12 +681,13 @@
                         <StackPanel TextElement.Foreground="Black" Margin="0,0,15,0" 
                                     Focusable="False" KeyboardNavigation.TabNavigation="None">
                             
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,40">
-                                <TextBlock Text="Video Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
-                            
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Video Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel Margin="{StaticResource SectionExpanderVideoContentTopMargin}">
+
                             <Border Margin="0,-10,0,0"
                                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                                     BorderThickness="1"
@@ -735,7 +731,6 @@
                                                 Height="38"
                                                 Style="{StaticResource MaterialDesignRaisedButton}"/>
                                             <Button Style="{StaticResource MaterialDesignIconButton}"
-                                                    ToolTip="Information"
                                                     Margin="5,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="Fov">
@@ -785,7 +780,6 @@
                                                Foreground="{Binding Graphics.HighResFixStatusForeground}"/>
                                 </Border>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         VerticalAlignment="Center"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="HighResFix">
@@ -810,7 +804,6 @@
                                 <TextBlock Grid.Column="2" 
                                            Text="{Binding Graphics.RenderResolutionPercent, StringFormat={}{0:F0}%}" VerticalAlignment="Center" Margin="10,0,0,0" MinWidth="45"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="RenderResolution">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -848,7 +841,6 @@
                                                    Foreground="{Binding Graphics.FpsLimitStatusForeground}"/>
                                     </Border>
                                     <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                            ToolTip="Information"
                                             Margin="5,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="FpsLimit">
@@ -902,20 +894,25 @@
                                         Margin="10,0,0,0"
                                         Command="{Binding Graphics.ApplyPhysXFpsCommand}"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="PhysXFps">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,5">
-                                <TextBlock Text="Quality Presets" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Quality Presets" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
+
                             <TextBlock Text="Note: Selecting a preset will override any custom individual settings you have applied." 
                                        FontSize="12" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,10"/>
 
@@ -940,7 +937,6 @@
                                     <ComboBoxItem Content="Highest"/>
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="TextureDetail">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -967,20 +963,25 @@
                                     <ComboBoxItem Content="Highest"/>
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="GraphicsQuality">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,5">
-                                <TextBlock Text="Individual Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Individual Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
+
                             <TextBlock Text="Note: Modifying these settings may cause the in-game video options to display 'Medium' as a fallback label. This does not indicate your settings have been changed to medium quality." 
                                        FontSize="12" FontStyle="Italic" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
 
@@ -1085,13 +1086,18 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="LOD Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="LOD Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
                             
                             <Grid Margin="0,15,0,0">
                                 <Grid.ColumnDefinitions>
@@ -1114,7 +1120,6 @@
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="MinLod">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
@@ -1141,7 +1146,6 @@
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="MaxLod">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
@@ -1168,19 +1172,21 @@
                                         VerticalAlignment="Center"
                                         Margin="0,0,5,0"/>
                                 <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="LodBias">
                                     <materialDesign:PackIcon Kind="Information" />
                                 </Button>
                             </Grid>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Shaders" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Shaders" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
 
                             <controls:SettingRow Margin="0,15,0,0" Label="Tone Mapper:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ToneMapper">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ToneMapperIndex, Mode=TwoWay}">
@@ -1188,6 +1194,8 @@
                                     <ComboBoxItem Content="Faithful Luma"/>
                                 </ComboBox>
                             </controls:SettingRow>
+
+                            </Expander>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">
@@ -1243,11 +1251,12 @@
                             </Style>
                         </ScrollViewer.Style>
                         <StackPanel Margin="0,0,15,0" Focusable="False" KeyboardNavigation.TabNavigation="None">
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Input Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Input Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
                             
                             <controls:SettingRow Margin="0,15,0,0" Label="Mouse Smoothing:" Foreground="Black" InfoCommand="{Binding Input.ShowMouseSmoothingInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Input.MouseSmoothingIndex, Mode=TwoWay}">
@@ -1298,7 +1307,6 @@
                                             Command="{Binding Input.ResetCm360Command}"/>
                                 </StackPanel>
                                 <Button Grid.Column="2" Style="{StaticResource MaterialDesignIconButton}"
-                                        ToolTip="Information"
                                         Margin="5,0,0,0"
                                         Command="{Binding Input.ShowCm360InfoCommand}">
                                     <materialDesign:PackIcon Kind="Information" />
@@ -1311,44 +1319,52 @@
                                     <ComboBoxItem Content="PS3" Foreground="Black"/>
                                 </ComboBox>
                             </controls:SettingRow>
-                            
+
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Custom Keybinds" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Custom Keybinds" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
                             
                             <ItemsControl ItemsSource="{Binding Keybinds.CustomKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
+
+                            </Expander>
                             
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Cheat/Trainer Keybinds" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Cheat/Trainer Keybinds" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
                             
                             <ItemsControl ItemsSource="{Binding Keybinds.CheatTrainerKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
 
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,15">
-                                <TextBlock Text="Macro Keybinds (Softimer)" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Macro Keybinds (Softimer)" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
 
                             <ItemsControl ItemsSource="{Binding Keybinds.MacroKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
+
+                            </Expander>
                             
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
                             
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,10">
-                                <TextBlock Text="Initialisation Settings" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Initialisation Settings" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
+
+                            <StackPanel>
                             
                             <controls:SettingRow Margin="0,15,0,0" Label="Intro Video:" Foreground="Black" InfoCommand="{Binding Init.ShowIntroVideoInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding Init.IntroVideoIndex, Mode=TwoWay}">
@@ -1380,13 +1396,16 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
+                            </StackPanel>
+
+                            </Expander>
+
                             <Separator Margin="0,20" Style="{StaticResource MaterialDesignDarkSeparator}"/>
 
-                            <Border Background="{DynamicResource PrimaryHueLightBrush}" 
-                                    CornerRadius="4" Padding="10,5" Margin="0,0,0,15">
-                                <TextBlock Text="Community Mods" FontWeight="Bold" FontSize="16" 
-                                           Foreground="White" VerticalAlignment="Center"/>
-                            </Border>
+                            <Expander Style="{StaticResource SectionExpander}">
+                                <Expander.Header>
+                                    <TextBlock Text="Community Mods" Style="{StaticResource SectionExpanderHeaderText}" />
+                                </Expander.Header>
 
                             <controls:SettingRow Margin="0,15,0,0" Label="Cinematic Faith Model:" Foreground="Black" InfoCommand="{Binding CommunityMods.ShowCinematicFaithInfoCommand}">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding CommunityMods.CinematicFaithIndex, Mode=TwoWay}">
@@ -1394,6 +1413,8 @@
                                     <ComboBoxItem Content="Enabled" Foreground="Black"/>
                                 </ComboBox>
                             </controls:SettingRow>
+
+                            </Expander>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid IsHitTestVisible="False" Margin="0,0,15,0">
