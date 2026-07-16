@@ -345,7 +345,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                     else
                     {
-                        _dialogService.ShowMessage("Warning", "Could not locate any editable properties in the game files.", DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Warning", "Could not locate editable properties in the loaded game packages.", DialogMessageType.Warning);
                     }
                     GameStatus.Status = "Ready.";
                 }
@@ -525,7 +525,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string launchArguments = (LaunchArguments.LaunchArguments ?? string.Empty).Trim();
                 if (string.IsNullOrEmpty(launchArguments))
                 {
-                    _dialogService.ShowMessage("Error", "Please enter launch arguments first.", DialogMessageType.Error);
+                    _dialogService.ShowMessage("Error", "Enter launch arguments first.", DialogMessageType.Error);
                     return;
                 }
 
@@ -533,7 +533,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (unlockMode == CommandLineUnlockMode.Unsupported)
                 {
                     _dialogService.ShowMessage("Error",
-                        "This executable version does not support command line unlocking.",
+                        "This executable version does not support command-line unlocking.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -541,7 +541,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!CommandLineUnlockHelper.IsUnlocked(exePath))
                 {
                     _dialogService.ShowMessage("Error",
-                        "The executable has not been patched to unlock command line arguments yet.\n\nClick the 'Patch' button first.",
+                        "The executable has not been patched to unlock command-line arguments.\n\nClick 'Patch' first.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -569,7 +569,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             else
             {
-                _dialogService.ShowMessage("Invalid Directory", "Invalid game directory.\n\nPlease select the base folder where Mirror's Edge is actually installed.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Invalid Directory",
+                    "Invalid game directory.\n\nSelect the base folder where Mirror's Edge is installed.",
+                    DialogMessageType.Error);
                 GameStatus.IsMainTabEnabled = false;
             }
         }

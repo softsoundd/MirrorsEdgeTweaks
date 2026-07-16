@@ -138,12 +138,12 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowLaunchArgumentsInfo()
         {
             _dialogService.ShowMessage("Launch Arguments Information",
-                "Patches the executable to unlock full command line handling in Mirror's Edge. " +
-                "Arguments can be entered here, or they can be added to your game library's launch options/other shortcuts.\n\n" +
-                "If entering arguments in Mirror's Edge Tweaks, use the 'Launch Game w/ Args' button at the top of the window to start the game with the entered arguments.\n\n" +
-                "The majority of arguments should be prefixed with a '-' character. Only URL-specific arguments do not require the '-' prefix, such as commands to load a specific map upon startup. " +
+                "Patches the executable to unlock full command-line handling in Mirror's Edge. " +
+                "Arguments can be entered here, or added to your game library's launch options or other shortcuts.\n\n" +
+                "When entering arguments in Mirror's Edge Tweaks, use the 'Launch Game w/ Args' button at the top of the window to start the game with the entered arguments.\n\n" +
+                "The majority of arguments should be prefixed with '-'. Only URL-specific arguments (e.g. commands to load a specific map on startup) do not require the prefix. " +
                 "Multiple arguments must be separated by a space.\n\n" +
-                "Refer to Unreal Engine 3 documentation for available stock command line arguments: https://docs.unrealengine.com/udk/Three/CommandLineArguments.html",
+                "Refer to Unreal Engine 3 documentation for available stock command-line arguments: https://docs.unrealengine.com/udk/Three/CommandLineArguments.html",
                 DialogMessageType.Information);
         }
 
@@ -187,7 +187,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     CommandLineUnlockMode.PersistentFilePatch when patchWasRemoved =>
                         "The command line unlock patch has been removed and the saved launch arguments were cleared.",
                     CommandLineUnlockMode.PersistentFilePatch =>
-                        "The executable is already using the stock command line behavior. Saved launch arguments were cleared.",
+                        "The executable is already using stock command-line handling. Saved launch arguments were cleared.",
                     _ =>
                         "Saved launch arguments were cleared."
                 };

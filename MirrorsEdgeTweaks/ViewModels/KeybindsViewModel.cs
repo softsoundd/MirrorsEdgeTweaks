@@ -73,78 +73,79 @@ namespace MirrorsEdgeTweaks.ViewModels
                 new KeybindEntryViewModel(this, label, KeybindDefinitions.KeybindMap[textBoxName], title, body);
 
             RestartLevel = Make("RestartLevelKeyTextBox", "Restart Level:", "Restart Level Keybind Information",
-                "Restarts the level from where you started (this does not respect checkpoints reached, refer to the \"Load last checkpoint\" keybind for this).\n\n" +
-                "In time trial and speedrun modes, this will reload the level back to the start.\n\nIn chapter mode, this will reload the level back to the checkpoint that was selected in the main menu.\n\n" +
-                "In story mode, this will reload the level back to where you started when you pressed \"Continue Game\" (except when you complete a chapter, you'll instead respawn at checkpoint A of the next chapter).");
+                "Restarts the level from where you started. This does not respect checkpoints reached; refer to the \"Load last checkpoint\" keybind for that.\n\n" +
+                "In time trial and speedrun modes, this reloads the level back to the start.\n\n" +
+                "In chapter mode, this reloads the level back to the checkpoint selected in the main menu.\n\n" +
+                "In story mode, this reloads the level back to where you started when you pressed \"Continue Game\" (except when you complete a chapter, in which case you respawn at checkpoint A of the next chapter).");
 
             LoadLastCheckpoint = Make("LoadLastCheckpointKeyTextBox", "Load Last Checkpoint:", "Load Last Checkpoint Keybind Information",
-                "In earlier dev/review builds of Mirror's Edge there used to be a dedicated \"Load last checkpoint\" button in the pause menu that would reload Faith " +
-                "to the last hard or soft checkpoint that was reached, however, this never made its way into the game's final release.\n\nAlthough the UI for this was removed, " +
-                "the underlying function for this still exists in retail builds, and Mirror's Edge Tweaks can patch it to become executable via keybinds/console commands. " +
-                "This is essentially a faster way to reset without having to force a death.");
+                "Earlier dev and review builds of Mirror's Edge had a dedicated \"Load last checkpoint\" button in the pause menu that reloaded Faith " +
+                "to the last hard or soft checkpoint reached. The UI was removed before release, but the underlying function still exists in retail builds.\n\n" +
+                "Mirror's Edge Tweaks patches it to be executable via keybinds or console commands — a faster way to reset without forcing a death.");
 
             RestartTimeTrial = Make("RestartTimeTrialKeyTextBox", "Restart Time Trial:", "Restart Time Trial Keybind Information",
-                "Restarts the time trial directly to the count down screen — this bypasses having to access it from the \"Restart Race\" button in the pause menu which can make resetting runs less tedious.\n\n" +
-                "By default this command is not accessible, Mirror's Edge Tweaks performs a patch to make this function executable via keybinds/console commands.");
+                "Restarts the time trial directly to the countdown screen, bypassing the \"Restart Race\" button in the pause menu.\n\n" +
+                "By default this command is not accessible. Mirror's Edge Tweaks applies a patch to make it executable via keybinds or console commands.");
 
             ResetReactionTime = Make("ResetReactionTimeKeyTextBox", "Reset Reaction Time:", "Reset Reaction Time Keybind Information",
                 "Restores reaction time without needing to build up the required momentum. Toggling this keybind while reaction time is active will immediately disengage it.");
 
             GodMode = Make("GodModeKeyTextBox", "God Mode:", "God Mode Keybind Information",
-                "Toggles invincibility, as well as additional commands for disabling kill volumes that god mode by itself misses.");
+                "Toggles invincibility, as well as additional commands for disabling kill volumes that god mode by itself does not cover.");
 
             KillBots = Make("KillBotsKeyTextBox", "Kill Bots:", "Kill Bots Keybind Information",
                 "Kills (deletes) all current bots and enemy helicopters.");
 
             ThirdPerson = Make("ThirdPersonKeyTextBox", "Third Person:", "Third Person Keybind Information",
-                "Cycles through different third person camera perspectives. The 6th press will return you to normal first person view.");
+                "Cycles through different third-person camera perspectives. The sixth press returns you to normal first-person view.");
 
             ToggleHUD = Make("ToggleHUDKeyTextBox", "Toggle HUD:", "Toggle HUD Keybind Information",
                 "Toggles the visibility of the crosshair and timer/checkpoint elements.");
 
             FPSIndicator = Make("FPSIndicatorKeyTextBox", "FPS Indicator:", "FPS Indicator Keybind Information",
-                "Toggles an overlay displaying the frames per second and other rendering statistics.");
+                "Toggles an overlay displaying frames per second and other rendering statistics.");
 
             LevelStats = Make("LevelStatsKeyTextBox", "Level Stats:", "Level Stats Keybind Information",
-                "Toggles an overlay displaying level streaming statistics, listing the levels for the current map. Red levels indicate the level is loaded and visible, " +
-                "with the number of seconds next to the level name representing the time taken from load request to load finish. Green levels indicate unloaded levels.");
+                "Toggles an overlay displaying level streaming statistics for the current map. Red levels indicate the level is loaded and visible; " +
+                "the number of seconds beside each level name is the time from load request to load finish. Green levels indicate unloaded levels.");
 
             TriggersVolumes = Make("TriggersVolumesKeyTextBox", "Triggers & Volumes:", "Triggers & Volumes Keybind Information",
-                "Toggles the display of the bounding boxes of ALL triggers (checkpoints, level loads, other scripted gameplay events) and volumes " +
-                "(areas that put Faith in a specific movement state, kill barriers, etc.).\n\nThis command also shows invisible blocking volumes the player can collide with, " +
-                "making it a more performant alternative to using \"nxvis collision\" ('Show Collision' keybind).");
+                "Toggles the bounding boxes of triggers (checkpoints, level loads, other scripted gameplay events) and volumes " +
+                "(areas that put Faith in a specific movement state, kill barriers, etc.).\n\n" +
+                "This command also shows invisible blocking volumes the player can collide with, " +
+                "making it a more performant alternative to \"nxvis collision\" (Show Collision keybind).");
 
             ShowCollision = Make("ShowCollisionKeyTextBox", "Show Collision:", "Show Collision Keybind Information",
-                "Note: This command is very performance intensive and in some cases can crash the game.\n\n" +
-                "Toggles the display of the PhysX collision data for the level, allowing you to see the wireframes and volumes for ALL collision objects with which rigid bodies interact.");
+                "Note: This command is very performance intensive and can crash the game in some cases.\n\n" +
+                "Toggles the display of PhysX collision data for the level — wireframes and volumes for all collision objects with which rigid bodies interact.");
 
             Noclip = Make("NoclipKeyTextBox", "Noclip:", "Noclip Keybind Information",
-                "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
-                "Toggles the use of noclip (flying with no collision). Keybinds for noclip movement speed can be set in the TweaksScriptsSettings file in the Binaries folder.");
+                "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
+                "Toggles noclip (flying with no collision). Noclip movement speed keybinds can be set in TweaksScriptsSettings in the Binaries folder.");
 
             SaveState = Make("SaveStateKeyTextBox", "Save State:", "Save State Keybind Information",
-                "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
-                "Saves Faith's current position and state. If bots were manually spawned, their states will also be saved.");
+                "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
+                "Saves Faith's current position and state. If bots were manually spawned, their states are also saved.");
 
             LoadSavedState = Make("LoadSavedStateKeyTextBox", "Load Saved State:", "Load Saved State Keybind Information",
-                "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
-                "Restores Faith to the saved state. This will also restore manually spawned bots.");
+                "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
+                "Restores Faith to the saved state. Manually spawned bots are also restored.");
 
             SaveTimerLocation = Make("SaveTimerLocationKeyTextBox", "Save Timer Location:", "Save Timer Location Keybind Information",
-                "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
+                "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
                 "Saves the current player location as the checkpoint for the timer in the trainer HUD.");
 
             DeleteViewedActor = Make("DeleteViewedActorKeyTextBox", "Delete Viewed Actor:", "Delete Viewed Actor Keybind Information",
-                "Note: This cheat only works if the Tweaks Scripts package is installed and when the Cheats + Trainer mode is active.\n\n" +
-                "Deletes the bot/object currently looked at (some objects are connected to essential world geometry and are excluded).");
+                "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
+                "Deletes the bot or object currently in view. Some objects connected to essential world geometry are excluded.");
 
             ScrollDownMacro = Make("ScrollDownMacroKeyTextBox", "Scroll Down Macro Key:", "Scroll Down Macro Key Information",
-                "Set the keybind that will macro the action that is assigned to 'Scroll Down' in the game's control settings menu.\n\n" +
-                "Note: This setting requires the Tweaks Scripts package to be installed. Macros are available while Softimer is active.");
+                "Sets the keybind that macros the action assigned to 'Scroll Down' in the game's control settings.\n\n" +
+                "Note: Requires the Tweaks Scripts package. Macros are available while Softimer is active.");
 
             ScrollUpMacro = Make("ScrollUpMacroKeyTextBox", "Scroll Up Macro Key:", "Scroll Up Macro Key Information",
-                "Set the keybind that will macro the action that is assigned to 'Scroll Up' in the game's control settings menu.\n\n" +
-                "Note: This setting requires the Tweaks Scripts package to be installed. Macros are available while Softimer is active.");
+                "Sets the keybind that macros the action assigned to 'Scroll Up' in the game's control settings.\n\n" +
+                "Note: Requires the Tweaks Scripts package. Macros are available while Softimer is active.");
 
             CustomKeybinds = new[]
             {
@@ -184,8 +185,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!File.Exists(settingsFilePath))
                 {
                     _dialogService.ShowMessage("Tweaks Scripts Not Installed",
-                        "The TweaksScriptsSettings file was not found.\n\n" +
-                        "Please install the Tweaks Scripts package from the Game Tweaks section before configuring macro keybinds.",
+                        "TweaksScriptsSettings was not found.\n\n" +
+                        "Install the Tweaks Scripts package from Game Tweaks before configuring macro keybinds.",
                         DialogMessageType.Warning);
                     return;
                 }
@@ -360,7 +361,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     _dialogService.ShowMessage("Error",
                         $"Cannot set keybind, 'TdInput.ini' file is missing from \"{tdInputPath}\".\n\n" +
-                        "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                        "Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -458,8 +459,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (conflictingCommand != null)
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already bound to the command '{conflictingCommand}'.\n\n" +
-                        "Please choose a different key or remove the existing binding in TdInput.ini first.",
+                        $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
+                        "Choose a different key or remove the existing binding in TdInput.ini first.",
                         DialogMessageType.Warning);
 
                     entry.DisplayKey = string.Empty;
@@ -473,7 +474,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         conflictingCommand = macroConflict;
                         await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                             $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                            "Please choose a different key.",
+                            "Choose a different key.",
                             DialogMessageType.Warning);
                     }
                 }
@@ -556,7 +557,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!File.Exists(tdInputPath))
                 {
                     _dialogService.ShowMessage("File Not Found",
-                        "TdInput.ini not found. Please launch Mirror's Edge at least once to create the configuration file.",
+                        "TdInput.ini not found. Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -592,8 +593,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (conflictingCommand != null)
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already bound to the command '{conflictingCommand}'.\n\n" +
-                        "Please choose a different key or remove the existing binding in TdInput.ini first.",
+                        $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
+                        "Choose a different key or remove the existing binding in TdInput.ini first.",
                         DialogMessageType.Warning);
                     entry.DisplayKey = string.Empty;
                     return;
@@ -604,7 +605,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                         $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                        "Please choose a different key.",
+                        "Choose a different key.",
                         DialogMessageType.Warning);
                     entry.DisplayKey = string.Empty;
                     return;
@@ -740,7 +741,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!File.Exists(tdInputPath))
                 {
                     _dialogService.ShowMessage("File Not Found",
-                        "TdInput.ini not found. Please launch Mirror's Edge at least once to create the configuration file.",
+                        "TdInput.ini not found. Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -776,8 +777,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (conflictingCommand != null)
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already bound to the command '{conflictingCommand}'.\n\n" +
-                        "Please choose a different key or remove the existing binding in TdInput.ini first.",
+                        $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
+                        "Choose a different key or remove the existing binding in TdInput.ini first.",
                         DialogMessageType.Warning);
                     entry.DisplayKey = string.Empty;
                     return;
@@ -788,7 +789,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                         $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                        "Please choose a different key.",
+                        "Choose a different key.",
                         DialogMessageType.Warning);
                     entry.DisplayKey = string.Empty;
                     return;
@@ -998,7 +999,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     {
                         await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                             $"The key '{ue3Key}' is already bound to the command '{conflictingCommand}'.\n\n" +
-                            "Please choose a different key or remove the existing binding in TdInput.ini first.",
+                            "Choose a different key or remove the existing binding in TdInput.ini first.",
                             DialogMessageType.Warning);
                         return false;
                     }
@@ -1009,7 +1010,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                         $"The key '{ue3Key}' is already assigned to '{macroConflict}'.\n\n" +
-                        "Please choose a different key.",
+                        "Choose a different key.",
                         DialogMessageType.Warning);
                     return false;
                 }

@@ -29,7 +29,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             var messageText = new System.Windows.Controls.TextBlock
             {
-                Text = "Which version of Tweaks Scripts UI would you like to install?",
+                Text = "Which version of Tweaks Scripts UI do you want to install?",
                 TextWrapping = System.Windows.TextWrapping.Wrap,
                 Margin = new System.Windows.Thickness(0, 0, 0, 16),
                 MaxWidth = 450

@@ -218,7 +218,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 LoggingPatchStatusForeground = PatchedBrush();
                 if (!alreadyPatched)
                 {
-                    _dialogService.ShowMessage("Success", "Logging patch applied successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Logging patch applied.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -254,7 +254,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!alreadyUnpatched)
                 {
                     LoggingPatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Logging patch removed successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Logging patch removed.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -272,8 +272,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "(and displayed in the log console window if the \"-LOG\" launch argument is used).\n\n" +
                 "By default, the log file is created at \"Logs\\Launch.log\" next to the executable. " +
                 "You can customise the log location using launch arguments:\n\n" +
-                "\"-LOG=mylog.txt\" — Write to a custom filename\n" +
-                "\"-ABSLOG=C:\\...\" — Write to an absolute path",
+                "\"-LOG=mylog.txt\" — write to a custom filename\n" +
+                "\"-ABSLOG=C:\\...\" — write to an absolute path",
                 DialogMessageType.Information);
         }
 
@@ -305,7 +305,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 MultiInstancePatchStatusForeground = PatchedBrush();
                 if (!alreadyPatched)
                 {
-                    _dialogService.ShowMessage("Success", "Multi-instance patch applied successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Multi-instance patch applied.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -341,7 +341,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!alreadyUnpatched)
                 {
                     MultiInstancePatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Multi-instance patch removed successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Multi-instance patch removed.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -355,7 +355,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService.ShowMessage("Multi-instance Information",
                 "Bypasses Mirror's Edge's single-instance restriction.\n\n" +
-                "This is useful for modders so that the editor can be kept open when launching the regular game instance.",
+                "Useful for modders who need the editor open while launching the regular game instance.",
                 DialogMessageType.Information);
         }
 
@@ -387,7 +387,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 AmbiguousBypassPatchStatusForeground = PatchedBrush();
                 if (!alreadyPatched)
                 {
-                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -423,7 +423,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!alreadyUnpatched)
                 {
                     AmbiguousBypassPatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed successfully.", DialogMessageType.Information);
+                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
@@ -438,11 +438,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             _dialogService.ShowMessage("Ambiguous Bypass Information",
                 "Suppresses the \"Ambiguous package name\" dialogs that block game startup.\n\n" +
                 "When multiple game files with the same name are present in the game directory, " +
-                "a blocking message box for each conflict is displayed when the game starts. " +
-                "With the patch applied, these dialogs are silently skipped.\n\n" +
-                "Warning: Bypassing this message is not intended for end users — this message appearing " +
-                "in the first place is a sign of a problem with your game's file setup. " +
-                "Only use this patch if you know what you're doing.",
+                "a blocking message box is displayed for each conflict at startup. With this patch applied, those dialogs are skipped silently.\n\n" +
+                "Warning: Bypassing this message is not intended for end users — it appearing " +
+                "in the first place indicates a problem with your game's file setup. " +
+                "Only use this patch if you know what you are doing.",
                 DialogMessageType.Information);
         }
 
@@ -451,7 +450,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
             {
-                _dialogService.ShowMessage("Error", "Please select a game directory first.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
                 return null;
             }
 
@@ -559,7 +558,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
             {
-                _dialogService.ShowMessage("Error", "Game directory not selected.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
                 return;
             }
 
@@ -623,7 +622,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     RefreshUnlockedConfigs();
                     string status = unlock ? "patched" : "unpatched";
-                    await _dialogService.ShowMessageAsync("Success", $"Successfully {status} unlocked configs.", DialogMessageType.Success);
+                    await _dialogService.ShowMessageAsync("Success", $"Unlocked configs {status}.", DialogMessageType.Success);
                 }
                 else
                 {
@@ -633,7 +632,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 HideProgress();
-                await _dialogService.ShowMessageAsync("Error", $"An error occurred while patching the executable: {ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowMessageAsync("Error", $"Failed to patch the executable:\n\n{ex.Message}", DialogMessageType.Error);
             }
             finally
             {
@@ -646,9 +645,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowUnlockedConfigsInfo()
         {
             _dialogService.ShowMessage("Unlocked Configs Information",
-                "Applying this patch bypasses the \"corrupted config\" error message that prevents the game from launching when the game directory's config files have been modified " +
-                "(e.g. when removing the streak effects, adding custom maps, removing startup wait period, etc.).\n\nThis is essentially achieving what the MEMLA tool does, " +
-                "except it patches the executable directly.",
+                "Bypasses the \"corrupted config\" error that prevents the game from launching when config files in the game directory have been modified " +
+                "(e.g. removing streak effects, adding custom maps, removing the startup wait period).\n\n" +
+                "Achieves the same result as the MEMLA tool, except the executable is patched directly.",
                 DialogMessageType.Information);
         }
     }

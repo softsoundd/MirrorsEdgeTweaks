@@ -87,6 +87,7 @@ namespace MirrorsEdgeTweaks.Tests
             { "DynamicLights", (s, p, v) => s.ApplyDynamicLights(p, v) },
             { "DynamicShadows", (s, p, v) => s.ApplyDynamicShadows(p, v) },
             { "DirectionalLightmaps", (s, p, v) => s.ApplyLightmaps(p, v) },
+            { "TdBicubicFiltering", (s, p, v) => s.ApplyHqLightmaps(p, v) },
             { "TdSunHaze", (s, p, v) => s.ApplySunHaze(p, v) },
             { "TdTonemapping", (s, p, v) => s.ApplyToneMapping(p, v) },
         };

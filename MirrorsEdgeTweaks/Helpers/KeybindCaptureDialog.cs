@@ -36,7 +36,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             var instruction = new System.Windows.Controls.TextBlock
             {
-                Text = "Press any key, mouse button, or scrollwheel.\n\nPress Escape to cancel.\n\nPress Backspace or Delete to clear.",
+                Text = "Press any key, mouse button, or scroll wheel.\n\nPress Escape to cancel.\n\nPress Backspace or Delete to clear the binding.",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new System.Windows.Thickness(0, 0, 0, 16),
                 MaxWidth = 450

@@ -334,6 +334,16 @@ namespace MirrorsEdgeTweaks.Services
             ModifyIniFile(tdEngineIniPath, replacements);
         }
 
+        public void ApplyHqLightmaps(string tdEngineIniPath, bool enabled)
+        {
+            var replacements = new Dictionary<string, string>
+            {
+                { "TdBicubicFiltering", $"TdBicubicFiltering={enabled}" }
+            };
+
+            ModifyIniFile(tdEngineIniPath, replacements);
+        }
+
         public void ApplySunHaze(string tdEngineIniPath, bool enabled)
         {
             var replacements = new Dictionary<string, string>

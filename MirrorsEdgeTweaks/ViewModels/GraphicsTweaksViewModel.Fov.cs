@@ -41,7 +41,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (!float.TryParse(NewFovValue, NumberStyles.Float, CultureInfo.InvariantCulture, out float newFov) || newFov < 80 || newFov > 179)
             {
-                _dialogService.ShowMessage("Invalid Input", "Please enter a valid number for the FOV (must be between 80 - 179).", DialogMessageType.Warning);
+                _dialogService.ShowMessage("Invalid Input", "Enter a valid horizontal FOV between 80 and 179.", DialogMessageType.Warning);
                 return;
             }
 
@@ -124,11 +124,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _settings.Save();
 
                 _gameStatus.Status = "Ready.";
-                await _dialogService.ShowMessageAsync("Success", "Successfully applied FOV patches.", DialogMessageType.Success);
+                await _dialogService.ShowMessageAsync("Success", "FOV patches applied.", DialogMessageType.Success);
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Save Error", $"Failed to apply changes: {ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowMessageAsync("Error", $"Failed to apply FOV patches:\n\n{ex.Message}", DialogMessageType.Error);
                 _gameStatus.Status = "Error applying changes.";
             }
             finally

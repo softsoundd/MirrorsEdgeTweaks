@@ -33,6 +33,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly ISteamService _steamService;
 
         private bool _isLoading;
+        private bool _isApplyingLanguage;
+        private bool _isProgrammaticLanguageUpdate;
+        private (int FromIndex, int ToIndex)? _failedSelectionEchoGuard;
 
         protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
@@ -64,47 +67,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _isLoading = true;
 
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
-
-                if (!File.Exists(tdEnginePath))
-                    return;
-
-                var lines = File.ReadAllLines(tdEnginePath);
-
-                foreach (var line in lines)
+                int? index = TryGetInstalledLanguageIndex();
+                if (index.HasValue)
                 {
-                    string trimmedLine = line.Trim();
-
-                    if (trimmedLine.StartsWith("Language="))
-                    {
-                        string value = trimmedLine.Substring("Language=".Length).Trim();
-
-                        int index = value.ToLower() switch
-                        {
-                            "cze" => 0,
-                            "deu" => 1,
-                            "int" => 2,
-                            "esn" => 3,
-                            "fra" => 4,
-                            "ita" => 5,
-                            "hun" => 6,
-                            "pol" => 7,
-                            "por" => 8,
-                            "rus" => 9,
-                            "kor" => 10,
-                            "cht" => 11,
-                            "jpn" => 12,
-                            "chs" => 13,
-                            _ => -1
-                        };
-
-                        if (index >= 0)
-                        {
-                            SelectedLanguageIndex = index;
-                        }
-                        return;
-                    }
+                    SelectedLanguageIndex = index.Value;
                 }
             }
             catch (Exception ex)
@@ -118,6 +84,47 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             TryReapplySteamLanguageFix();
         }
+
+        private static int? TryGetInstalledLanguageIndex()
+        {
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+
+            if (!File.Exists(tdEnginePath))
+                return null;
+
+            foreach (var line in File.ReadAllLines(tdEnginePath))
+            {
+                string trimmedLine = line.Trim();
+
+                if (trimmedLine.StartsWith("Language="))
+                {
+                    string value = trimmedLine.Substring("Language=".Length).Trim();
+                    return MapTdEngineLanguageCodeToIndex(value);
+                }
+            }
+
+            return null;
+        }
+
+        private static int? MapTdEngineLanguageCodeToIndex(string value) => value.ToLower() switch
+        {
+            "cze" => 0,
+            "deu" => 1,
+            "int" => 2,
+            "esn" => 3,
+            "fra" => 4,
+            "ita" => 5,
+            "hun" => 6,
+            "pol" => 7,
+            "por" => 8,
+            "rus" => 9,
+            "kor" => 10,
+            "cht" => 11,
+            "jpn" => 12,
+            "chs" => 13,
+            _ => null
+        };
 
         private void TryReapplySteamLanguageFix()
         {
@@ -137,6 +144,11 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private void SetLanguageIndexSilently(int index)
         {
+            if (SelectedLanguageIndex == index)
+                return;
+
+            _isProgrammaticLanguageUpdate = true;
+            bool previous = _isLoading;
             _isLoading = true;
             try
             {
@@ -144,40 +156,68 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             finally
             {
-                _isLoading = false;
+                _isLoading = previous;
+                Post(() => _isProgrammaticLanguageUpdate = false);
             }
         }
 
-        partial void OnSelectedLanguageIndexChanged(int oldValue, int newValue) => EnqueueApply(() => OnLanguageChangedAsync(oldValue, newValue));
+        partial void OnSelectedLanguageIndexChanged(int oldValue, int newValue)
+        {
+            if (_isProgrammaticLanguageUpdate || _isLoading || _isApplyingLanguage || newValue < 0 || newValue == oldValue || IsApplySuppressed)
+                return;
+
+            if (ShouldIgnoreFailedSelectionEcho(newValue))
+                return;
+
+            _isApplyingLanguage = true;
+            EnqueueApply(() => OnLanguageChangedAsync(oldValue, newValue));
+        }
+
+        private bool ShouldIgnoreFailedSelectionEcho(int newValue)
+        {
+            if (_failedSelectionEchoGuard is not { } guard)
+                return false;
+
+            if (newValue == guard.FromIndex || newValue == guard.ToIndex)
+                return true;
+
+            _failedSelectionEchoGuard = null;
+            return false;
+        }
 
         private async Task OnLanguageChangedAsync(int previousIndex, int value)
         {
-            if (value < 0 || _isLoading)
-                return;
-
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath) || value >= LanguageNames.Length)
-            {
-                SetLanguageIndexSilently(previousIndex);
-                return;
-            }
-
-            string language = LanguageNames[value];
-
-            var languageConfig = GetLanguageConfig(language);
-            if (languageConfig == null)
-            {
-                SetLanguageIndexSilently(previousIndex);
-                return;
-            }
-
             bool switched = false;
-
-            _gameStatus.IsUiEnabled = false;
 
             try
             {
-                UpdateRegistryValue(@"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge", "Language", languageConfig.RegistryLanguage);
-                UpdateRegistryValue(@"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge", "Locale", languageConfig.Locale);
+                if (value < 0 || _isLoading)
+                    return;
+
+                if (value != SelectedLanguageIndex)
+                    return;
+
+                if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath) || value >= LanguageNames.Length)
+                {
+                    SetLanguageIndexSilently(previousIndex);
+                    return;
+                }
+
+                string language = LanguageNames[value];
+
+                var languageConfig = GetLanguageConfig(language);
+                if (languageConfig == null)
+                {
+                    SetLanguageIndexSilently(previousIndex);
+                    return;
+                }
+
+                _gameStatus.IsUiEnabled = false;
+                _failedSelectionEchoGuard = (previousIndex, value);
+
+                try
+                {
+                    UpdateRegistryLanguage(languageConfig);
 
                 string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                 string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
@@ -186,7 +226,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     _dialogService.ShowMessage("Error",
                         $"Cannot switch language, 'TdEngine.ini' file is missing from \"{tdEnginePath}\".\n\n" +
-                        "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                        "Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -261,30 +301,36 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
 
                 switched = true;
+                _failedSelectionEchoGuard = null;
                 _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);
-            }
-            catch (System.Security.SecurityException)
-            {
-                _dialogService.ShowMessage("Administrator Access Required",
-                    "Changing the game language requires administrator privileges to modify the Windows Registry.\n\n" +
-                    "To switch languages, please:\n\n" +
-                    "1. Close Mirror's Edge Tweaks\n" +
-                    "2. Right-click on MirrorsEdgeTweaks.exe\n" +
-                    "3. Select 'Run as administrator'\n" +
-                    "4. Try changing the language again",
-                    DialogMessageType.Error);
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to switch language:\n\n{ex.Message}", DialogMessageType.Error);
+                }
+                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+                {
+                    _dialogService.ShowMessage("Administrator Access Required",
+                        "Changing the game language requires administrator privileges to modify the Windows Registry.\n\n" +
+                        "To switch languages:\n\n" +
+                        "1. Close Mirror's Edge Tweaks\n" +
+                        "2. Restart it as administrator\n" +
+                        "3. Change the language again",
+                        DialogMessageType.Error);
+                }
+                catch (Exception ex)
+                {
+                    _dialogService.ShowMessage("Error", $"Failed to switch language:\n\n{ex.Message}", DialogMessageType.Error);
+                }
+                finally
+                {
+                    if (!switched)
+                    {
+                        SetLanguageIndexSilently(previousIndex);
+                    }
+
+                    _gameStatus.IsUiEnabled = true;
+                }
             }
             finally
             {
-                if (!switched)
-                {
-                    SetLanguageIndexSilently(previousIndex);
-                }
-                _gameStatus.IsUiEnabled = true;
+                Post(() => _isApplyingLanguage = false);
             }
         }
 
@@ -402,7 +448,14 @@ namespace MirrorsEdgeTweaks.ViewModels
             };
         }
 
-        private void UpdateRegistryValue(string keyPath, string valueName, string newValue)
+        private static void UpdateRegistryLanguage(LanguageConfig languageConfig)
+        {
+            const string keyPath = @"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge";
+            UpdateRegistryValue(keyPath, "Language", languageConfig.RegistryLanguage);
+            UpdateRegistryValue(keyPath, "Locale", languageConfig.Locale);
+        }
+
+        private static void UpdateRegistryValue(string keyPath, string valueName, string newValue)
         {
             using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath, true))
             {
@@ -424,9 +477,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowGameLanguageInfo()
         {
             _dialogService.ShowMessage("Game Language Information",
-                "Allows you to change to any of the game's 14 supported languages.\n\n" +
+                "Change to any of the game's 14 supported languages.\n\n" +
                 "Note: Requires administrator privileges to modify registry values.\n\n" +
-                "The following languages support only UI and subtitles: Czech, Hungarian, Portuguese Brazil, Korean, Traditional Chinese Taiwan, and Simplified Chinese.",
+                "The following languages support UI and subtitles only: Czech, Hungarian, Portuguese (Brazil), Korean, Traditional Chinese (Taiwan), and Simplified Chinese.",
                 DialogMessageType.Information);
         }
     }

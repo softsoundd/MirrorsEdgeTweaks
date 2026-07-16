@@ -21,6 +21,7 @@ namespace MirrorsEdgeTweaks.Services
         void ApplyDynamicShadows(string tdEngineIniPath, bool enabled);
         void ApplyHQDynamicShadows(string tdEngineIniPath, bool enabled);
         void ApplyLightmaps(string tdEngineIniPath, bool enabled);
+        void ApplyHqLightmaps(string tdEngineIniPath, bool enabled);
         void ApplySunHaze(string tdEngineIniPath, bool enabled);
         void ApplyToneMapping(string tdEngineIniPath, bool enabled);
         void ApplyTextureManagement(string tdEngineIniPath, string mode);

@@ -149,7 +149,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (string.IsNullOrEmpty(engineIniPath) || !File.Exists(engineIniPath))
                 {
-                    await _dialogService.ShowMessageAsync("Error", "TdEngine.ini file not found. Please ensure Mirror's Edge has been run at least once to create the config files.", DialogMessageType.Error);
+                    await _dialogService.ShowMessageAsync("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
                     return false;
                 }
 

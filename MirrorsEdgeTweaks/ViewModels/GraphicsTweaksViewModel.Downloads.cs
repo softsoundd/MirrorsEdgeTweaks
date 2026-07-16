@@ -39,13 +39,13 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 RefreshToneMapper();
                 await _dialogService.ShowMessageAsync("Success",
-                    $"{variantName} tone mapper successfully downloaded and installed.",
+                    $"{variantName} tone mapper downloaded and installed.",
                     DialogMessageType.Success);
             }
             catch (Exception ex)
             {
-                _gameStatus.Status = "An error occurred during installation.";
-                await _dialogService.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogMessageType.Error);
+                _gameStatus.Status = "Installation failed.";
+                await _dialogService.ShowMessageAsync("Error", $"Installation failed:\n\n{ex.Message}", DialogMessageType.Error);
                 SetSilently(RefreshToneMapper);
             }
             finally

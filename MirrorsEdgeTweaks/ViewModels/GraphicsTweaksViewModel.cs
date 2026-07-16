@@ -48,6 +48,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         public GraphicsOption DynamicShadows { get; }
         public GraphicsOption HqDynamicShadows { get; }
         public GraphicsOption Lightmaps { get; }
+        public GraphicsOption HqLightmaps { get; }
         public GraphicsOption SunHaze { get; }
         public GraphicsOption ToneMapping { get; }
         public GraphicsOption TextureManagement { get; }
@@ -121,6 +122,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             DynamicShadows = new GraphicsOption((o, v) => ApplyStandard(o, v, "dynamic shadows", () => _graphics.ApplyDynamicShadows(IniPath!, v == 0)));
             HqDynamicShadows = new GraphicsOption((o, v) => ApplyStandard(o, v, "HQ dynamic shadows", () => _graphics.ApplyHQDynamicShadows(IniPath!, v == 0)));
             Lightmaps = new GraphicsOption((o, v) => ApplyStandard(o, v, "lightmaps", () => _graphics.ApplyLightmaps(IniPath!, v == 0)));
+            HqLightmaps = new GraphicsOption((o, v) => ApplyStandard(o, v, "HQ lightmaps", () => _graphics.ApplyHqLightmaps(IniPath!, v == 0)));
             SunHaze = new GraphicsOption((o, v) => ApplyStandard(o, v, "sun haze", () => _graphics.ApplySunHaze(IniPath!, v == 0)));
             ToneMapping = new GraphicsOption((o, v) => ApplyStandard(o, v, "tone mapping", () => _graphics.ApplyToneMapping(IniPath!, v == 0)));
             TextureManagement = new GraphicsOption((o, v) => ApplyStandard(o, v, "texture management", () => _graphics.ApplyTextureManagement(IniPath!, v == 0 ? "Modern" : "Default")));
@@ -140,7 +142,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath) || !File.Exists(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini file not found. Please ensure Mirror's Edge has been run at least once to create the config files.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
                 SetSilently(revert);
                 return false;
             }
@@ -241,6 +243,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                     string? lightmaps = _graphics.ReadIniValue(IniPath, "DirectionalLightmaps");
                     if (lightmaps != null)
                         Lightmaps.Index = lightmaps.Equals("True", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+
+                    string? hqLightmaps = _graphics.ReadIniValue(IniPath, "TdBicubicFiltering");
+                    if (hqLightmaps != null)
+                        HqLightmaps.Index = hqLightmaps.Equals("True", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
                     string? sunHaze = _graphics.ReadIniValue(IniPath, "TdSunHaze");
                     if (sunHaze != null)
@@ -368,8 +374,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 bool proceed = await _dialogService.ShowConfirmationAsync(
                     "Warning for NVIDIA GPU users",
-                    "16xQ anti-aliasing (CSAA) is not supported on NVIDIA GPUs newer than the first-generation Maxwell microarchitecture (GTX 960 and up). " +
-                    "Mirror's Edge will fail to launch if you choose this setting and have an NVIDIA GPU newer than this.\n\nDo you wish to proceed?");
+                    "16xQ anti-aliasing (CSAA) is not supported on NVIDIA GPUs newer than the first-generation Maxwell architecture (GTX 960 and later). " +
+                    "Mirror's Edge will fail to launch with this setting on affected GPUs.\n\nContinue?");
 
                 if (!proceed)
                 {
@@ -406,7 +412,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             var gameDir = _session.Config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
             {
-                _dialogService.ShowMessage("Error", "Please specify the correct game install folder path first.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
                 SetSilently(() => StreakEffectIndex = oldValue);
                 return;
             }
@@ -414,7 +420,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             string defaultHudEffectsPath = Path.Combine(gameDir, "TdGame", "Config", "DefaultHudEffects.ini");
             if (!File.Exists(defaultHudEffectsPath))
             {
-                _dialogService.ShowMessage("Error", "Cannot toggle streak effect, 'DefaultHudEffects.ini' file not found.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "DefaultHudEffects.ini not found. Cannot toggle the streak effect.", DialogMessageType.Error);
                 SetSilently(() => StreakEffectIndex = oldValue);
                 return;
             }
@@ -429,8 +435,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                     bool isPatched = _unlockedConfigs.UnlockedConfigsStatus == "Patched";
                     if (!isPatched)
                     {
-                        _dialogService.ShowMessage("Warning", "The config modification patch in the 'Game Tweaks' section is not applied. " +
-                            "Please apply the patch in order for your game to launch with the disabled streak effect.", DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Warning",
+                            "The 'Unlocked Configs' patch in 'Game Tweaks' is not applied. " +
+                            "Apply it before launching with the streak effect disabled.",
+                            DialogMessageType.Warning);
                     }
                 }
             }
@@ -456,7 +464,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
                 "Texture detail preset",
-                "Applying a texture detail preset will revert any changes you may have made in the 'Individual Settings' section below.\n\nDo you wish to proceed?");
+                "Applying a texture detail preset will revert any changes made in the 'Individual Settings' section below.\n\nContinue?");
 
             if (!proceed)
             {
@@ -497,7 +505,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
                 "Graphics quality preset",
-                "Applying a graphics quality preset will revert any changes you may have made in the 'Individual Settings' section below.\n\nDo you wish to proceed?");
+                "Applying a graphics quality preset will revert any changes made in the 'Individual Settings' section below.\n\nContinue?");
 
             if (!proceed)
             {
@@ -561,7 +569,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (!File.Exists(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini file not found. Please ensure Mirror's Edge has been run at least once to create the config files.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
                 RevertRenderResolution();
                 return;
             }
@@ -634,25 +642,25 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (string.IsNullOrEmpty(input))
             {
-                _dialogService.ShowMessage("Error", "FPS value not entered.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter an FPS limit value.", DialogMessageType.Error);
                 return;
             }
 
             if (!int.TryParse(input, out int value))
             {
-                _dialogService.ShowMessage("Error", "Invalid FPS value.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter a valid integer FPS value.", DialogMessageType.Error);
                 return;
             }
 
             if (value < 1)
             {
-                _dialogService.ShowMessage("Error", "FPS cannot be less than 1.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "FPS limit cannot be less than 1.", DialogMessageType.Error);
                 return;
             }
 
             if (value > 2000)
             {
-                _dialogService.ShowMessage("Error", "FPS cannot be greater than 2000.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "FPS limit cannot be greater than 2000.", DialogMessageType.Error);
                 return;
             }
 
@@ -744,25 +752,25 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (string.IsNullOrEmpty(input))
             {
-                _dialogService.ShowMessage("Error", "PhysX FPS value not entered.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter a PhysX FPS value.", DialogMessageType.Error);
                 return;
             }
 
             if (!int.TryParse(input, out int physxFps))
             {
-                _dialogService.ShowMessage("Error", "Invalid PhysX FPS. Please enter a number between 50 and 300.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter a valid PhysX FPS value between 50 and 300.", DialogMessageType.Error);
                 return;
             }
 
             if (physxFps < 50)
             {
-                _dialogService.ShowMessage("Error", "PhysX framerate cannot be less than 50.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "PhysX frame rate cannot be less than 50.", DialogMessageType.Error);
                 return;
             }
 
             if (physxFps > 300)
             {
-                _dialogService.ShowMessage("Error", "PhysX framerate cannot be greater than 300.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "PhysX frame rate cannot be greater than 300.", DialogMessageType.Error);
                 return;
             }
 
@@ -775,7 +783,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 await Task.Run(() => PhysXTimingPatcher.Apply(gameDir, physxFps));
                 _gameStatus.Status = "Ready.";
-                await _dialogService.ShowMessageAsync("Success", $"PhysX FPS set to {physxFps} successfully.", DialogMessageType.Success);
+                await _dialogService.ShowMessageAsync("Success", $"PhysX FPS set to {physxFps}.", DialogMessageType.Success);
             }
             catch (Exception ex)
             {
@@ -897,13 +905,13 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (string.IsNullOrEmpty(input))
             {
-                _dialogService.ShowMessage("Error", "LOD value not entered.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter a LOD value.", DialogMessageType.Error);
                 return false;
             }
 
             if (!int.TryParse(input, out value))
             {
-                _dialogService.ShowMessage("Error", "Invalid LOD value.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", "Enter a valid integer LOD value.", DialogMessageType.Error);
                 return false;
             }
 

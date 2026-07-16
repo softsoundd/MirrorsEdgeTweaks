@@ -166,7 +166,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     _dialogService.ShowMessage("Error",
                         $"Cannot change audio backend, 'TdEngine.ini' file is missing from \"{tdEnginePath}\".\n\n" +
-                        "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                        "Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -274,16 +274,14 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowAudioBackendInfo()
         {
             _dialogService.ShowMessage("Audio Backend Information",
-                "The default OpenAL implementation in Mirror's Edge has sampling issues where the initial attack/transients of footstep sounds, " +
-                "hand placements, etc. are lost due to the audio fading in. Upgrading to OpenAL Soft is highly recommended and fixes these issues in Mirror's Edge as well " +
-                "as providing a noticeable boost in audio clarity.\n\nBoth OpenAL Soft options also raise the simultaneous " +
-                "audio source limit from 32 to 256. The default limit of 32 causes sounds to be abruptly cut during busy scenes " +
-                "with lots of gunfire, foley and ambient sources.\n\n" +
-                "The HRTF option provides realistic 3D spatial audio through stereo headphones, " +
-                "and utilises a special proxy that intercepts the engine's audio stream and splits the signal path so that HRTF is only applied " +
-                "to actual 3D world sounds. Without the proxy, standard OpenAL Soft HRTF colours everything — including music, " +
+                "The default OpenAL implementation in Mirror's Edge has sampling issues where the initial attack and transients of footstep sounds, " +
+                "hand placements, and similar effects are lost due to audio fading in. OpenAL Soft fixes these issues and improves overall audio clarity.\n\n" +
+                "Both OpenAL Soft options raise the simultaneous audio source limit from 32 to 256. " +
+                "The default limit of 32 causes sounds to be cut abruptly during busy scenes with heavy gunfire, foley, and ambient sources.\n\n" +
+                "The HRTF option provides realistic 3D spatial audio through stereo headphones via a proxy that intercepts the engine's audio stream " +
+                "and applies HRTF only to 3D world sounds. Without the proxy, standard OpenAL Soft HRTF colours everything — including music, " +
                 "dialogue, and UI effects — which can sound unnatural. With the proxy, non-spatial audio bypasses HRTF entirely " +
-                "and plays back cleanly, while world-space sounds keep their full HRTF spatialisation.",
+                "and plays back cleanly, while world-space sounds retain full HRTF spatialisation.",
                 DialogMessageType.Information);
         }
     }

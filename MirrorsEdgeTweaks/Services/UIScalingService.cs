@@ -30,9 +30,8 @@ namespace MirrorsEdgeTweaks.Services
         {
             return await _dialogService.ShowConfirmationAsync(
                 "Fix UI and blurry text?",
-                "Do you wish to fix the game's UI and blurry text at higher resolutions?\n\n" +
-                "This installs a dynamic fix that adjusts the UI to your resolution automatically, " +
-                "including when you change resolution in-game - no need to re-apply it per resolution.");
+                "Apply the dynamic high-resolution UI fix? This adjusts UI scaling to your resolution automatically, " +
+                "including when you change resolution in-game, without needing to reapply it for each resolution.");
         }
 
         public async Task ApplyUIScalingAsync(int width, int height, string gameDirectoryPath, Action? beforeShowingDialog = null, bool showDialogs = true)
@@ -77,7 +76,7 @@ namespace MirrorsEdgeTweaks.Services
                 if (showDialogs)
                 {
                     beforeShowingDialog?.Invoke();
-                    string message = $"Resolution set to {width} x {height}\nDynamic UI fix applied.";
+                    string message = $"Resolution set to {width} × {height}.\nDynamic UI fix applied.";
                     if (failedLayers.Count > 0)
                         message += $"\n\nNote: the following optional layers could not be applied: {string.Join(", ", failedLayers)}.";
                     await _dialogService.ShowMessageAsync(
@@ -113,7 +112,7 @@ namespace MirrorsEdgeTweaks.Services
                     beforeShowingDialog?.Invoke();
                     await _dialogService.ShowMessageAsync(
                         "Resolution Updated",
-                        $"Resolution set to {width} x {height}\nDynamic UI fix removed (stock UI scaling restored).",
+                        $"Resolution set to {width} × {height}.\nDynamic UI fix removed (stock UI scaling restored).",
                         DialogMessageType.Success);
                 }
             }

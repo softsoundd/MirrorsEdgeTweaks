@@ -106,7 +106,7 @@ namespace MirrorsEdgeTweaks.Services
             {
                 Dispatch(() =>
                 {
-                    _dialogService.ShowMessage("Error", $"An error occurred: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowMessage("Error", $"Failed to load game data:\n\n{ex.Message}", DialogMessageType.Error);
                     _gameStatus.Status = "Error loading packages.";
                 });
                 _session.Package = null;

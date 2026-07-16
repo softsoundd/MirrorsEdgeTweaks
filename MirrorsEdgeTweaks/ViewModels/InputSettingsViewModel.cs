@@ -62,7 +62,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error",
                     $"Cannot edit mouse smoothing, 'TdInput.ini' file is missing from \"{tdInputIniPath}\".\n\n" +
-                    "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                    "Launch Mirror's Edge at least once to create the configuration file.",
                     DialogMessageType.Error);
                 return;
             }
@@ -146,7 +146,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowMouseSmoothingInfo()
         {
             _dialogService.ShowMessage("Mouse Smoothing Information",
-                "Mouse smoothing will variably adjust your mouse sensitivity, generally making it more inconsistent. It is recommended to disable mouse smoothing for a better experience.",
+                "Mouse smoothing variably adjusts your mouse sensitivity, generally making it more inconsistent. Disabling mouse smoothing is recommended for a better experience.",
                 DialogMessageType.Information);
         }
 
@@ -202,7 +202,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                     string message = enabled
                         ? "Uniform sensitivity enabled. Mouse sensitivity will now remain consistent regardless of vertical view angle."
-                        : "Uniform sensitivity disabled (default behavior restored).";
+                        : "Uniform sensitivity disabled (default behaviour restored).";
 
                     _dialogService.ShowMessage("Success", message, DialogMessageType.Success);
                 }
@@ -242,8 +242,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             _dialogService.ShowMessage("Uniform Sensitivity Information",
                 "Warning: Enabling uniform sensitivity is banned in official Mirror's Edge speedrun categories. " +
                 "Only enable this if you are playing casually.\n\n" +
-                "When pitching the camera up or down greater than a 63° angle from the horizon, horizontal camera sensitivity is reduced by 60%. " +
-                "Enabling the uniform sensitivity option ensures the sensitivity is consistent at all vertical angles.",
+                "When pitching the camera more than 63° from the horizon, horizontal camera sensitivity is reduced by 60%. " +
+                "Enabling uniform sensitivity keeps sensitivity consistent at all vertical angles.",
                 DialogMessageType.Information);
         }
 
@@ -259,7 +259,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error",
                     $"Cannot modify sensitivity, 'TdInput.ini' file is missing from \"{tdInputIniPath}\".\n\n" +
-                    "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                    "Launch Mirror's Edge at least once to create the configuration file.",
                     DialogMessageType.Error);
                 return;
             }
@@ -268,13 +268,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (!double.TryParse(Dpi, NumberStyles.Float, CultureInfo.InvariantCulture, out double dpi) || dpi <= 0)
                 {
-                    _dialogService.ShowMessage("Invalid Input", "Please enter a valid DPI value (must be greater than 0).", DialogMessageType.Error);
+                    _dialogService.ShowMessage("Invalid Input", "Enter a valid DPI value greater than 0.", DialogMessageType.Error);
                     return;
                 }
 
                 if (!double.TryParse(Cm360, NumberStyles.Float, CultureInfo.InvariantCulture, out double cm360) || cm360 <= 0)
                 {
-                    _dialogService.ShowMessage("Invalid Input", "Please enter a valid cm/360° value (must be greater than 0).", DialogMessageType.Error);
+                    _dialogService.ShowMessage("Invalid Input", "Enter a valid cm/360° value greater than 0.", DialogMessageType.Error);
                     return;
                 }
 
@@ -292,7 +292,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _dialogService.ShowMessage("Success",
                     $"Sensitivity multiplier set to {calculatedValue:F6}\n\n" +
                     $"Based on {dpi} DPI and {cm360} cm/360°\n\n" +
-                    "Important: Please ensure mouse smoothing is disabled and FOV-agnostic sensitivity is enabled (if applicable) for consistent sensitivity behaviour.",
+                    "Important: Disable mouse smoothing and enable FOV-agnostic sensitivity (if applicable) for consistent sensitivity behaviour.",
                     DialogMessageType.Success);
             }
             catch (Exception ex)
@@ -312,7 +312,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error",
                     $"Cannot modify sensitivity, 'TdInput.ini' file is missing from \"{tdInputIniPath}\".\n\n" +
-                    "Please ensure you have launched Mirror's Edge at least once so that this file can be created.",
+                    "Launch Mirror's Edge at least once to create the configuration file.",
                     DialogMessageType.Error);
                 return;
             }
@@ -404,11 +404,11 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowCm360Info()
         {
             _dialogService.ShowMessage("cm/360° Converter Information",
-                "Converts your real-world mouse sensitivity (measured in centimeters per 360° turn) into Mirror's Edge sensitivity values.\n\n" +
+                "Converts real-world mouse sensitivity (measured in centimetres per 360° turn) into Mirror's Edge sensitivity values.\n\n" +
                 "1. Enter your mouse DPI\n" +
-                "2. Enter your desired cm/360° (how many centimeters you want to move your mouse for a full 360° turn)\n" +
+                "2. Enter your desired cm/360° (how many centimetres you want to move the mouse for a full 360° turn)\n" +
                 "3. Check the 'Apply' box to calculate and apply the sensitivity\n\n" +
-                "Please be aware that adjusting your sensitivity in-game will have no effect while this is enabled. Click the 'Reset' button to restore the default sensitivity behaviour.",
+                "Adjusting sensitivity in-game has no effect while this is enabled. Click 'Reset' to restore the default sensitivity behaviour.",
                 DialogMessageType.Information);
         }
 
@@ -507,10 +507,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowGamepadButtonsInfo()
         {
             _dialogService.ShowMessage("Gamepad Buttons Information",
-                "By default, Mirror's Edge will show only the Xbox button prompts when using a controller. " +
-                "This setting lets you toggle between the PS3 and Xbox button prompts.\n\n" +
-                "Note: This only targets the UI, it does not enable Sixaxis support for PS3 controllers. " +
-                "An XInput wrapper is required if using a DualShock or DualSense controller (such as Steam Input, DS4Windows, DualSenseX, etc.).",
+                "By default, Mirror's Edge shows only Xbox button prompts when using a controller. " +
+                "This setting toggles between PS3 and Xbox button prompts.\n\n" +
+                "Note: This only affects the UI; it does not enable Sixaxis support for PS3 controllers. " +
+                "An XInput wrapper is required for DualShock or DualSense controllers (e.g. Steam Input, DS4Windows, DualSenseX).",
                 DialogMessageType.Information);
         }
     }

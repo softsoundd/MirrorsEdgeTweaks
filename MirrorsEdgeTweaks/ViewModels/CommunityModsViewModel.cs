@@ -61,7 +61,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         _dialogService.ShowMessage("Warning",
                             "The Cinematic Faith Model requires a TdGame Fix variant to be installed.\n\n" +
                             "Your current TdGame version is: '" + tdGameVersion + "'\n\n" +
-                            "Please install 'TdGame Fix (by Keku)' or 'TdGame Fix + Time Trials Timer Fix' from the Game Tweaks section. Parts of Faith's model will render incorrectly until the fix is applied.",
+                            "Install 'TdGame Fix (by Keku)' or 'TdGame Fix + Time Trials Timer Fix' from Game Tweaks. Parts of Faith's model will render incorrectly until a fix variant is installed.",
                             DialogMessageType.Warning);
                     }
                 }
@@ -131,8 +131,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowCinematicFaithInfo()
         {
             _dialogService.ShowMessage("Cinematic Faith Model Information",
-                "Cinematic Faith (by Keku) is a mod that swaps the default third person model to a much higher quality version that is only otherwise seen once in the game's final sequence. " +
-                "Additionally, this mod fixes the shader issues on the arms in first person, making the armband render as intended.\n\nNote: Requires a TdGame Fix variant to be installed.",
+                "Cinematic Faith (by Keku) swaps the default third-person model for a higher-quality version otherwise seen only in the game's final sequence. " +
+                "It also fixes first-person arm shader issues so the armband renders as intended.\n\n" +
+                "Note: Requires a TdGame Fix variant to be installed.",
                 DialogMessageType.Information);
         }
     }

@@ -1065,6 +1065,13 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
+                            <controls:SettingRow Margin="0,15,0,0" Label="HQ Lightmaps:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="HqLightmaps">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.HqLightmaps.Index, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Enabled"/>
+                                    <ComboBoxItem Content="Disabled"/>
+                                </ComboBox>
+                            </controls:SettingRow>
+
                             <controls:SettingRow Margin="0,15,0,0" Label="Sun Haze:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="SunHaze">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.SunHaze.Index, Mode=TwoWay}">
                                     <ComboBoxItem Content="Enabled"/>

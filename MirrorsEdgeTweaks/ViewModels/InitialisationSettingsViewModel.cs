@@ -215,8 +215,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                     bool isPatched = _unlockedConfigs.UnlockedConfigsStatus == "Patched";
                     if (!isPatched)
                     {
-                        _dialogService.ShowMessage("Warning", "The config modification patch in the 'Game Tweaks' section is not applied. " +
-                            "Please apply the patch in order for your game to launch with the disabled main menu delay.", DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Warning",
+                            "The 'Unlocked Configs' patch in 'Game Tweaks' is not applied. " +
+                            "Apply it before launching with the main menu delay disabled.",
+                            DialogMessageType.Warning);
                     }
                 }
 
@@ -313,8 +315,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowMainMenuDelayInfo()
         {
             _dialogService.ShowMessage("Main Menu Delay Information",
-                "When launching the game, you have to wait 4 seconds at the title screen before you can pass input to proceed to the main menu. " +
-                "Disabling this delay allows any input to be pressed immediately, getting you to the main menu faster.",
+                "When launching the game, you must wait four seconds at the title screen before input can proceed to the main menu. " +
+                "Disabling this delay allows any input to be pressed immediately.",
                 DialogMessageType.Information);
         }
 
@@ -350,8 +352,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                     bool isPatched = _unlockedConfigs.UnlockedConfigsStatus == "Patched";
                     if (!isPatched)
                     {
-                        _dialogService.ShowMessage("Warning", "The config modification patch in the 'Game Tweaks' section is not applied. " +
-                            "Please apply the patch in order for your game to launch with the custom time trial countdown.", DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Warning",
+                            "The 'Unlocked Configs' patch in 'Game Tweaks' is not applied. " +
+                            "Apply it before launching with a custom time trial countdown.",
+                            DialogMessageType.Warning);
                     }
                 }
 
@@ -452,8 +456,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowTimeTrialCountdownInfo()
         {
             _dialogService.ShowMessage("Time Trial Countdown Information",
-                "Controls the countdown timer duration before the start of a time trial. " +
-                "If Softimer is active, the countdown timer will revert to the default value of 4 seconds regardless of the setting selected here.",
+                "Controls the countdown duration before the start of a time trial. " +
+                "If Softimer is active, the countdown reverts to the default value of four seconds regardless of the setting selected here.",
                 DialogMessageType.Information);
         }
 
@@ -533,8 +537,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             _dialogService.ShowMessage("Skip Online Check Information",
                 "Skips the dead EA online login attempt for Time Trials and Speedruns. " +
                 "The game normally tries to connect to EA servers that no longer exist, " +
-                "causing a delay of three intermediate connection check UI scenes before reaching the offline mode. " +
-                "With this enabled, the game goes straight to the offline mode.",
+                "causing a delay of three intermediate connection-check UI scenes before reaching offline mode. " +
+                "With this enabled, the game goes straight to offline mode.",
                 DialogMessageType.Information);
         }
     }

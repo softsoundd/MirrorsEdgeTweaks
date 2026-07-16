@@ -27,7 +27,7 @@ namespace MirrorsEdgeTweaks
             if (!isFirstInstance)
             {
                 System.Windows.MessageBox.Show(
-                    "Mirror's Edge Tweaks is already running.\n\nPlease switch to the existing window.",
+                    "Mirror's Edge Tweaks is already running.\n\nSwitch to the existing window to continue.",
                     "Mirror's Edge Tweaks",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -61,7 +61,7 @@ namespace MirrorsEdgeTweaks
                 LogCrash("DispatcherUnhandledException", args.Exception);
                 System.Windows.MessageBox.Show(
                     $"An unexpected error occurred:\n\n{args.Exception.Message}\n\n" +
-                    $"Details were written to:\n{CrashLogDirectory}",
+                    $"A crash log was written to:\n{CrashLogDirectory}",
                     "Mirror's Edge Tweaks - Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

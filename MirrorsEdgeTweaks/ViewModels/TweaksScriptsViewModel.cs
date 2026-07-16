@@ -9,7 +9,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         [ObservableProperty] private string _tweaksScriptsUIStatus = "N/A";
         [ObservableProperty] private System.Windows.Media.Brush _tweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Gray;
         [ObservableProperty] private bool _isTweaksScriptsUIInstallEnabled = false;
-        [ObservableProperty] private string _tweaksScriptsUIInstallTooltip = "Install Tweaks Scripts first to enable this installer.";
+        [ObservableProperty] private string _tweaksScriptsUIInstallTooltip = "Install Tweaks Scripts first to enable this option.";
         [ObservableProperty] private bool _isTweaksScriptsUIDependencyTextVisible = false;
     }
 }

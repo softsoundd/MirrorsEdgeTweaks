@@ -100,7 +100,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            var result = await _dialogService.ShowConfirmationAsync("Confirm Download", $"This will download and replace your current 'TdGame.u' file.\n\nThis action cannot be undone. Do you want to continue?");
+            var result = await _dialogService.ShowConfirmationAsync(
+                "Confirm Download",
+                "This will download and replace your current TdGame.u file.\n\nThis cannot be undone. Do you want to continue?");
 
             if (!result)
             {
@@ -136,7 +138,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (string.IsNullOrEmpty(downloadUrl))
             {
-                _dialogService.ShowMessage("URL Error", "Could not determine the download URL for the selected game version and TdGame variant.", DialogMessageType.Error);
+                _dialogService.ShowMessage("URL Error",
+                    "Could not determine the download URL for the selected game version and TdGame variant.",
+                    DialogMessageType.Error);
                 DetectVersion();
                 return;
             }
@@ -171,7 +175,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "An error occurred during the download/extraction.";
-                await _dialogService.ShowMessageAsync("Error", $"An error occurred: {ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowMessageAsync("Error", $"Download failed:\n\n{ex.Message}", DialogMessageType.Error);
             }
             finally
             {
@@ -201,7 +205,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             _gameStatus.Status = "TdGame installed, but settings reapply hit an error.";
                             await _dialogService.ShowMessageAsync(
                                 "Warning",
-                                $"The TdGame version was installed successfully, but some TdGame-linked settings failed to be reapplied:\n\n{ex.Message}.",
+                                $"The TdGame version was installed, but some TdGame-linked settings could not be reapplied:\n\n{ex.Message}",
                                 DialogMessageType.Warning);
                         }
                     }
@@ -398,7 +402,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private static string BuildTdGameInstallSuccessMessage(string selectedVersionName, TdGameTouchpointReapplyResult reapplyResult)
         {
-            string message = $"Successfully downloaded and installed '{selectedVersionName}' TdGame version.";
+            string message = $"Downloaded and installed '{selectedVersionName}' TdGame version.";
 
             if (reapplyResult.FailedSettings.Count > 0)
             {
