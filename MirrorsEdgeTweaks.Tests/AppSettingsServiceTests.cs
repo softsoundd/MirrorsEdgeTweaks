@@ -11,6 +11,7 @@ namespace MirrorsEdgeTweaks.Tests
         {
             var session = new GameSession();
             session.Config.GameDirectoryPath = @"C:\Games\MirrorsEdge";
+            session.Config.UserFolderPath = @"C:\Games\MirrorsEdge\TdGame";
             session.Config.Fov = "100";
             session.Config.Dpi = "800";
             session.Config.Cm360 = "30";
@@ -24,6 +25,7 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(1, store.SaveCount);
             Assert.NotNull(store.Saved);
             Assert.Equal(@"C:\Games\MirrorsEdge", store.Saved!.GameDirectoryPath);
+            Assert.Equal(@"C:\Games\MirrorsEdge\TdGame", store.Saved.UserFolderPath);
             Assert.Equal("100", store.Saved.Fov);
             Assert.Equal("800", store.Saved.Dpi);
             Assert.Equal("30", store.Saved.Cm360);
@@ -39,6 +41,7 @@ namespace MirrorsEdgeTweaks.Tests
                 ToLoad = new AppSettings
                 {
                     GameDirectoryPath = @"D:\ME",
+                    UserFolderPath = @"D:\ME\TdGame",
                     Fov = "95",
                     Dpi = "1600",
                     Cm360 = "20",
@@ -50,6 +53,7 @@ namespace MirrorsEdgeTweaks.Tests
             service.Load();
 
             Assert.Equal(@"D:\ME", session.Config.GameDirectoryPath);
+            Assert.Equal(@"D:\ME\TdGame", session.Config.UserFolderPath);
             Assert.Equal("95", session.Config.Fov);
             Assert.Equal("1600", session.Config.Dpi);
             Assert.Equal("20", session.Config.Cm360);
@@ -95,6 +99,7 @@ namespace MirrorsEdgeTweaks.Tests
 
             var writer = new GameSession();
             writer.Config.GameDirectoryPath = @"E:\Edge";
+            writer.Config.UserFolderPath = @"E:\Edge\TdGame";
             writer.Config.Fov = "110";
             writer.Config.Dpi = "400";
             writer.Config.Cm360 = "45";
@@ -105,6 +110,7 @@ namespace MirrorsEdgeTweaks.Tests
             new AppSettingsService(store, reader).Load();
 
             Assert.Equal(writer.Config.GameDirectoryPath, reader.Config.GameDirectoryPath);
+            Assert.Equal(writer.Config.UserFolderPath, reader.Config.UserFolderPath);
             Assert.Equal(writer.Config.Fov, reader.Config.Fov);
             Assert.Equal(writer.Config.Dpi, reader.Config.Dpi);
             Assert.Equal(writer.Config.Cm360, reader.Config.Cm360);

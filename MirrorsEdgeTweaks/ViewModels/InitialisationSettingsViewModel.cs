@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 
@@ -35,9 +36,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             _graphics = graphics;
         }
 
-        private static string TdEngineIniPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+        private string TdEngineIniPath =>
+            UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
         private void SetSilently(Action action)
         {

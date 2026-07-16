@@ -97,6 +97,32 @@
                 </Setter>
             </Style>
 
+            <Style x:Key="CompactInlineInfoButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="4" />
+                <Setter Property="Margin" Value="2,0,0,0" />
+                <Setter Property="MinWidth" Value="24" />
+                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent"
+                                    Padding="{TemplateBinding Padding}"
+                                    MinWidth="{TemplateBinding MinWidth}"
+                                    MinHeight="{TemplateBinding MinHeight}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="FadeOverlayRectStyle" TargetType="Rectangle">
                 <Setter Property="Opacity" Value="0"/>
                 <Style.Triggers>

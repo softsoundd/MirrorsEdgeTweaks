@@ -349,14 +349,8 @@ namespace MirrorsEdgeTweaks.Services
             bool configModified = false;
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string configDirectory = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config");
-                string tdEngineIniPath = !string.IsNullOrEmpty(config.TdEngineIniPath)
-                    ? config.TdEngineIniPath
-                    : Path.Combine(configDirectory, "TdEngine.ini");
-                string tdInputIniPath = !string.IsNullOrEmpty(config.TdInputIniPath)
-                    ? config.TdInputIniPath
-                    : Path.Combine(configDirectory, "TdInput.ini");
+                string tdEngineIniPath = UserTdGamePathHelper.GetTdEngineIniPath(config);
+                string tdInputIniPath = UserTdGamePathHelper.GetTdInputIniPath(config);
 
                 if (_fileService.FileExists(tdEngineIniPath) && _fileService.FileExists(tdInputIniPath))
                 {

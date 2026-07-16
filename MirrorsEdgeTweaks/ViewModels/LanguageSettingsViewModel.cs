@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 
@@ -85,10 +86,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             TryReapplySteamLanguageFix();
         }
 
-        private static int? TryGetInstalledLanguageIndex()
+        private int? TryGetInstalledLanguageIndex()
         {
-            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+            string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
             if (!File.Exists(tdEnginePath))
                 return null;
@@ -219,8 +219,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     UpdateRegistryLanguage(languageConfig);
 
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+                string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
                 if (!File.Exists(tdEnginePath))
                 {

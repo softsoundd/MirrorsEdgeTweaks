@@ -3,6 +3,7 @@ namespace MirrorsEdgeTweaks.Models
     public class GameConfiguration
     {
         public string? GameDirectoryPath { get; set; }
+        public string? UserFolderPath { get; set; }
         public string? TdEngineIniPath { get; set; }
         public string? TdInputIniPath { get; set; }
         public string? EnginePackagePath { get; set; }

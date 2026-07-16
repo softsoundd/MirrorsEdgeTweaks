@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 
@@ -40,8 +41,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _isLoading = true;
 
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+                string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
                 if (!File.Exists(tdEnginePath))
                     return;
@@ -159,8 +159,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (selectedIndex != 2)
                     CleanupHrtfFiles();
 
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string tdEnginePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config", "TdEngine.ini");
+                string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
                 if (!File.Exists(tdEnginePath))
                 {

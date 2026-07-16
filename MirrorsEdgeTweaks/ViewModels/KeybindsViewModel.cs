@@ -162,9 +162,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             };
         }
 
-        private static string TdInputIniPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "EA Games", "Mirror's Edge", "TdGame", "Config", "TdInput.ini");
+        private string TdInputIniPath =>
+            UserTdGamePathHelper.GetTdInputIniPath(_session.Config);
 
         public void ShowInfo(KeybindEntryViewModel entry) =>
             _dialogService.ShowMessage(entry.InfoTitle, entry.InfoBody, DialogMessageType.Information);

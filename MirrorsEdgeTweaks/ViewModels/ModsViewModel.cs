@@ -116,38 +116,27 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string publishedPath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Published");
+                var paths = UserTdGamePathHelper.GetTweaksScriptsUIPaths(_session.Config);
+                var state = TweaksScriptsUIHelper.GetInstallState(_session.Config, paths);
 
-                string mainMenuFile = Path.Combine(publishedPath, "CookedPC", "Maps", "Menu", "TdMainMenu.me1");
-                string frontEndFile = Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_FrontEnd.upk");
-                string sofTimerFile = Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_SofTimer.upk");
-                string customRacesFile = Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_Custom_Races.upk");
-
-                bool hasMainMenu = File.Exists(mainMenuFile);
-                bool hasFrontEnd = File.Exists(frontEndFile);
-                bool hasSofTimer = File.Exists(sofTimerFile);
-                bool hasCustomRaces = File.Exists(customRacesFile);
-
-                if (hasMainMenu && hasFrontEnd && hasSofTimer && hasCustomRaces)
+                switch (state)
                 {
-                    _tweaksScripts.TweaksScriptsUIStatus = "Installed (MEMM)";
-                    _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Green;
-                }
-                else if (hasMainMenu && hasFrontEnd && hasSofTimer && !hasCustomRaces)
-                {
-                    _tweaksScripts.TweaksScriptsUIStatus = "Installed (regular)";
-                    _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Green;
-                }
-                else if (hasMainMenu || hasFrontEnd || hasSofTimer || hasCustomRaces)
-                {
-                    _tweaksScripts.TweaksScriptsUIStatus = "Partially Installed";
-                    _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Orange;
-                }
-                else
-                {
-                    _tweaksScripts.TweaksScriptsUIStatus = "Not Installed";
-                    _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Gray;
+                    case TweaksScriptsUIInstallState.InstalledMemm:
+                        _tweaksScripts.TweaksScriptsUIStatus = "Installed (MEMM)";
+                        _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Green;
+                        break;
+                    case TweaksScriptsUIInstallState.InstalledRegular:
+                        _tweaksScripts.TweaksScriptsUIStatus = "Installed (regular)";
+                        _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Green;
+                        break;
+                    case TweaksScriptsUIInstallState.PartiallyInstalled:
+                        _tweaksScripts.TweaksScriptsUIStatus = "Partially Installed";
+                        _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Orange;
+                        break;
+                    default:
+                        _tweaksScripts.TweaksScriptsUIStatus = "Not Installed";
+                        _tweaksScripts.TweaksScriptsUIStatusForeground = System.Windows.Media.Brushes.Gray;
+                        break;
                 }
             }
             catch (Exception)
@@ -392,25 +381,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string tdGamePath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame");
-                string publishedPath = Path.Combine(tdGamePath, "Published");
-
-                if (!Directory.Exists(publishedPath))
-                {
-                    if (Directory.Exists(tdGamePath))
-                    {
-                        Directory.CreateDirectory(publishedPath);
-                    }
-                    else
-                    {
-                        _dialogService.ShowMessage("Error",
-                            $"Published folder not found at: {publishedPath}\n\n" +
-                            "Launch Mirror's Edge at least once to create the Documents game folder.",
-                            DialogMessageType.Error);
-                        return;
-                    }
-                }
+                UserTdGamePathHelper.EnsureUserFolderLayout(_session.Config);
+                string extractPath = UserTdGamePathHelper.GetUserContentExtractDirectory(_session.Config);
 
                 await _assetUrls.EnsureLoadedAsync();
                 string zipName = isMEMM
@@ -422,7 +394,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     _download,
                     _fileService,
                     downloadUrl,
-                    publishedPath,
+                    extractPath,
                     "Tweaks Scripts UI");
 
                 string versionName = isMEMM ? "MEMM-Compatible" : "Regular";
@@ -454,41 +426,53 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string publishedPath = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Published");
+                var paths = UserTdGamePathHelper.GetTweaksScriptsUIPaths(_session.Config);
 
-                string[] filesToDelete = new[]
-                {
-                    Path.Combine(publishedPath, "CookedPC", "Maps", "Menu", "TdMainMenu.me1"),
-                    Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_FrontEnd.upk"),
-                    Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_SofTimer.upk"),
-                    Path.Combine(publishedPath, "CookedPC", "UI", "TdUI_Custom_Races.upk")
-                };
-
-                int deletedCount = await Task.Run(() =>
-                {
-                    int count = 0;
-                    foreach (string file in filesToDelete)
-                    {
-                        if (File.Exists(file))
-                        {
-                            File.Delete(file);
-                            count++;
-                        }
-                    }
-                    return count;
-                });
-
-                if (deletedCount == 0)
+                if (!TweaksScriptsUIHelper.AnyFilesPresent(_session.Config, paths))
                 {
                     _dialogService.ShowMessage("Information",
                         "No Tweaks Scripts UI files were found to uninstall.",
                         DialogMessageType.Information);
+                    RefreshTweaksScriptsUIStatus();
+                    return;
+                }
+
+                if (UserTdGamePathHelper.UsesPublishedLayout(_session.Config))
+                {
+                    int deletedCount = await Task.Run(() =>
+                        TweaksScriptsUIHelper.DeleteAllFiles(paths, _fileService));
+
+                    _dialogService.ShowMessage("Success",
+                        $"Tweaks Scripts UI uninstalled. ({deletedCount} file(s) removed)",
+                        DialogMessageType.Success);
                 }
                 else
                 {
+                    string? zipName = TweaksScriptsUIHelper.GetStockRestoreZipFileName(_session.Config);
+                    if (zipName == null)
+                    {
+                        _dialogService.ShowMessage("Error",
+                            "Could not determine the game version needed to restore stock menu files.\n\n" +
+                            "Select a valid game directory, then try uninstalling again.",
+                            DialogMessageType.Error);
+                        return;
+                    }
+
+                    await _assetUrls.EnsureLoadedAsync();
+                    string downloadUrl = _assetUrls.For(zipName);
+                    string extractPath = TweaksScriptsUIHelper.GetStockRestoreExtractDirectory(_session.Config);
+
+                    await RunDownloadAndExtractAsync(
+                        _download,
+                        _fileService,
+                        downloadUrl,
+                        extractPath,
+                        "Tweaks Scripts UI stock files");
+
+                    await Task.Run(() => TweaksScriptsUIHelper.DeleteModOnlyFiles(paths, _fileService));
+
                     _dialogService.ShowMessage("Success",
-                        $"Tweaks Scripts UI uninstalled. ({deletedCount} file(s) removed)",
+                        "Tweaks Scripts UI uninstalled. Mod files removed and stock menu files restored.",
                         DialogMessageType.Success);
                 }
 

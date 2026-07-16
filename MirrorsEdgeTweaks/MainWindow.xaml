@@ -114,13 +114,32 @@
             </StackPanel>
             <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="16,0"/>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <materialDesign:PackIcon Kind="FileDocumentOutline"
-                                         VerticalAlignment="Center"
-                                         Margin="0,0,5,0"
-                                         Opacity="0.7"/>
-                <TextBlock Text="{Binding GameStatus.ConfigStatus}"
-                           Foreground="{Binding GameStatus.ConfigStatusForeground}"
-                           Opacity="0.7"/>
+                <Button Command="{Binding SelectUserFolderPathCommand}"
+                        Style="{StaticResource MaterialDesignFlatButton}"
+                        Padding="0"
+                        Margin="0"
+                        VerticalAlignment="Center"
+                        ToolTip="{Binding GameStatus.ConfigPathTooltip}"
+                        Cursor="Hand">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="FileDocumentOutline"
+                                                 VerticalAlignment="Center"
+                                                 Margin="0,0,5,0"
+                                                 Foreground="{DynamicResource MaterialDesignBody}"
+                                                 Opacity="0.7"/>
+                        <TextBlock Text="{Binding GameStatus.ConfigStatus}"
+                                   Foreground="{Binding GameStatus.ConfigStatusForeground}"
+                                   Opacity="0.7"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource CompactInlineInfoButton}"
+                        Command="{Binding ShowUserFolderInfoCommand}">
+                    <materialDesign:PackIcon Kind="InformationOutline"
+                                             Width="15"
+                                             Height="15"
+                                             Foreground="{DynamicResource MaterialDesignBody}"
+                                             Opacity="0.7"/>
+                </Button>
             </StackPanel>
         </StackPanel>
 

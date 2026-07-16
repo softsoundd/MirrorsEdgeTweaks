@@ -33,6 +33,11 @@ namespace MirrorsEdgeTweaks.Services
                 config.GameDirectoryPath = settings.GameDirectoryPath;
             }
 
+            if (!string.IsNullOrEmpty(settings.UserFolderPath))
+            {
+                config.UserFolderPath = settings.UserFolderPath;
+            }
+
             config.Fov = settings.Fov;
             config.Dpi = settings.Dpi;
             config.Cm360 = settings.Cm360;
@@ -45,6 +50,7 @@ namespace MirrorsEdgeTweaks.Services
             _store.Save(new AppSettings
             {
                 GameDirectoryPath = config.GameDirectoryPath,
+                UserFolderPath = config.UserFolderPath,
                 Fov = config.Fov,
                 Dpi = config.Dpi,
                 Cm360 = config.Cm360,

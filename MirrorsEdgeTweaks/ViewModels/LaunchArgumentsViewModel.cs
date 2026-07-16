@@ -180,6 +180,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 LaunchArguments = string.Empty;
                 _settings.Save();
+                _session.NotifyUserFolderContextChanged();
                 await RefreshPatchStatusAsync();
 
                 string message = unlockMode switch
@@ -254,6 +255,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 LaunchArguments = launchArguments;
                 _settings.Save();
+                _session.NotifyUserFolderContextChanged();
                 await RefreshPatchStatusAsync();
 
                 string argumentsMessage = string.IsNullOrEmpty(launchArguments)

@@ -103,7 +103,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
             _processMonitor.RunningStateChanged += OnGameRunningChanged;
+            Session.UserFolderContextChanged += OnUserFolderContextChanged;
         }
+
+        private void OnUserFolderContextChanged() => Dispatch(RefreshUserFolderDependentFeatures);
 
         private void OnGameRunningChanged(bool running) => Dispatch(() =>
         {
@@ -264,7 +267,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             GameStatus.GameVersion = "Game Version: Loading...";
 
-            GameStatus.ConfigStatus = "Documents Configs: Checking...";
+            GameStatus.ConfigStatus = "User Folder: Checking...";
             GameStatus.ConfigStatusForeground = Brushes.Gray;
 
             Console.ConsoleStatus = "Checking...";
@@ -397,20 +400,26 @@ namespace MirrorsEdgeTweaks.ViewModels
             var config = Session.Config;
             try
             {
-                string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                string configDirectory = Path.Combine(documentsPath, "EA Games", "Mirror's Edge", "TdGame", "Config");
+                string tdGamePath = UserTdGamePathHelper.ResolveTdGamePath(config);
+                bool isCustomPath = UserTdGamePathHelper.IsUsingCustomPath(config.UserFolderPath);
+                string customSuffix = isCustomPath ? " (Custom)" : string.Empty;
 
-                config.TdEngineIniPath = Path.Combine(configDirectory, "TdEngine.ini");
-                config.TdInputIniPath = Path.Combine(configDirectory, "TdInput.ini");
+                string tdEngineIniPath = UserTdGamePathHelper.GetTdEngineIniPath(config);
+                string tdInputIniPath = UserTdGamePathHelper.GetTdInputIniPath(config);
+                config.TdEngineIniPath = tdEngineIniPath;
+                config.TdInputIniPath = tdInputIniPath;
+                GameStatus.ConfigPathTooltip = isCustomPath
+                    ? $"Custom user folder:\n{tdGamePath}\n\nClick to change."
+                    : $"Default user folder:\n{tdGamePath}\n\nClick to override.";
 
                 if (_fileService.FileExists(config.TdEngineIniPath) && _fileService.FileExists(config.TdInputIniPath))
                 {
-                    GameStatus.ConfigStatus = "Documents Configs: Found";
+                    GameStatus.ConfigStatus = $"User Folder: Found{customSuffix}";
                     GameStatus.ConfigStatusForeground = Brushes.Green;
                 }
                 else
                 {
-                    GameStatus.ConfigStatus = "Documents Configs: Not Found";
+                    GameStatus.ConfigStatus = $"User Folder: Not Found{customSuffix}";
                     GameStatus.ConfigStatusForeground = Brushes.OrangeRed;
                     config.TdEngineIniPath = null;
                     config.TdInputIniPath = null;
@@ -418,11 +427,28 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception)
             {
-                GameStatus.ConfigStatus = "Documents Configs: Error";
+                GameStatus.ConfigStatus = "User Folder: Error";
                 GameStatus.ConfigStatusForeground = Brushes.Red;
+                GameStatus.ConfigPathTooltip = "Failed to resolve the user folder. Click to select a folder.";
                 config.TdEngineIniPath = null;
                 config.TdInputIniPath = null;
             }
+        }
+
+        private void RefreshUserFolderDependentFeatures()
+        {
+            CheckForConfigFiles();
+            Graphics.LoadFromIni();
+            Input.RefreshMouseSmoothing();
+            Keybinds.LoadCustomKeybinds();
+            Keybinds.LoadMacroKeybinds();
+            Init.RefreshIntroVideo();
+            Init.RefreshMainMenuDelay();
+            Init.RefreshTimeTrialCountdown();
+            Language.Refresh();
+            Audio.RefreshAudioBackendSetting();
+            Mods.RefreshTweaksScriptsUIStatus();
+            _gameData.UpdateConsoleStatus();
         }
 
         private void DisplayGameVersion()
@@ -552,6 +578,46 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error", $"Failed to launch game with arguments: {ex.Message}", DialogMessageType.Error);
             }
+        }
+
+        [RelayCommand]
+        private void ShowUserFolderInfo()
+        {
+            _dialogService.ShowMessage("User Folder Information",
+                "Mirror's Edge Tweaks needs the folder where Mirror's Edge stores your game's user data for certain features to work correctly.\n\n" +
+                "In the majority of cases, this is located at:\nDocuments\\EA Games\\Mirror's Edge\\TdGame.\n\n" +
+                "Mirror's Edge Tweaks will default to this path, so no action is needed.\n\n" +
+                "You can however override the user folder path if required.\n\n" +
+                "Common reasons to override:\n\n" +
+                "• You launch the game with the -NOHOMEDIR launch argument, so the user folder is inside your game install.\n\n" +
+                "• You run Mirror's Edge via non-Windows operating systems, and the user folder is inside a prefix or other directory.",
+                DialogMessageType.Information);
+        }
+
+        [RelayCommand]
+        private void SelectUserFolderPath()
+        {
+            string currentPath = UserTdGamePathHelper.ResolveTdGamePath(Session.Config);
+            string? selectedPath = _folderPicker.PickFolder(
+                "Select the Mirror's Edge user folder",
+                currentPath);
+            if (selectedPath == null)
+            {
+                return;
+            }
+
+            if (!UserTdGamePathHelper.TryNormalizeSelectedPath(selectedPath, out string normalizedPath, out string? errorMessage))
+            {
+                _dialogService.ShowMessage("Invalid Directory", errorMessage!, DialogMessageType.Error);
+                return;
+            }
+
+            Session.Config.UserFolderPath = UserTdGamePathHelper.IsDefaultPath(normalizedPath)
+                ? null
+                : normalizedPath;
+
+            SaveSettings();
+            RefreshUserFolderDependentFeatures();
         }
 
         [RelayCommand]

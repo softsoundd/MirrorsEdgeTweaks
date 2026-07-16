@@ -5,6 +5,7 @@ namespace MirrorsEdgeTweaks.Services
     public sealed record AppSettings
     {
         public string? GameDirectoryPath { get; init; }
+        public string? UserFolderPath { get; init; }
         public string? Fov { get; init; }
         public string? Dpi { get; init; }
         public string? Cm360 { get; init; }
@@ -42,6 +43,7 @@ namespace MirrorsEdgeTweaks.Services
             return new AppSettings
             {
                 GameDirectoryPath = settings.TryGetValue("Path", out var path) ? path : null,
+                UserFolderPath = settings.TryGetValue("UserFolderPath", out var userFolderPath) ? userFolderPath : null,
                 Fov = settings.TryGetValue("FOV", out var fov) ? fov : null,
                 Dpi = settings.TryGetValue("DPI", out var dpi) ? dpi : null,
                 Cm360 = settings.TryGetValue("Cm360", out var cm360) ? cm360 : null,
@@ -54,6 +56,7 @@ namespace MirrorsEdgeTweaks.Services
             var lines = new List<string>
             {
                 $"Path={settings.GameDirectoryPath}",
+                $"UserFolderPath={settings.UserFolderPath}",
                 $"FOV={settings.Fov}",
                 $"DPI={settings.Dpi}",
                 $"Cm360={settings.Cm360}",

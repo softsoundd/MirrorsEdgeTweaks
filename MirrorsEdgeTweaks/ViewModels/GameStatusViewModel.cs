@@ -6,8 +6,9 @@ namespace MirrorsEdgeTweaks.ViewModels
     {
         [ObservableProperty] private string _gameDirectoryPath = "No valid directory selected.";
         [ObservableProperty] private string _gameVersion = "Game Version: N/A";
-        [ObservableProperty] private string _configStatus = "Documents Configs: Not Found";
+        [ObservableProperty] private string _configStatus = "User Folder: Not Found";
         [ObservableProperty] private System.Windows.Media.Brush _configStatusForeground = System.Windows.Media.Brushes.OrangeRed;
+        [ObservableProperty] private string _configPathTooltip = string.Empty;
         [ObservableProperty] private string _status = "Ready. Please select your Mirror's Edge game directory.";
         [ObservableProperty] private bool _isGameTweaksEnabled = true;
         [ObservableProperty] private bool _isUiEnabled = true;

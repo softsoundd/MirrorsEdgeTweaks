@@ -25,6 +25,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public ApplyGate ApplyGate { get; } = new();
 
+        public event Action? UserFolderContextChanged;
+
+        public void NotifyUserFolderContextChanged() => UserFolderContextChanged?.Invoke();
+
         [ObservableProperty]
         private bool _isGameLoaded;
     }

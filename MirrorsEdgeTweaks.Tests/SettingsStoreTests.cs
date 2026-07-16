@@ -16,6 +16,7 @@ namespace MirrorsEdgeTweaks.Tests
             store.Save(new AppSettings
             {
                 GameDirectoryPath = @"C:\ME",
+                UserFolderPath = @"C:\ME\TdGame",
                 Fov = "100",
                 Dpi = "800",
                 Cm360 = "30",
@@ -25,6 +26,7 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.True(fileService.FileExists(IniFileName));
             string[] lines = fileService.ReadAllLines(IniFileName);
             Assert.Contains(@"Path=C:\ME", lines);
+            Assert.Contains(@"UserFolderPath=C:\ME\TdGame", lines);
             Assert.Contains("FOV=100", lines);
             Assert.Contains("DPI=800", lines);
             Assert.Contains("Cm360=30", lines);
@@ -40,6 +42,7 @@ namespace MirrorsEdgeTweaks.Tests
             var settings = store.Load();
 
             Assert.Null(settings.GameDirectoryPath);
+            Assert.Null(settings.UserFolderPath);
             Assert.Null(settings.Fov);
             Assert.Null(settings.Dpi);
             Assert.Null(settings.Cm360);
@@ -52,6 +55,7 @@ namespace MirrorsEdgeTweaks.Tests
             var fileService = new InMemoryFileService();
             fileService.Seed(IniFileName,
                 @"Path=D:\Edge",
+                @"UserFolderPath=D:\Edge\TdGame",
                 "FOV=95",
                 "DPI=1600",
                 "Cm360=20",
@@ -61,6 +65,7 @@ namespace MirrorsEdgeTweaks.Tests
             var settings = store.Load();
 
             Assert.Equal(@"D:\Edge", settings.GameDirectoryPath);
+            Assert.Equal(@"D:\Edge\TdGame", settings.UserFolderPath);
             Assert.Equal("95", settings.Fov);
             Assert.Equal("1600", settings.Dpi);
             Assert.Equal("20", settings.Cm360);
@@ -90,6 +95,7 @@ namespace MirrorsEdgeTweaks.Tests
             var original = new AppSettings
             {
                 GameDirectoryPath = @"F:\Game",
+                UserFolderPath = @"F:\Game\TdGame",
                 Fov = "120",
                 Dpi = "3200",
                 Cm360 = "15",
