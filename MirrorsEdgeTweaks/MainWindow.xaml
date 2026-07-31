@@ -1482,11 +1482,18 @@
                            VerticalAlignment="Center"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right" VerticalAlignment="Center">
-                <ProgressBar Value="{Binding DownloadProgress.DownloadProgressValue}"
-                             IsIndeterminate="{Binding DownloadProgress.IsDownloadProgressIndeterminate}"
-                             Width="150" Height="12"
-                             Visibility="{Binding DownloadProgress.IsDownloadProgressVisible, Converter={StaticResource BoolToVis}}"
-                             VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DownloadProgress.DownloadProgressValue, StringFormat={}{0:F0}%}"
+                               Width="36"
+                               Margin="0,0,6,0"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding DownloadProgress.IsDownloadProgressPercentVisible, Converter={StaticResource BoolToVis}}"/>
+                    <ProgressBar Value="{Binding DownloadProgress.DownloadProgressValue}"
+                                 IsIndeterminate="{Binding DownloadProgress.IsDownloadProgressIndeterminate}"
+                                 Width="150" Height="12"
+                                 Visibility="{Binding DownloadProgress.IsDownloadProgressVisible, Converter={StaticResource BoolToVis}}"
+                                 VerticalAlignment="Center"/>
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
         </Grid>

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
+using System.Threading;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -95,7 +96,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             ShowProgress(status, indeterminate);
             try
             {
-                await Task.Run(work);
+                await Task.Run(work).ConfigureAwait(false);
                 return true;
             }
             finally
@@ -105,23 +106,79 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        protected Action<double, string?> CreateThrottledProgressReporter(int minIntervalMs = 75)
+        private sealed class CoalescedProgressReporter
         {
-            long lastTick = 0;
-            return (value, status) =>
+            private readonly DownloadProgressViewModel _downloadProgress;
+            private readonly Action<Action> _post;
+            private readonly Action<Action> _dispatch;
+
+            private double _latestValue;
+            private int _lastDisplayedPercent = -1;
+            private int _updateScheduled;
+
+            public CoalescedProgressReporter(
+                DownloadProgressViewModel downloadProgress,
+                Action<Action> post,
+                Action<Action> dispatch)
             {
-                long now = Environment.TickCount64;
-                if (now - lastTick < minIntervalMs) return;
-                lastTick = now;
-                Post(() =>
+                _downloadProgress = downloadProgress;
+                _post = post;
+                _dispatch = dispatch;
+            }
+
+            public void Report(double value)
+            {
+                _latestValue = value;
+
+                int percent = (int)value;
+                if (percent <= _lastDisplayedPercent && value < 100)
+                    return;
+
+                EnsureUpdateScheduled();
+            }
+
+            public void Flush()
+            {
+                _dispatch(() =>
                 {
-                    _downloadProgress.DownloadProgressValue = value;
-                    if (status != null)
+                    _downloadProgress.DownloadProgressValue = _latestValue;
+                    _lastDisplayedPercent = (int)_latestValue;
+                });
+            }
+
+            private void EnsureUpdateScheduled()
+            {
+                if (Interlocked.CompareExchange(ref _updateScheduled, 1, 0) != 0)
+                    return;
+
+                _post(() =>
+                {
+                    try
                     {
-                        _gameStatus.Status = status;
+                        ApplyLatestIfDue();
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref _updateScheduled, 0);
+
+                        if ((int)_latestValue > _lastDisplayedPercent
+                            || (_latestValue >= 100 && _downloadProgress.DownloadProgressValue < _latestValue))
+                        {
+                            EnsureUpdateScheduled();
+                        }
                     }
                 });
-            };
+            }
+
+            private void ApplyLatestIfDue()
+            {
+                int percent = (int)_latestValue;
+                if (percent <= _lastDisplayedPercent && _latestValue < 100)
+                    return;
+
+                _lastDisplayedPercent = percent;
+                _downloadProgress.DownloadProgressValue = _latestValue;
+            }
         }
 
         protected async Task RunDownloadAndExtractAsync(
@@ -143,7 +200,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 ShowProgress($"Downloading {statusPrefix}...", true);
 
-                var report = CreateThrottledProgressReporter();
+                var report = new CoalescedProgressReporter(_downloadProgress, Post, Dispatch);
                 bool determinateSet = false;
                 await download.DownloadToFileAsync(url, tempZipPath, p =>
                 {
@@ -159,22 +216,24 @@ namespace MirrorsEdgeTweaks.ViewModels
                         Post(() => _downloadProgress.IsDownloadProgressIndeterminate = false);
                     }
 
-                    report(p, $"Downloading {statusPrefix}... {p:F0}%");
-                }, cancellationToken);
+                    report.Report(p);
+                }, cancellationToken).ConfigureAwait(false);
+
+                report.Flush();
 
                 ShowProgress($"Extracting {statusPrefix}...", true);
 
                 if (customExtract != null)
                 {
-                    await customExtract(tempZipPath, extractPath);
+                    await customExtract(tempZipPath, extractPath).ConfigureAwait(false);
                 }
                 else
                 {
-                    await Task.Run(() => ZipFile.ExtractToDirectory(tempZipPath, extractPath, overwriteFiles: true), cancellationToken);
+                    await Task.Run(() => ZipFile.ExtractToDirectory(tempZipPath, extractPath, overwriteFiles: true), cancellationToken).ConfigureAwait(false);
                 }
 
                 if (afterExtract != null)
-                    await afterExtract();
+                    await afterExtract().ConfigureAwait(false);
             }
             finally
             {

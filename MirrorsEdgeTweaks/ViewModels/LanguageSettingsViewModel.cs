@@ -219,89 +219,89 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     UpdateRegistryLanguage(languageConfig);
 
-                string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
+                    string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
-                if (!File.Exists(tdEnginePath))
-                {
-                    _dialogService.ShowMessage("Error",
-                        $"Cannot switch language, 'TdEngine.ini' file is missing from \"{tdEnginePath}\".\n\n" +
-                        "Launch Mirror's Edge at least once to create the configuration file.",
-                        DialogMessageType.Error);
-                    return;
-                }
-
-                await Task.Run(() =>
-                {
-                    try
+                    if (!File.Exists(tdEnginePath))
                     {
-                        if (!File.Exists(tdEnginePath))
-                        {
-                            throw new FileNotFoundException($"TdEngine.ini not found at: {tdEnginePath}");
-                        }
+                        _dialogService.ShowMessage("Error",
+                            $"Cannot switch language, 'TdEngine.ini' file is missing from \"{tdEnginePath}\".\n\n" +
+                            "Launch Mirror's Edge at least once to create the configuration file.",
+                            DialogMessageType.Error);
+                        return;
+                    }
 
-                        var lines = File.ReadAllLines(tdEnginePath);
-                        bool modified = false;
-
-                        for (int i = 0; i < lines.Length; i++)
+                    await Task.Run(() =>
+                    {
+                        try
                         {
-                            if (lines[i].TrimStart().StartsWith("Language="))
+                            if (!File.Exists(tdEnginePath))
                             {
-                                int indentLength = lines[i].Length - lines[i].TrimStart().Length;
-                                string indent = lines[i].Substring(0, indentLength);
-                                lines[i] = indent + "Language=" + languageConfig.TdEngineLanguage;
-                                modified = true;
-                                break;
+                                throw new FileNotFoundException($"TdEngine.ini not found at: {tdEnginePath}");
                             }
-                        }
 
-                        if (!modified)
+                            var lines = File.ReadAllLines(tdEnginePath);
+                            bool modified = false;
+
+                            for (int i = 0; i < lines.Length; i++)
+                            {
+                                if (lines[i].TrimStart().StartsWith("Language="))
+                                {
+                                    int indentLength = lines[i].Length - lines[i].TrimStart().Length;
+                                    string indent = lines[i].Substring(0, indentLength);
+                                    lines[i] = indent + "Language=" + languageConfig.TdEngineLanguage;
+                                    modified = true;
+                                    break;
+                                }
+                            }
+
+                            if (!modified)
+                            {
+                                // Thrown (not shown) here: this runs on a background thread, and a
+                                // corrupted INI must also abort the language-pack download below.
+                                throw new InvalidDataException("TdEngine.ini file is corrupted (no Language= entry found).");
+                            }
+
+                            FileAttributes attributes = File.GetAttributes(tdEnginePath);
+                            if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                                File.SetAttributes(tdEnginePath, attributes & ~FileAttributes.ReadOnly);
+
+                            File.WriteAllLines(tdEnginePath, lines);
+                            File.SetAttributes(tdEnginePath, File.GetAttributes(tdEnginePath) | FileAttributes.ReadOnly);
+                        }
+                        catch (FileNotFoundException)
                         {
-                            // Thrown (not shown) here: this runs on a background thread, and a
-                            // corrupted INI must also abort the language-pack download below.
-                            throw new InvalidDataException("TdEngine.ini file is corrupted (no Language= entry found).");
+                            throw;
                         }
+                        catch (IOException ex)
+                        {
+                            throw new IOException($"Failed to access TdEngine.ini: {ex.Message}", ex);
+                        }
+                    });
 
-                        FileAttributes attributes = File.GetAttributes(tdEnginePath);
-                        if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
-                            File.SetAttributes(tdEnginePath, attributes & ~FileAttributes.ReadOnly);
+                    await _assetUrls.EnsureLoadedAsync();
+                    await RunDownloadAndExtractAsync(
+                        _download,
+                        _fileService,
+                        _assetUrls.For(languageConfig.ZipFileName),
+                        _session.Config.GameDirectoryPath!,
+                        "language files",
+                        afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
 
-                        File.WriteAllLines(tdEnginePath, lines);
-                        File.SetAttributes(tdEnginePath, File.GetAttributes(tdEnginePath) | FileAttributes.ReadOnly);
-                    }
-                    catch (FileNotFoundException)
+                    SteamInstallScriptFixResult steamFixResult = await Task.Run(() =>
+                        _steamService.ApplyLanguageFix(_session.Config.GameDirectoryPath!));
+
+                    if (steamFixResult.AnyFailed)
                     {
-                        throw;
+                        _dialogService.ShowMessage(
+                            "Warning",
+                            "Game language was updated, but one or more Steam install scripts could not be updated. " +
+                            "Language changes may revert when launching via Steam.",
+                            DialogMessageType.Warning);
                     }
-                    catch (IOException ex)
-                    {
-                        throw new IOException($"Failed to access TdEngine.ini: {ex.Message}", ex);
-                    }
-                });
 
-                await _assetUrls.EnsureLoadedAsync();
-                await RunDownloadAndExtractAsync(
-                    _download,
-                    _fileService,
-                    _assetUrls.For(languageConfig.ZipFileName),
-                    _session.Config.GameDirectoryPath!,
-                    "language files",
-                    afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
-
-                SteamInstallScriptFixResult steamFixResult = await Task.Run(() =>
-                    _steamService.ApplyLanguageFix(_session.Config.GameDirectoryPath!));
-
-                if (steamFixResult.AnyFailed)
-                {
-                    _dialogService.ShowMessage(
-                        "Warning",
-                        "Game language was updated, but one or more Steam install scripts could not be updated. " +
-                        "Language changes may revert when launching via Steam.",
-                        DialogMessageType.Warning);
-                }
-
-                switched = true;
-                _failedSelectionEchoGuard = null;
-                _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);
+                    switched = true;
+                    _failedSelectionEchoGuard = null;
+                    _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);
                 }
                 catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
                 {
