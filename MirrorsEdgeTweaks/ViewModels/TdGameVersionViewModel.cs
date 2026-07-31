@@ -170,6 +170,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                         _decompressionService.RunDecompressor(tdGamePackagePath);
                     }));
 
+                BackupRetentionService.PruneBackupForPath(tdGamePackagePath);
+
                 installSucceeded = true;
             }
             catch (Exception ex)
@@ -289,6 +291,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return result;
             }
 
+            using var backupOperation = PatchUtility.BeginBackupOperation();
+
             if (snapshot.FovSnapshot.HasValues)
             {
                 try
@@ -375,6 +379,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             List<string> distinctReapplied = result.ReappliedSettings.Distinct(StringComparer.Ordinal).ToList();
             result.ReappliedSettings.Clear();
             result.ReappliedSettings.AddRange(distinctReapplied);
+
+            if (result.FailedSettings.Count == 0)
+                backupOperation.Complete();
+
             return result;
         }
 

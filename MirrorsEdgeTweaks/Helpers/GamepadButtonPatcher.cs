@@ -37,6 +37,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
             var pendingWrites = new List<(string Path, byte[] Data)>();
 
+            using var backupOperation = PatchUtility.BeginBackupOperation();
+
             foreach (string tsLocFilePath in tsLocFiles)
             {
                 string fileName = Path.GetFileName(tsLocFilePath);
@@ -102,6 +104,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
 
             ApplyControllerImagePathSwap(tdGamePackagePath, buttonType);
+            backupOperation.Complete();
         }
 
         public static bool? ReadIsPs3(string? gameDirectoryPath)

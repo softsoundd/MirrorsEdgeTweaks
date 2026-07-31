@@ -32,7 +32,6 @@ namespace MirrorsEdgeTweaks.Services
                 if (File.Exists(tdGamePath)) ApplyTdGame(tdGamePath);
             }
             catch { }
-            // Dynamic crosshair scaling (TdSPHUD.DrawLivingHUD) - best-effort, never blocks the primary fix.
             try
             {
                 if (File.Exists(tdGamePath)) ApplyCrosshair(tdGamePath);

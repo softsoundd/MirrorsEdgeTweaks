@@ -73,6 +73,8 @@ namespace MirrorsEdgeTweaks.Services
             var alreadyClean = new List<string>();
             var failed = new List<(string Path, string Error)>();
 
+            using var backupOperation = PatchUtility.BeginBackupOperation();
+
             foreach (string scriptPath in GetInstallScriptPaths(gameDirectory))
             {
                 SteamInstallScriptPatchFileResult result = SteamInstallScriptPatcher.TryPatchFile(scriptPath);
@@ -89,6 +91,9 @@ namespace MirrorsEdgeTweaks.Services
                         break;
                 }
             }
+
+            if (failed.Count == 0)
+                backupOperation.Complete();
 
             return new SteamInstallScriptFixResult
             {

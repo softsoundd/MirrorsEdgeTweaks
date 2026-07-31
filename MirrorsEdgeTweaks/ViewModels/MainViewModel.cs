@@ -143,6 +143,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
+            _ = Task.Run(BackupRetentionService.PruneOrphanedBackups);
+
             Session.Config.GameDirectoryPath = null;
             GameStatus.GameDirectoryPath = "No valid directory selected.";
             DisplayGameVersion();
@@ -170,6 +172,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task ProcessGameDirectoryCoreAsync(string path)
         {
+            _ = Task.Run(BackupRetentionService.PruneOrphanedBackups);
+
             Session.IsProcessingGameDirectory = true;
             Session.Config.GameDirectoryPath = path;
             GameStatus.GameDirectoryPath = path;

@@ -5,15 +5,41 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     internal static class PatchUtility
     {
-        // Root folder for pre-patch copies of game files, e.g.
-        // %LocalAppData%\MirrorsEdgeTweaks\backups\<pathHash>\TdGame.u.first.bak
-        internal static string BackupRoot => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MirrorsEdgeTweaks", "backups");
+        private static readonly AsyncLocal<Stack<BackupOperationScope>> BackupOperationStack = new();
+
+        private static BackupOperationScope? CurrentBackupOperation =>
+            BackupOperationStack.Value is { Count: > 0 } stack ? stack.Peek() : null;
+
+        internal static string? BackupRootOverrideForTests { get; set; }
+
+        internal static string BackupRoot =>
+            BackupRootOverrideForTests ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MirrorsEdgeTweaks", "backups");
+
+        internal static string GetBackupDirectoryForPath(string path) =>
+            Path.Combine(BackupRoot, ComputePathHash(path));
+
+        // Wrap multi-file patch flows. Call Complete() only after the full operation succeeds;
+        // otherwise staged backups are left for manual recovery.
+        public static BackupOperationScope BeginBackupOperation()
+        {
+            var scope = new BackupOperationScope();
+            Stack<BackupOperationScope> stack = BackupOperationStack.Value ??= new Stack<BackupOperationScope>();
+            stack.Push(scope);
+            return scope;
+        }
+
+        internal static void ReleaseBackupOperation(BackupOperationScope scope)
+        {
+            Stack<BackupOperationScope>? stack = BackupOperationStack.Value;
+            if (stack != null && stack.Count > 0 && ReferenceEquals(stack.Peek(), scope))
+                stack.Pop();
+        }
 
         // Single safe writer for every binary patch target (exe, .u, .upk). Provides:
         //  1. Read-only attribute preservation (cleared for the write, restored afterwards).
-        //  2. A best-effort backup of the current on-disk content before it is overwritten.
+        //  2. A pre-write backup cleared on success unless a BackupOperationScope is active.
         //  3. An atomic temp-file + rename write, so a crash mid-write can never leave a
         //     half-written game file behind.
         public static void WritePreservingAttributes(string path, byte[] content)
@@ -22,10 +48,13 @@ namespace MirrorsEdgeTweaks.Helpers
             bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
             if (wasReadOnly)
                 File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+
+            byte[] preWriteBytes = File.ReadAllBytes(path);
+            StageBackup(path, preWriteBytes);
             try
             {
-                TryBackup(path);
                 WriteAtomically(path, content);
+                OnWriteSucceeded(path);
             }
             finally
             {
@@ -34,42 +63,36 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Keeps two bounded copies per target file:
-        //  - "<name>.first.bak": the content seen the first time this tool ever wrote the file
-        //    (closest available state to pristine). Never overwritten.
-        //  - "<name>.last.bak": the content immediately before the most recent write (an undo
-        //    point for the last operation). Overwritten on every write.
-        // Backup failures are swallowed: a broken backup location must not block patching.
-        private static void TryBackup(string path)
+        internal static void StageBackup(string path, byte[] preWriteBytes)
         {
             try
             {
                 string fileName = Path.GetFileName(path);
-                string pathHash = ComputePathHash(path);
-                string backupDir = Path.Combine(BackupRoot, pathHash);
+                string backupDir = GetBackupDirectoryForPath(path);
                 Directory.CreateDirectory(backupDir);
 
-                string firstBackup = Path.Combine(backupDir, fileName + ".first.bak");
                 string lastBackup = Path.Combine(backupDir, fileName + ".last.bak");
-
-                if (!File.Exists(firstBackup))
-                {
-                    File.Copy(path, firstBackup);
-                    // Record where the backup came from, so users restoring by hand know the target.
-                    File.WriteAllText(Path.Combine(backupDir, "source.txt"), path);
-                }
-
-                File.Copy(path, lastBackup, overwrite: true);
-
-                // Backups of read-only game files inherit the attribute; clear it so the backup
-                // folder stays trivially manageable.
-                File.SetAttributes(firstBackup, FileAttributes.Normal);
+                File.WriteAllBytes(lastBackup, preWriteBytes);
+                File.WriteAllText(Path.Combine(backupDir, "source.txt"), path);
                 File.SetAttributes(lastBackup, FileAttributes.Normal);
             }
             catch (Exception ex)
             {
+                // A broken backup location must not block patching.
                 System.Diagnostics.Debug.WriteLine($"Backup of '{path}' failed: {ex.Message}");
             }
+        }
+
+        private static void OnWriteSucceeded(string path)
+        {
+            BackupOperationScope? operation = CurrentBackupOperation;
+            if (operation != null)
+            {
+                operation.Register(path);
+                return;
+            }
+
+            BackupRetentionService.PruneBackupForPath(path);
         }
 
         // Short stable hash of the full path so identically named files from different game

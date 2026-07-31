@@ -38,6 +38,8 @@ namespace MirrorsEdgeTweaks.Services
         {
             try
             {
+                using var backupOperation = PatchUtility.BeginBackupOperation();
+
                 string enginePath = EnginePath(gameDirectoryPath);
                 string tdGamePath = TdGamePath(gameDirectoryPath);
                 if (!File.Exists(enginePath))
@@ -73,6 +75,8 @@ namespace MirrorsEdgeTweaks.Services
                 if (!TryApplyCursorFix(gameDirectoryPath, height))
                     failedLayers.Add("cursor size");
 
+                backupOperation.Complete();
+
                 if (showDialogs)
                 {
                     beforeShowingDialog?.Invoke();
@@ -99,6 +103,8 @@ namespace MirrorsEdgeTweaks.Services
         {
             try
             {
+                using var backupOperation = PatchUtility.BeginBackupOperation();
+
                 string enginePath = EnginePath(gameDirectoryPath);
                 string tdGamePath = TdGamePath(gameDirectoryPath);
 
@@ -106,6 +112,8 @@ namespace MirrorsEdgeTweaks.Services
                 TryRemoveExeFontHook(gameDirectoryPath);
                 TryRemoveSubtitleFix(gameDirectoryPath);
                 TryRemoveCursorFix(gameDirectoryPath);
+
+                backupOperation.Complete();
 
                 if (showDialogs)
                 {
