@@ -10,7 +10,9 @@
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-		
+		<!-- Disabling CET so the app can start on older systems -->
+		<CetCompat>false</CetCompat>
+
 		<!-- Version Information -->
 		<Version>4.5.0</Version>
 		<AssemblyVersion>4.5.0.0</AssemblyVersion>
