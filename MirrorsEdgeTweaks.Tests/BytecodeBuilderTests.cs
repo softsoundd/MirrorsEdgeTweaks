@@ -134,5 +134,97 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(3, BytecodeBuilder.FindPattern(data, new byte[] { 0x01, 0x02 }, start: 2));
             Assert.Equal(-1, BytecodeBuilder.FindPattern(data, new byte[] { 0x01, 0x02 }, start: 2, end: 4));
         }
+
+        static byte[] BuildSensBlobTestTokens()
+        {
+            byte[] fovscaleLocal = BytecodeBuilder.LocalVar(1);
+            byte[] outerVar = BytecodeBuilder.InstVar(2);
+            byte[] getfovVf = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.FName(100));
+            byte[] sncpVf = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.FName(101));
+            byte[] instPawn = BytecodeBuilder.InstVar(10);
+            byte[] instWeapon = BytecodeBuilder.InstVar(11);
+            byte[] tdweaponDcast = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_DYNAMIC_CAST },
+                BytecodeBuilder.I32(12));
+            byte[] isZoomingVf = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.FName(200));
+            byte[] instFovangle = BytecodeBuilder.InstVar(13);
+            byte[] instDefaultFov = BytecodeBuilder.InstVar(14);
+
+            return BytecodeBuilder.BuildSensBlob(
+                insertBc: 0,
+                fovscaleLocal, outerVar, getfovVf, sncpVf,
+                myhudImp: 20, sizexImp: 21, sizeyImp: 22,
+                instPawn, instWeapon, tdweaponDcast, isZoomingVf, instFovangle, instDefaultFov,
+                enableSens: false, enableClip: true);
+        }
+
+        [Fact]
+        public void BuildSensBlob_clipOnly_requiresDefaultFovTokens()
+        {
+            Assert.Throws<InvalidOperationException>(() => BytecodeBuilder.BuildSensBlob(
+                insertBc: 0,
+                BytecodeBuilder.LocalVar(1), BytecodeBuilder.InstVar(2),
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC }, new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                myhudImp: 20, sizexImp: 21, sizeyImp: 22,
+                BytecodeBuilder.InstVar(10), BytecodeBuilder.InstVar(11),
+                new byte[] { BytecodeBuilder.OP_DYNAMIC_CAST, 0, 0, 0, 0 },
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.InstVar(13), Array.Empty<byte>(),
+                enableSens: false, enableClip: true));
+        }
+
+        [Fact]
+        public void BuildStockZoomTargetFovExpr_closesEveryNestedOp()
+        {
+            byte[] defaultFov = BytecodeBuilder.InstVar(1);
+            byte[] fovAngle = BytecodeBuilder.InstVar(2);
+
+            byte[] zoomDelta = BytecodeBuilder.BuildStockZoomDeltaExpr(defaultFov, fovAngle);
+            byte[] zoomTarget = BytecodeBuilder.BuildStockZoomTargetFovExpr(defaultFov, fovAngle);
+
+            Assert.Equal(2, zoomDelta.Count(b => b == BytecodeBuilder.OP_END_FP));
+            Assert.Equal(3, zoomTarget.Count(b => b == BytecodeBuilder.OP_END_FP));
+        }
+
+        [Fact]
+        public void BuildSensBlob_clipOnly_includesZoomGuard()
+        {
+            byte[] blob = BuildSensBlobTestTokens();
+            byte[] zoomNearClip = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_FLOAT_CONST },
+                BytecodeBuilder.F32(BytecodeBuilder.K_STOCK_ZOOM_DELTA));
+            byte[] isZoomingVf = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.FName(200));
+
+            Assert.NotEqual(-1, BytecodeBuilder.FindPattern(blob, zoomNearClip));
+            Assert.NotEqual(-1, BytecodeBuilder.FindPattern(blob, isZoomingVf));
+            Assert.Contains(BytecodeBuilder.OP_LESS_EQUAL_FF, blob);
+            Assert.Contains(BytecodeBuilder.OP_FMAX, blob);
+        }
+
+        [Fact]
+        public void BuildSensBlob_clipBranch_usesGetFovOnlyWhenNotZoomed()
+        {
+            byte[] blob = BuildSensBlobTestTokens();
+            byte[] isZoomingVf = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_VIRT_FUNC },
+                BytecodeBuilder.FName(200));
+
+            int zoomIdx = BytecodeBuilder.FindPattern(blob, isZoomingVf);
+            Assert.NotEqual(-1, zoomIdx);
+
+            int jumpIdx = Array.IndexOf(blob, BytecodeBuilder.OP_JUMP, zoomIdx);
+            Assert.True(jumpIdx > zoomIdx, "Expected Jump after zoom near-clip path");
+
+            int tanIdx = Array.IndexOf(blob, BytecodeBuilder.OP_TAN, jumpIdx);
+            Assert.True(tanIdx > jumpIdx, "Expected Tan(GetFOVAngle()) only on non-zoom path");
+        }
     }
 }

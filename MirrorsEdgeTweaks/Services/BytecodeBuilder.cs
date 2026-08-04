@@ -34,6 +34,7 @@ namespace MirrorsEdgeTweaks.Services
         public const byte OP_ADD_FF = 0xAE;
         public const byte OP_SUBTRACT_FF = 0xAF;
         public const byte OP_GREATER_FF = 0xB1;
+        public const byte OP_LESS_EQUAL_FF = 0xB2;
         public const byte OP_MULTIPLY_EQ_FF = 0xB6;
         public const byte OP_TAN = 0xBD;
         public const byte OP_ATAN = 0xBE;
@@ -305,9 +306,12 @@ namespace MirrorsEdgeTweaks.Services
             byte[] sncpVf,
             int myhudImp, int sizexImp, int sizeyImp,
             byte[] instPawn, byte[] instWeapon, byte[] tdweaponDcast, byte[] isZoomingVf,
-            byte[] instFovangle,
+            byte[] instFovangle, byte[] instDefaultFov,
             bool enableSens, bool enableClip)
         {
+            if (enableClip && (instDefaultFov.Length == 0 || instFovangle.Length == 0))
+                throw new InvalidOperationException("Cannot build near-clip blob without DefaultFOV and FOVAngle tokens");
+
             byte[] outer = Concat(new byte[] { OP_INST_VAR }, outerVar.AsSpan(1).ToArray());
             byte[] myhud = InstVar(myhudImp);
             byte[] sizex = InstVar(sizexImp);
@@ -359,16 +363,10 @@ namespace MirrorsEdgeTweaks.Services
                     FloatConst(0.0f), EndFP());
             }
 
-            var result = new List<byte>();
-            int currentBc = insertBc;
-
-            // Block 1: FOVScale = K_BASE_SENS (unconditional, FOV-agnostic)
-            if (enableSens)
+            byte[] zoomCond = Array.Empty<byte>();
+            byte[] clipZoomCond = Array.Empty<byte>();
+            if (enableSens || enableClip)
             {
-                byte[] sensBody = Concat(
-                    new byte[] { OP_LET }, fovscaleLocal, FloatConst(K_BASE_SENS));
-
-                // Block 1b: weapon zoom override
                 byte[] tdwExpr = Concat(tdweaponDcast, CtxOuterPawnWeapon());
                 byte[] condPawnNotNone = Concat(
                     new byte[] { OP_NOT_EQ_OBJ }, CtxOuterProp(instPawn),
@@ -379,7 +377,32 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] isZoomingInner = Concat(isZoomingVf, EndFP());
                 byte[] condIsZooming = Context(tdwExpr, (ushort)isZoomingInner.Length, 4, isZoomingInner);
 
-                byte[] zoomCond = BoolAnd(BoolAnd(condPawnNotNone, condWeaponNotNone), condIsZooming);
+                zoomCond = BoolAnd(BoolAnd(condPawnNotNone, condWeaponNotNone), condIsZooming);
+
+                if (enableClip)
+                {
+                    byte[] defaultFov = CtxOuterProp(instDefaultFov);
+                    byte[] fovAngle = CtxOuterProp(instFovangle);
+                    byte[] zoomTargetFov = BuildStockZoomTargetFovExpr(defaultFov, fovAngle);
+                    byte[] fovAtZoomTarget = Concat(
+                        new byte[] { OP_LESS_EQUAL_FF },
+                        CtxOuterGetfov(),
+                        zoomTargetFov,
+                        EndFP());
+                    clipZoomCond = BoolAnd(zoomCond, fovAtZoomTarget);
+                }
+            }
+
+            var result = new List<byte>();
+            int currentBc = insertBc;
+
+            // Block 1: FOVScale = K_BASE_SENS (unconditional, FOV-agnostic)
+            if (enableSens)
+            {
+                byte[] sensBody = Concat(
+                    new byte[] { OP_LET }, fovscaleLocal, FloatConst(K_BASE_SENS));
+
+                // Block 1b: weapon zoom override
                 byte[] zoomBody = Concat(
                     new byte[] { OP_LET }, fovscaleLocal,
                     new byte[] { OP_MULTIPLY_FF },
@@ -394,7 +417,7 @@ namespace MirrorsEdgeTweaks.Services
                 currentBc += sensBody.Length + block1b.Length;
             }
 
-            // Block 2: FOV-aware near clip
+            // Block 2: FOV-aware near clip; stock zoom value once GetFOVAngle() reaches the target.
             if (enableClip)
             {
                 byte[] clipCond = BoolAnd(condHudNotNone, CondSizexPositive());
@@ -417,10 +440,24 @@ namespace MirrorsEdgeTweaks.Services
                     EndFP());
 
                 byte[] clipArg = Concat(new byte[] { OP_DIVIDE_FF }, fminPart, tanFov, EndFP());
-                byte[] clipBody = CtxOuterSncp(clipArg);
+                byte[] compensatedClipBody = CtxOuterSncp(clipArg);
+                byte[] zoomClipBody = CtxOuterSncp(FloatConst(K_STOCK_ZOOM_DELTA));
 
-                int block2End = currentBc + 3 + clipCond.Length + clipBody.Length;
-                byte[] block2 = Concat(JumpIfNot((ushort)block2End), clipCond, clipBody);
+                int block2Start = currentBc;
+                int afterHudGuard = block2Start + 3 + clipCond.Length;
+                int afterZoomGuard = afterHudGuard + 3 + clipZoomCond.Length;
+                int afterZoomClip = afterZoomGuard + zoomClipBody.Length;
+                int uncompPath = afterZoomClip + 3;
+                int endBlock = uncompPath + compensatedClipBody.Length;
+
+                byte[] block2 = Concat(
+                    JumpIfNot((ushort)endBlock),
+                    clipCond,
+                    JumpIfNot((ushort)uncompPath),
+                    clipZoomCond,
+                    zoomClipBody,
+                    Jump((ushort)endBlock),
+                    compensatedClipBody);
 
                 result.AddRange(block2);
             }
@@ -472,15 +509,31 @@ namespace MirrorsEdgeTweaks.Services
                 FloatConst(K_VERTIGO_DELTA), EndFP());
         }
 
-        // UnZoom else-branch: replace FloatConst(20) with FMax(20, DefaultFOV - FOVAngle).
-        public static byte[] BuildUnzoomElseReplacement(byte[] instDefaultFov, byte[] instFovangle)
+        public static byte[] BuildStockZoomDeltaExpr(byte[] defaultFovExpr, byte[] fovAngleExpr)
         {
             return Concat(
                 new byte[] { OP_FMAX },
-                FloatConst(20.0f),
+                FloatConst(K_STOCK_ZOOM_DELTA),
                 new byte[] { OP_SUBTRACT_FF },
-                instDefaultFov, instFovangle, EndFP(),
+                defaultFovExpr, fovAngleExpr, EndFP(),
                 EndFP());
+        }
+
+        // Used to detect when zoom animation has finished (IsZoomingOrZoomed alone fires too early).
+        public static byte[] BuildStockZoomTargetFovExpr(byte[] defaultFovExpr, byte[] fovAngleExpr)
+        {
+            byte[] zoomDelta = BuildStockZoomDeltaExpr(defaultFovExpr, fovAngleExpr);
+            return Concat(
+                new byte[] { OP_SUBTRACT_FF },
+                defaultFovExpr,
+                zoomDelta,
+                EndFP());
+        }
+
+        // UnZoom else-branch: replace FloatConst(20) with FMax(20, DefaultFOV - FOVAngle).
+        public static byte[] BuildUnzoomElseReplacement(byte[] instDefaultFov, byte[] instFovangle)
+        {
+            return BuildStockZoomDeltaExpr(instDefaultFov, instFovangle);
         }
 
         // SetFOV: Rate = Rate * (DefaultFOV - NewFOV) / 20.0.

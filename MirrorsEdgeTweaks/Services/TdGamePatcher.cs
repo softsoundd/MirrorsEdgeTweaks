@@ -98,7 +98,7 @@ namespace MirrorsEdgeTweaks.Services
                     fovscaleLocal, outerVar, getfovVf, clipVfunc,
                     resolved.MyhudImp, resolved.SizexImp, resolved.SizeyImp,
                     resolved.InstPawn, resolved.InstWeapon, resolved.TdweaponDcast,
-                    resolved.IsZoomingVf, resolved.InstFovangle,
+                    resolved.IsZoomingVf, resolved.InstFovangle, resolved.DefaultFovInst,
                     enableSens, enableClip);
                 sensNet = sensBlob.Length;
 
@@ -466,7 +466,7 @@ namespace MirrorsEdgeTweaks.Services
                 fovResult.Value.getfovVf, r.SncpVfunc,
                 r.MyhudImp, r.SizexImp, r.SizeyImp,
                 r.InstPawn, r.InstWeapon, r.TdweaponDcast,
-                r.IsZoomingVf, r.InstFovangle,
+                r.IsZoomingVf, r.InstFovangle, r.DefaultFovInst,
                 hasSens, hasClip);
             int blobSize = sensBlob.Length;
             if (blobSize <= 0) return;
