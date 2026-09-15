@@ -1,5 +1,5 @@
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
-using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -56,21 +56,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public void RefreshToneMapper()
         {
-            var gameDir = _session.Config.GameDirectoryPath;
-            int detected = 0;
-            if (!string.IsNullOrEmpty(gameDir))
-            {
-                string shaderPath = Path.Combine(gameDir, "Engine", "Shaders", "TdToneMappingPixelShader.usf");
-                try
-                {
-                    if (File.Exists(shaderPath) &&
-                        File.ReadAllText(shaderPath).Contains("ApplyWhiteNeutralityCorrection"))
-                        detected = 1;
-                }
-                catch { }
-            }
-
-            SetSilently(() => ToneMapperIndex = detected);
+            bool installed = ToneMapperHelper.IsFaithfulLumaInstalled(_session.Config.GameDirectoryPath, _fileService);
+            SetSilently(() => ToneMapperIndex = installed ? 1 : 0);
         }
     }
 }
