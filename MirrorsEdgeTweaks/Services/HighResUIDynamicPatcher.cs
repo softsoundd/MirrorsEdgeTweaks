@@ -4,34 +4,21 @@ using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Services
 {
-    // Injects a self contained ConsoleCommand("set ...") blob into stock packages so the font
-    // ResolutionTestTable, UIStyle_Text scale and subtitle region track the live viewport size and
-    // are reapplied automatically whenever the resolution changes
+    // Injects self-contained UnrealScript blobs into stock packages.
+    // They handle the parts of the high-res UI fix that MultiFontScalePatcher cannot reach.
+    // Both blobs read the live viewport size, so they follow in-game resolution changes.
     //
-    //   Engine.u  : HUD.PreCalcValues (fires on every size change in menu and gameplay - see ApplyEngine)
-    //   TdGame.u  : the video settings apply path
+    //   Engine.u: HUD.PreCalcValues sets the subtitle region on every size change (see ApplyEngine).
+    //   TdGame.u: TdSPHUD.DrawLivingHUD sizes the crosshair textures every frame (see ApplyCrosshair).
     //
-    // The blob is equivalent to (see BytecodeBuilder.BuildHighResCommands for the exact expressions):
-    //   ConsoleCommand("set MultiFont ResolutionTestTable (480,720," $ int(FMax(1080, SizeX*0.5625+0.5)) $ ")");
-    //   ConsoleCommand("set UIStyle_Text Scale (X=" $ (FMin(SizeY,SizeX*0.5625)/FMin(SizeX*0.5625,1080)) $ ",Y=...)");
-    //   ConsoleCommand("set TdGameViewportClient SubtitleMinRegion (X=" $ (0.5-FMin(FMax(0.4*r*r,0.5*SizeY/SizeX),0.5)) $ ",Y=" $ (0.5-0.35*r) $ ")");   // r=(SizeY/SizeX)*16/9
-    //   ConsoleCommand("set TdGameViewportClient SubtitleMaxRegion (X=" $ (0.5+FMin(FMax(0.4*r*r,0.5*SizeY/SizeX),0.5)) $ ",Y=" $ (0.5+0.35*r) $ ")");
-    //   ConsoleCommand("set TdUIScene bRefreshWidgetStyles true");
+    // BytecodeBuilder.BuildHighResCommands builds the Engine.u blob, which is equivalent to this:
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMinRegion (X=" $ (0.5-FMin(0.5*r,0.5)) $ ",Y=" $ (0.5-0.35*r) $ ")");   // r=(SizeY/SizeX)*16/9
+    //   ConsoleCommand("set TdGameViewportClient SubtitleMaxRegion (X=" $ (0.5+FMin(0.5*r,0.5)) $ ",Y=" $ (0.5+0.35*r) $ ")");
     public static class HighResUIDynamicPatcher
     {
-        // Active == the (primary) Engine.u HUD.PreCalcValues hook is present.
-        public static bool IsActive(string enginePath) => IsEnginePatched(enginePath);
-
-        // Applies both hooks. The Engine.u hook is the primary fix; the TdGame.u menu hook is
-        // best-effort (front-end instant apply) and never blocks the primary fix.
         public static void ApplyAll(string enginePath, string tdGamePath)
         {
             ApplyEngine(enginePath);
-            try
-            {
-                if (File.Exists(tdGamePath)) ApplyTdGame(tdGamePath);
-            }
-            catch { }
             try
             {
                 if (File.Exists(tdGamePath)) ApplyCrosshair(tdGamePath);
@@ -42,18 +29,10 @@ namespace MirrorsEdgeTweaks.Services
         public static void RemoveAll(string enginePath, string tdGamePath)
         {
             try { if (File.Exists(enginePath)) RemoveEngine(enginePath); } catch { }
-            try { if (File.Exists(tdGamePath)) RemoveTdGame(tdGamePath); } catch { }
             try { if (File.Exists(tdGamePath)) RemoveCrosshair(tdGamePath); } catch { }
         }
 
         // Engine.u : HUD.PreCalcValues
-
-        public static bool IsEnginePatched(string enginePath)
-        {
-            if (!File.Exists(enginePath)) return false;
-            byte[] data = File.ReadAllBytes(enginePath);
-            return BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1;
-        }
 
         public static void ApplyEngine(string enginePath)
         {
@@ -253,131 +232,6 @@ namespace MirrorsEdgeTweaks.Services
                 new List<(int, int, int)> { (exportStart, -blob.Length, exportIndex) });
 
             Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
-        }
-
-        // TdGame.u : TdUIScene_VideoSettingsPC.ApplyVideoSettings
-
-        public static void ApplyTdGame(string tdGamePath)
-        {
-            byte[] data = File.ReadAllBytes(tdGamePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return;
-
-            TdGameRefs r;
-            int serialOffset, exportIndex, insertBc;
-            List<int> jumpPositions;
-            using (var pkg = UePackageLocator.Load(tdGamePath))
-            {
-                r = ResolveTdGameRefs(pkg);
-                var fn = UePackageLocator.FindFunction(pkg, "TdUIScene_VideoSettingsPC", "ApplyVideoSettings")
-                    ?? throw new InvalidOperationException("Cannot find TdUIScene_VideoSettingsPC.ApplyVideoSettings");
-                serialOffset = fn.SerialOffset;
-                exportIndex = fn.ExportIndex;
-                insertBc = FindAfterCall(fn.Tokens, "SetScreenResolution");
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
-            }
-
-            byte[] blob = BuildTdGameBlob(r);
-
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
-            int insertFile = bcStart + insertBc;
-
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, blob.Length);
-            data = PackageSplicer.InsertBytes(data, insertFile, blob);
-
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsStructural(data, hdr,
-                new List<(int, int, int)> { (exportStart, blob.Length, exportIndex) });
-
-            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
-        }
-
-        public static void RemoveTdGame(string tdGamePath)
-        {
-            byte[] data = File.ReadAllBytes(tdGamePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) == -1)
-                return;
-
-            TdGameRefs r;
-            int serialOffset, exportIndex;
-            List<int> jumpPositions;
-            using (var pkg = UePackageLocator.Load(tdGamePath))
-            {
-                r = ResolveTdGameRefs(pkg);
-                var fn = UePackageLocator.FindFunction(pkg, "TdUIScene_VideoSettingsPC", "ApplyVideoSettings")
-                    ?? throw new InvalidOperationException("Cannot find TdUIScene_VideoSettingsPC.ApplyVideoSettings");
-                serialOffset = fn.SerialOffset;
-                exportIndex = fn.ExportIndex;
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
-            }
-
-            byte[] blob = BuildTdGameBlob(r);
-
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
-            int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
-
-            int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
-            if (blobPos == -1)
-                throw new InvalidOperationException("High-res menu blob not found for removal");
-            int insertBc = blobPos - bcStart;
-
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, -blob.Length);
-            data = PackageSplicer.RemoveBytes(data, blobPos, blob.Length);
-
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsStructural(data, hdr,
-                new List<(int, int, int)> { (exportStart, -blob.Length, exportIndex) });
-
-            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
-        }
-
-        sealed class TdGameRefs
-        {
-            public int ConsoleNameIdx;
-            public int ResXRef;
-            public int ResYRef;
-            public int StructRef;
-            public int NewResolutionRef;
-        }
-
-        static TdGameRefs ResolveTdGameRefs(UnrealPackage pkg)
-        {
-            var r = new TdGameRefs
-            {
-                ConsoleNameIdx = UePackageLocator.FindNameIndex(pkg, "ConsoleCommand"),
-                ResXRef = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "ResX", "ScreenResSetting")),
-                ResYRef = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "ResY", "ScreenResSetting")),
-                StructRef = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "ScreenResSetting", "TdUIScene_VideoSettingsPC")),
-                NewResolutionRef = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "NewResolution", "TdUIScene_VideoSettingsPC")),
-            };
-            if (r.ConsoleNameIdx < 0 || r.ResXRef == 0 || r.ResYRef == 0 || r.StructRef == 0 || r.NewResolutionRef == 0)
-                throw new InvalidOperationException("Cannot resolve TdUIScene_VideoSettingsPC references in TdGame.u");
-            return r;
-        }
-
-        static byte[] BuildTdGameBlob(TdGameRefs r)
-        {
-            byte[] width = BytecodeBuilder.StructMember(r.ResXRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
-            byte[] height = BytecodeBuilder.StructMember(r.ResYRef, r.StructRef, BytecodeBuilder.InstVar(r.NewResolutionRef));
-            return BytecodeBuilder.BuildHighResApplyBlobSelfCall(r.ConsoleNameIdx, width, height);
-        }
-
-        static int FindAfterCall(IList<Token> tokens, string funcName)
-        {
-            for (int i = 0; i < tokens.Count; i++)
-            {
-                if (tokens[i] is VirtualFunctionToken vf && vf.FunctionName?.ToString() == funcName)
-                {
-                    for (int j = i + 1; j < tokens.Count; j++)
-                        if (tokens[j] is EndFunctionParmsToken)
-                            return UePackageLocator.Pos(tokens[j]) + 1;
-                }
-            }
-            throw new InvalidOperationException($"Cannot locate {funcName}() call");
         }
 
         sealed class EngineRefs

@@ -42,31 +42,27 @@ namespace MirrorsEdgeTweaks.Services
 
                 string enginePath = EnginePath(gameDirectoryPath);
                 string tdGamePath = TdGamePath(gameDirectoryPath);
+                string exePath = ExePath(gameDirectoryPath);
                 if (!File.Exists(enginePath))
                     throw new FileNotFoundException("Engine.u not found", enginePath);
+                if (!File.Exists(exePath))
+                    throw new FileNotFoundException("MirrorsEdge.exe not found", exePath);
 
-                // The runtime "set" commands the hooks issue require console set/setnopec, which EA
-                // disabled in the 1.1.0.0 DLC exe - restore them so the fix works there too.
+                // The Engine.u subtitle blob issues "set" commands, which the 1.1.0.0 DLC exe disables.
                 EnsureSetCommandEnabled(gameDirectoryPath);
 
-                // Script-package (Engine.u/TdGame.u) fix: lies the font ResolutionTestTable + sets
-                // UIStyle_Text scale at runtime per resolution. This is the working high-res fix
-                // (crisp/correct UI; soft-but-fine above 1080p). This is the required core of the
-                // fix - if it fails, the whole apply failed and the user must be told.
-                HighResUIDynamicPatcher.ApplyAll(enginePath, tdGamePath);
+                // The exe patch is the required core, so its failure fails the whole apply.
+                MultiFontScalePatcher.Apply(exePath);
 
-                // Secondary layers are best-effort: collect what failed so the result dialog can
-                // mention it rather than silently pretending everything applied.
+                // The remaining layers are best-effort, and the result dialog lists any that failed.
                 var failedLayers = new List<string>();
 
-                // Layer the canvas/HUD text size fix on top: the UI fix doesn't cover canvas-drawn
-                // HUD text (Canvas.DrawText), which stays small. This exe hook scales it to correct
-                // size; console/debug text (plain UFont) is excluded.
-                if (!TryApplyCanvasTextFix(gameDirectoryPath))
-                    failedLayers.Add("HUD text size");
+                // The Engine.u and TdGame.u blobs size the subtitle region and the crosshair.
+                if (!TryApplyScriptLayer(enginePath, tdGamePath))
+                    failedLayers.Add("subtitle region");
 
-                // Native exe fix for the ultrawide subtitle bug; pairs with the SubtitleMin/MaxRegion
-                // "set" commands from HighResUIDynamicPatcher.
+                // SubtitleRegionPatcher stops subtitles vanishing above 16:9,
+                // and the Engine.u subtitle region formula assumes that fix.
                 if (!TryApplySubtitleFix(gameDirectoryPath))
                     failedLayers.Add("subtitle centring");
 
@@ -138,7 +134,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             try
             {
-                return HighResUIDynamicPatcher.IsActive(EnginePath(gameDirectoryPath));
+                return MultiFontScalePatcher.IsApplied(ExePath(gameDirectoryPath));
             }
             catch
             {
@@ -171,13 +167,12 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
-        private static bool TryApplyCanvasTextFix(string gameDirectoryPath)
+        // Returns false only when the subtitle blob fails, because ApplyAll swallows crosshair failures.
+        private static bool TryApplyScriptLayer(string enginePath, string tdGamePath)
         {
             try
             {
-                string exePath = ExePath(gameDirectoryPath);
-                if (File.Exists(exePath))
-                    MultiFontScalePatcher.Apply(exePath);
+                HighResUIDynamicPatcher.ApplyAll(enginePath, tdGamePath);
                 return true;
             }
             catch

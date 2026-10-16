@@ -644,79 +644,29 @@ namespace MirrorsEdgeTweaks.Services
             return Context(objExpr, (ushort)inner.Length, 0, inner);
         }
 
-        // self.VirtualFunction(singleArg) (no context).
-        public static byte[] SelfCall(int funcNameIndex, byte[] singleArg)
-        {
-            return Concat(VirtualFunc(FName(funcNameIndex)), singleArg, EndFP());
-        }
-
         // EX_EatReturnValue: discards the return value of a value-returning call used as a statement.
         public static byte[] EatReturnValue(int returnValueRef)
         {
             return Concat(new byte[] { OP_EAT_RETURN_VALUE }, I32(returnValueRef));
         }
 
-        // StructMember access: 0x35 <prop ref> <struct ref> <isCopy> <isMod> <inner>.
-        public static byte[] StructMember(int propertyRef, int structRef, byte[] inner)
-        {
-            return Concat(new byte[] { OP_STRUCT_MEMBER }, I32(propertyRef), I32(structRef),
-                new byte[] { 0x00, 0x00 }, inner);
-        }
-
-        // Engine.GameViewportClient.SubtitleMin/MaxRegion, read each frame by
-        // TdGameViewportClient.GetSubtitleRegion; the set targets the concrete runtime class.
+        // TdGameViewportClient.GetSubtitleRegion reads these GameViewportClient fields every frame.
+        // The commands name TdGameViewportClient, which is the class of the live viewport client.
         const string SubtitleMinRegionSetPrefix = "set TdGameViewportClient SubtitleMinRegion (X=";
         const string SubtitleMaxRegionSetPrefix = "set TdGameViewportClient SubtitleMaxRegion (X=";
 
-        // The "set" commands, each wrapped by `wrap` into a ConsoleCommand call.
-        // restest = int( FMax(1080, width * 0.5625 + 0.5) )   (0.5625 == 9/16; +0.5 rounds to nearest)
-        // scale   = FMin(height, width*0.5625) / FMin(width*0.5625, 1080)
-        // Denominator = the font page height the lie selects (1080 page once width >= 1920, else the
-        // smaller page matching the render). Numerator = the visible height = the smaller of the window
-        // height and the 16:9-locked render height (width*0.5625): wider-than-16:9 is bounded by the
-        // window, taller-than-16:9 by the (shorter) render. So scale sizes UI text for the visible area
-        // at every aspect: 2560x720 -> 0.667, 1920x1440 -> 1.0, and 16:9 reduces to the old behaviour.
-        // restest is the 16:9-equivalent height derived from WIDTH, not the literal viewport height.
-        // The engine's font scale is HeightTest / ResolutionTestTable[closest] with HeightTest =
-        // Viewport->GetSizeY(); under ME's 16:9-locked rendering that height tracks width*0.5625, so
-        // matching it keeps GetScalingFactor ~= 1.0 (crisp). Using the literal height makes
-        // GetScalingFactor magnify the page (blurry) on wide / non-16:9 modes (e.g. 2560x1080).
-        // widthFloatExpr / heightFloatExpr must each evaluate to a float.
+        // Builds the subtitle-region "set" commands, each wrapped by `wrap` into a ConsoleCommand call.
+        // They keep the subtitle band inside the visible 16:9 area at every aspect ratio.
+        //   r = (SizeY/SizeX)*16/9, which is 1 at 16:9, below 1 when wider and above 1 when taller.
+        //   Region Y, the vertical band, is 0.5 +/- 0.35*r.
+        //   With SubtitleRegionPatcher's exe fix, this puts the band at its stock 16:9 position.
+        //   Region X, the wrap width, is 0.5 +/- FMin(0.5*r, 0.5).
+        //   This spans the full width at 16:9 and narrower, and the centred 16:9 width when wider.
+        //   At r = 1, both match the stock defaults.
+        // widthFloatExpr and heightFloatExpr must each evaluate to a float.
         static byte[] BuildHighResCommands(byte[] widthFloatExpr, byte[] heightFloatExpr,
             Func<byte[], byte[]> wrap)
         {
-            byte[] mul = Concat(new byte[] { OP_MULTIPLY_FF }, widthFloatExpr, FloatConst(0.5625f), EndFP());
-            byte[] rounded = Concat(new byte[] { OP_ADD_FF }, mul, FloatConst(0.5f), EndFP());
-            byte[] restestFloat = Concat(new byte[] { OP_FMAX }, FloatConst(1080.0f), rounded, EndFP());
-            byte[] restestStr = PrimitiveCast(CAST_INT_TO_STRING,
-                PrimitiveCast(CAST_FLOAT_TO_INT, restestFloat));
-            byte[] restestCmd = ConcatStr(
-                ConcatStr(StrConst("set MultiFont ResolutionTestTable (480,720,"), restestStr),
-                StrConst(")"));
-
-            byte[] ScaleExpr()
-            {
-                byte[] renderH = Concat(new byte[] { OP_MULTIPLY_FF }, widthFloatExpr, FloatConst(0.5625f), EndFP());
-                byte[] num = Concat(new byte[] { OP_FMIN }, heightFloatExpr, renderH, EndFP());
-                byte[] denom = Concat(new byte[] { OP_FMIN }, renderH, FloatConst(1080.0f), EndFP());
-                byte[] scaleFloat = Concat(new byte[] { OP_DIVIDE_FF }, num, denom, EndFP());
-                return PrimitiveCast(CAST_FLOAT_TO_STRING, scaleFloat);
-            }
-
-            byte[] scaleCmd = ConcatStr(ConcatStr(ConcatStr(ConcatStr(
-                StrConst("set UIStyle_Text Scale (X="), ScaleExpr()),
-                StrConst(",Y=")), ScaleExpr()),
-                StrConst(")"));
-
-            byte[] refreshCmd = StrConst("set TdUIScene bRefreshWidgetStyles true");
-
-            // Region Y (vertical band) uses r = (SizeY/SizeX)*16/9 (== 1 at 16:9): Y = 0.5 +/- 0.35*r
-            // which, paired with SubtitleRegionPatcher's signed-centring exe fix, lands the band at its
-            // stock 16:9 on-screen position at every aspect ratio.
-            // Region X (wrap width): X = 0.5 +/- FMin(FMax(0.4*r*r, 0.5*SizeY/SizeX), 0.5). The engine
-            // wraps with whichever MultiFont page is closest to the render height, so the band has two
-            // regimes - the lied top page (16:9 / tall) -> 0.4*r*r, the 720/480 pages (wide & short) ->
-            // 0.5*SizeY/SizeX; FMax picks the active one, the clamp caps it at full width
             byte[] RatioExpr() => Concat(new byte[] { OP_MULTIPLY_FF },
                 Concat(new byte[] { OP_DIVIDE_FF }, heightFloatExpr, widthFloatExpr, EndFP()),
                 FloatConst(REF_AR), EndFP());
@@ -731,12 +681,8 @@ namespace MirrorsEdgeTweaks.Services
 
             byte[] SubtitleRegionXStr(bool isMax)
             {
-                byte[] sizeRatio = Concat(new byte[] { OP_DIVIDE_FF }, heightFloatExpr, widthFloatExpr, EndFP());
-                byte[] rSq = Concat(new byte[] { OP_MULTIPLY_FF }, RatioExpr(), RatioExpr(), EndFP());
-                byte[] topPage = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.4f), rSq, EndFP());
-                byte[] lowPage = Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.5f), sizeRatio, EndFP());
                 byte[] half = Concat(new byte[] { OP_FMIN },
-                    Concat(new byte[] { OP_FMAX }, topPage, lowPage, EndFP()),
+                    Concat(new byte[] { OP_MULTIPLY_FF }, FloatConst(0.5f), RatioExpr(), EndFP()),
                     FloatConst(0.5f), EndFP());
                 byte[] xFloat = Concat(new byte[] { isMax ? OP_ADD_FF : OP_SUBTRACT_FF },
                     FloatConst(0.5f), half, EndFP());
@@ -752,18 +698,15 @@ namespace MirrorsEdgeTweaks.Services
             byte[] subMaxCmd = SubtitleCmd(SubtitleMaxRegionSetPrefix, isMax: true);
 
             return Concat(
-                wrap(restestCmd),
-                wrap(scaleCmd),
                 wrap(subMinCmd),
-                wrap(subMaxCmd),
-                wrap(refreshCmd));
+                wrap(subMaxCmd));
         }
 
-        // Blob for HUD.PreCalcValues: PlayerOwner.ConsoleCommand(...) x3.
-        // SizeX/SizeY are HUD float instance vars (recalculated just before this blob).
-        // PlayerController.ConsoleCommand returns a string, so each discarded statement must be
-        // wrapped in EatReturnValue (consoleReturnValueRef = ConsoleCommand.ReturnValue) or the VM
-        // mishandles the return value and crashes.
+        // Builds the HUD.PreCalcValues blob, which issues one PlayerOwner.ConsoleCommand per command.
+        // HUD.SizeX and SizeY are floats that PreCalcValues recalculates before the blob runs.
+        // PlayerController.ConsoleCommand returns a string.
+        // Each discarded call is wrapped in EatReturnValue, or the VM mishandles the value and crashes.
+        // consoleReturnValueRef is the ConsoleCommand.ReturnValue property.
         public static byte[] BuildHighResApplyBlob(int playerOwnerRef, int consoleCmdNameIdx,
             int consoleReturnValueRef, int hudSizeXRef, int hudSizeYRef)
         {
@@ -773,18 +716,8 @@ namespace MirrorsEdgeTweaks.Services
                 arg => Concat(eat, ContextCall(po, consoleCmdNameIdx, arg)));
         }
 
-        // Blob for TdUIScene_VideoSettingsPC.ApplyVideoSettings (after SetScreenResolution):
-        // self.ConsoleCommand(...), computing from the int width/height expressions just applied.
-        public static byte[] BuildHighResApplyBlobSelfCall(int consoleCmdNameIdx,
-            byte[] widthIntExpr, byte[] heightIntExpr)
-        {
-            byte[] widthF = PrimitiveCast(CAST_INT_TO_FLOAT, widthIntExpr);
-            byte[] heightF = PrimitiveCast(CAST_INT_TO_FLOAT, heightIntExpr);
-            return BuildHighResCommands(widthF, heightF, arg => SelfCall(consoleCmdNameIdx, arg));
-        }
-
-        // Idempotency marker - the StrConst literal emitted by every high-res blob; detects an install.
-        public static readonly byte[] HighResSignature = StrConst("set MultiFont ResolutionTestTable (480,720,");
+        // Only the high-res blob emits this StrConst literal, so its presence marks an install.
+        public static readonly byte[] HighResSignature = StrConst(SubtitleMinRegionSetPrefix);
 
         // Crosshair dynamic scaling (TdSPHUD.DrawLivingHUD)
 

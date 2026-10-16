@@ -6,116 +6,59 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public enum MultiFontScaleState { Unknown, Unpatched, Patched }
 
-    // Canvas/HUD text size fix (exe) layered on top of the script package lie+UIStyle UI fix.
+    // Patches the executable for the high-res UI fix.
+    // Every UMultiFont text path, drawing and measuring alike, takes its scale from GetScalingFactor,
+    // so layout always agrees with the drawn text.
     //
-    // The lie+UIStyle fix makes UI scene text crisp/correct but leaves canvas/HUD text small because
-    // HUD text has no UIStyle equivalent: with the lied table its GetScalingFactor returns approx 1.0. Each
-    // canvas text function is hooked right after its GetScalingFactor call and, only for UMultiFont text,
-    // the lied FontScale is replaced/scaled by the EmitBoost factor so HUD text is sized like the UI text.
+    //   1. GetResolutionTestTableIndex picks the font page.
+    //      Stock takes the nearest page at or above the font height test, which is width*0.5625,
+    //      and falls back to the 480p page when none qualifies, as happens above 1920 wide.
+    //      The replacement falls back to the largest page instead.
+    //   2. GetScalingFactor divides the font height test by the chosen page's height.
+    //      Above 1920 wide, the replacement clamps the test to the visible 16:9 height,
+    //      min(ResY, ResX*0.5625), so text on wider-than-16:9 modes is sized for the window.
+    //   3. FUIScreenValue_Extent::GetValue scales the fixed-pixel extents of UIList and UIScrollbar,
+    //      such as padding, bar width and arrow buttons, by the same factor above 1920 wide.
     //
-    // EmitBoost uses GSystemSettings.ResY (the requested window height, not the rendertarget height) medge
-    // 16:9 locks the render to the width so on non-16:9 modes the render buffer is taller than the window
-    // and scaling by it would oversize text. Its denominator (the font page the lie selects) makes the
-    // boost match the bytecode UIStyle scale at every aspect and height
-    //
-    // All paths gate on the font being a UMultiFont (vtable slot 0x118 == UMultiFont::GetScalingFactor),
-    // so the console and engine debug overlays (plain UFont) stay stock - the DrawString UI path also
-    // boosts underscaled UMultiFont UI text (list cells, which ignore UIStyle_Text.Scale).
+    // A fourth, optional hook confines the loading-screen hint to the 16:9 bink region.
+    // Plain UFont text, such as the console, keeps its stock scale,
+    // because hooks 1 and 2 only replace the UMultiFont overrides.
     public static class MultiFontScalePatcher
     {
         private const float StockAuthoredHeight = 1080f;
 
-        private static readonly int DsCaveLen = BuildDrawStringCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int WpCaveLen = BuildWrappedPrintCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int DscCaveLen = BuildDrawStringCenteredCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int WsCaveLen = BuildWrapStringCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int DswCaveLen = BuildDrawStringWrappedCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int DswcCaveLen = BuildDswConfineCave(0, 0, 0, 0, 0).Length;
-        private static readonly int DssCaveLen = BuildSubtitleSpacingCave(0, 0, 0, 0, 0, 0).Length;
-        private static readonly int TsCaveLen = BuildTextSizeCave(0, 0, 0, 0, 0, 0, 0).Length;
+        // ---- UMultiFont::GetResolutionTestTableIndex (font page selection) ----------------------------
+        // This function and GetScalingFactor are replaced whole.
+        // Their locators wildcard the entry bytes so they still match after the detour.
+        // Restoring writes each entry back from its Orig constant, which holds on every build
+        // because the entries have no absolute operands.
+        // The page locator also wildcards the per-build address of a 0.0001 constant.
+        private static readonly BytePattern PageIndexPrefix = BytePattern.Parse(
+            "?? ?? ?? ?? ?? ?? ?? ?? DD 05 ?? ?? ?? ?? 55 8B C1 8B 88 54 01 00 00 56 33 ED");
+        private const int PageIndexHookOffset = 0;
+        private static readonly byte[] PageIndexOrig = { 0x83, 0xEC, 0x10, 0xD9, 0x44, 0x24, 0x14, 0x53 };
 
-        // ---- DrawString hook --------------------------------------------------------------------------
-        // 16-byte prefix ending at the GetScalingFactor call; hook = +16 (relocates fld [ebp+0x20];
-        // mov eax,[ebp+0x1C]).
-        private static readonly byte[] DrawStringPrefix =
-        {
-            0x8B, 0x06, 0x8B, 0x90, 0x18, 0x01, 0x00, 0x00,
-            0x51, 0x8B, 0xCE, 0xD9, 0x1C, 0x24, 0xFF, 0xD2,
-        };
-        private const int DrawStringHookOffset = 16;
-        private static readonly byte[] DrawStringOrig = { 0xD9, 0x45, 0x20, 0x8B, 0x45, 0x1C };
+        // ---- UMultiFont::GetScalingFactor (text scale) -------------------------------------------------
+        private static readonly BytePattern GsfPrefix = BytePattern.Parse(
+            "?? ?? ?? ?? ?? ?? ?? 8B 06 8B 90 2C 01 00 00 51 D9 1C 24 FF D2 3B 86 54 01 00 00 7D 11");
+        private const int GsfHookOffset = 0;
+        private static readonly byte[] GsfOrig = { 0xD9, 0x44, 0x24, 0x04, 0x56, 0x8B, 0xF1 };
 
-        // ---- WrappedPrint hook ------------------------------------------------------------------------
-        // 24-byte prefix (incl. fld [esp+0x40]; mov [esp+0x38],eax for uniqueness) ending at the
-        // GetScalingFactor call; hook = +24 (relocates fld [esp+0x90]).
-        private static readonly byte[] WrappedPrintPrefix =
-        {
-            0xD9, 0x44, 0x24, 0x40, 0x89, 0x44, 0x24, 0x38,
-            0x8B, 0x07, 0x8B, 0x90, 0x18, 0x01, 0x00, 0x00,
-            0x51, 0x8B, 0xCF, 0xD9, 0x1C, 0x24, 0xFF, 0xD2,
-        };
-        private const int WrappedPrintHookOffset = 24;
-        private static readonly byte[] WrappedPrintOrig = { 0xD9, 0x84, 0x24, 0x90, 0x00, 0x00, 0x00 };
+        // ---- FUIScreenValue_Extent::GetValue (list and scrollbar pixel extents) -----------------------
+        // The locator wildcards the 6 entry bytes, which the cave re-runs before resuming at entry+6.
+        private static readonly BytePattern ExtentPrefix = BytePattern.Parse(
+            "?? ?? ?? ?? ?? ?? 85 DB 56 8B F1 F3 0F 10 06 57 F3 0F 11 44 24 0C 74 63");
+        private const int ExtentHookOffset = 0;
+        private static readonly byte[] ExtentDisplaced = { 0x51, 0x53, 0x8B, 0x5C, 0x24, 0x0C };
+        // UUIScrollbar is 0x4B0 bytes and UUIList is larger. Both hold all their extents below 0x4B0,
+        // so an extent within this span of its owner is one of the owner's own members.
+        private const uint ExtentOwnerSpan = 0x4B0;
 
-        // ---- DrawStringCentered hook (subtitles) ------------------------------------------------------
-        // DrawStringCentered does: StringSize(Font,&XL,&YL,Text); DrawString(Canvas, StartX-(XL/2), ...).
-        // The measure (XL) is at the lied 1.0 scale but the draw is upsized, so it miscentres. We scale
-        // XL by the boost (same as the draw) before the StartX-(XL/2). 14byte prefix sits before the
-        // hook so it still matches after the detour is written (fld1; fst [esp+4]; fstp [esp];
-        // fld [esp+0x30]; push eax); hook = +14 (relocates mov eax,[esp+0x20]; cdq).
-        private static readonly byte[] DrawStringCenteredPrefix =
-        {
-            0xD9, 0xE8, 0xD9, 0x54, 0x24, 0x04, 0xD9, 0x1C, 0x24, 0xD9, 0x44, 0x24, 0x30, 0x50,
-        };
-        private const int DrawStringCenteredHookOffset = 14;
-        private static readonly byte[] DrawStringCenteredOrig = { 0x8B, 0x44, 0x24, 0x20, 0x99 };
-
-        // ---- WrapString hook (subtitle / loading-hint word wrap) --------------------------------------
-        // UUIString::WrapString wraps to Parameters.DrawXL using ScaleX = Parameters.Scaling.X * FontScale.
-        // For canvas callers (ViewportHeight==0, Scaling==1) FontScale is the lied 1.0 so it wraps at the
-        // wrong (small) scale while the draw is upsized -> text overruns before wrapping. We multiply
-        // FontScale by the boost for VH==0 (canvas) UMultiFont text so wrapping matches the draw - UI
-        // callers (VH>0) are untouched. 18-byte prefix ends at the GetScalingFactor call; hook = +18
-        // (relocates movss xmm0,[edi+0x10]).
-        private static readonly byte[] WrapStringPrefix =
-        {
-            0x89, 0x44, 0x24, 0x78, 0x8B, 0x01, 0x8B, 0x90, 0x18, 0x01, 0x00, 0x00,
-            0x51, 0xD9, 0x1C, 0x24, 0xFF, 0xD2,
-        };
-        private const int WrapStringHookOffset = 18;
-        private static readonly byte[] WrapStringOrig = { 0xF3, 0x0F, 0x10, 0x47, 0x10 };
-
-        // ---- DrawStringWrapped hook (loading-screen hint overlays, TdGameEngine.AddOverlayWrapped) -----
-        // Measures/word-wraps at EffectiveXScale = FontScale (lied 1.0) but draws each line upsized, so the
-        // wrapped overlay text overruns. For UMultiFont text we multiply FontScale by the EmitBoost factor
-        // so the wrap matches the draw. 18-byte prefix ends at the GetScalingFactor call; hook = +18
-        // (relocates fstp [esp+0x18]; mov ecx,[esp+0x74]).
-        private static readonly byte[] DrawStringWrappedPrefix =
-        {
-            0x51, 0x89, 0x44, 0x24, 0x28, 0xD9, 0x1C, 0x24, 0x8B, 0x82, 0x18, 0x01, 0x00, 0x00,
-            0x8B, 0xCF, 0xFF, 0xD0,
-        };
-        private const int DrawStringWrappedHookOffset = 18;
-        private static readonly byte[] DrawStringWrappedOrig = { 0xD9, 0x5C, 0x24, 0x18, 0x8B, 0x4C, 0x24, 0x74 };
-
-        // ---- DrawStringWrapped 16:9 confine hook (loading screen / bink hint position+wrap) -----------
-        // TdGameEngine.OnLoadLevel adds the loading hint via AddOverlayWrapped with fullscreen fractions
-        // (X=0.35, WrapWidth=0.55); the movie driver turns those into pixels = fraction * ResX. But the
-        // bink is always 16:9 so the hint overruns the bink horizontally.
-        //  We remap CurX and the wrap width *XL into the centred 16:9 region:
-        //   binkWidth = min(ResX, ResY*16/9); binkFrac = binkWidth/ResX; binkLeft = (ResX-binkWidth)/2;
-        //   CurX = binkLeft + CurX*binkFrac;  *XL *= binkFrac.
-        // No-op at <=16:9 (binkFrac=1, binkLeft=0). Hook is right after the SEH prologue (esp=entry-0x60),
-        // before the body touches xmm: CurX@[esp+0x6c], XL*@[esp+0x74], Font@[esp+0x7c]. CurX is a value
-        // param and *XL is a fresh per-render local, so the remap doesnt accumulate across frames. Hook =
-        // +37; displaced = mov edi,[esp+0x7c]; xor esi,esi.
-        //
-        // The 0x40-frame SEH prologue alone is a generic MSVC shape (approx 70-80 sites) so the locator also
-        // pins the version-stable body that follows the displaced bytes (cmp edi,esi; jz; load+call the
-        // font vtable; ...). The two per-build absolute addresses (the SEH scope-table push
-        //  and __security_cookie) and the 6 displaced bytes the detour overwrites are
-        // wildcarded so the single match holds on every version AND survives being patched (Remove /
-        // re-Apply still relocate it). The cave consumes none of the wildcarded bytes.
+        // ---- DrawStringWrapped 16:9 confine (loading-screen hint) --------------------------------------
+        // The hook sits after the SEH prologue.
+        // That prologue matches roughly 70 to 80 MSVC functions, so the locator also pins the body
+        // that follows the displaced bytes.
+        // Wildcards cover the displaced bytes and the per-build SEH scope-table and cookie addresses.
         private static readonly BytePattern DswConfinePrefix = BytePattern.Parse(
             "68 ?? ?? ?? ?? 64 A1 00 00 00 00 50 83 EC 40 53 55 56 57 A1 ?? ?? ?? ?? " +
             "33 C4 50 8D 44 24 54 64 A3 00 00 00 00 ?? ?? ?? ?? ?? ?? " +
@@ -123,41 +66,22 @@ namespace MirrorsEdgeTweaks.Helpers
         private const int DswConfineHookOffset = 37;
         private static readonly byte[] DswConfineOrig = { 0x8B, 0x7C, 0x24, 0x7C, 0x33, 0xF6 }; // mov edi,[esp+0x7c]; xor esi,esi
 
-        // ---- Subtitle line-spacing hook (FSubtitleManager::DisplaySubtitleWordWrapped) ----------------
-        // StrHeight = GetMaxCharHeight() * GetScalingFactor(HeightTest) decides the multi-line gap, but
-        // GetScalingFactor is the lied 1.0 while the lines draw upsized -> lines overlap. We multiply the
-        // FontScale by the boost before it is multiplied into StrHeight. 22-byte prefix
-        // ends at the GetScalingFactor call; hook = +22 (relocates fmul [esp+0x38]; cmp [esp+0x40],ebp).
-        // The leading fmul references a per-build float const (Const_u2f), so its 4 address bytes are
-        // wildcarded; the rest of the prefix (load Font vtable -> GetScalingFactor -> call) is unique.
-        private static readonly BytePattern SubtitleSpacingPrefix = BytePattern.Parse(
-            "D8 05 ?? ?? ?? ?? 8B 07 8B 90 18 01 00 00 51 8B CF D9 1C 24 FF D2");
-        private const int SubtitleSpacingHookOffset = 22;
-        private static readonly byte[] SubtitleSpacingOrig = { 0xD8, 0x4C, 0x24, 0x38, 0x39, 0x6C, 0x24, 0x40 };
+        // ---- UIList and UIScrollbar vtables ------------------------------------------------------------
+        // The game strips MSVC RTTI from UObject classes,
+        // so the extent hook reads its gating vtables from their constructors.
+        private static readonly BytePattern UiListCtorPattern = BytePattern.Parse(
+            "C7 86 DC 03 00 00 ?? ?? ?? ?? C6 44 24 20 01 C7 06 ?? ?? ?? ?? C7 86 DC 03 00 00");
+        private const int UiListVtableImmOffset = 17;
+        private static readonly BytePattern UiScrollbarCtorPattern = BytePattern.Parse(
+            "8D 8E EC 03 00 00 C7 44 24 14 00 00 00 00 C7 06 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8D 8E 0C 04 00 00");
+        private const int UiScrollbarVtableImmOffset = 16;
 
-        // ---- Canvas.TextSize measure hook (UCanvas::execTextSize) -------------------------------------
-        // Script HUD code positions elements relative to Canvas.TextSize(s, XL, YL). TextSize runs through
-        // ClippedStrLen->UUIString::StringSize, which returns the 1080-authored size (the lied 1.0), while
-        // the text itself draws upsized via the DrawString/WrappedPrint hooks -> overlaps (e.g. the time-
-        // trial timer vs its target/qualifying time). We scale the returned XL/YL by the boost for
-        // UMultiFont text so measured size matches the drawn size. The store block is SSE; the cave
-        // rebuilds the whole convert+store sequence and returns past it (BlockLen below).
-        private static readonly byte[] TextSizePrefix =
-        {
-            0xD9, 0xE8, 0x51, 0x8D, 0x4C, 0x24, 0x24, 0x51, 0x8D, 0x54, 0x24, 0x24, 0x52,
-            0x83, 0xEC, 0x08, 0xD9, 0x54, 0x24, 0x04, 0xD9, 0x1C, 0x24, 0x50,
-        };
-        private const int TextSizeHookOffset = 29;   // 24-byte prefix + 5-byte ClippedStrLen call
-        private static readonly byte[] TextSizeOrig = { 0xF3, 0x0F, 0x2A, 0x44, 0x24, 0x34 }; // cvtsi2ss xmm0,[esp+0x34]
-        private const int TextSizeBlockLen = 0x1B;    // convert+store block replaced by the cave
-
-        // ---- UMultiFont::GetScalingFactor (the "is MultiFont" discriminator constant) -----------------
-        private static readonly byte[] GsfUniqueTail =
-        {
-            0x8B, 0x8E, 0x50, 0x01, 0x00, 0x00, 0xD9, 0x44, 0x24, 0x08, 0xD8, 0x34, 0x81,
-        };
-        private static readonly byte[] GsfPrologue = { 0xD9, 0x44, 0x24, 0x04, 0x56 };
-        private const int MaxPrologueScanBack = 0x40;
+        // These must stay below the byte-array fields the builders read, because static initializers
+        // run top to bottom.
+        private static readonly int PageIndexCaveLen = BuildPageIndexCave(0, 0, 0).Length;
+        private static readonly int GsfCaveLen = BuildGsfCave(0, 0, 0).Length;
+        private static readonly int ExtentCaveLen = BuildExtentCave(0, 0, 0, 0, 0, 0, 0).Length;
+        private static readonly int DswCaveLen = BuildDswConfineCave(0, 0, 0, 0, 0).Length;
 
         public static MultiFontScaleState DetectState(string exePath)
         {
@@ -167,10 +91,10 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (OoaService.HasOoaSection(data))
                     PatchUtility.DecryptOoaInPlace(data);
                 var pe = PeImageLayout.Parse(data);
-                if (!TryFindHook(data, pe, DrawStringPrefix, DrawStringHookOffset, out int off, out _))
+                if (!TryFindHook(data, pe, PageIndexPrefix, PageIndexHookOffset, out int off, out _))
                     return MultiFontScaleState.Unknown;
                 if (data[off] == 0xE9) return MultiFontScaleState.Patched;
-                if (data.AsSpan(off, DrawStringOrig.Length).SequenceEqual(DrawStringOrig))
+                if (IsOriginal(data, off, PageIndexOrig))
                     return MultiFontScaleState.Unpatched;
                 return MultiFontScaleState.Unknown;
             }
@@ -188,143 +112,85 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             else
             {
-                // An unrecognised exe must not be patched with a guessed tag: the cave version tag
-                // drives later detection/reapply logic, and a wrong tag corrupts that pipeline.
+                // An unrecognised exe must not be patched with a guessed tag,
+                // because later detection and reapply logic relies on the cave version tag.
                 string version = ExeVersionDetector.DetectVersion(data, exePath)
-                    ?? throw new InvalidOperationException("Unknown or unsupported MirrorsEdge.exe version; cannot apply the HUD text fix.");
+                    ?? throw new InvalidOperationException("Unknown or unsupported MirrorsEdge.exe version. Cannot apply the high-res UI fix.");
                 data = ApplyToImage(data, version);
             }
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
-        private static byte[] ApplyToImage(byte[] data, string versionTag)
+        internal static byte[] ApplyToImage(byte[] data, string versionTag)
         {
             var pe = PeImageLayout.Parse(data);
 
-            uint gsfVa = FindGsfVa(data, pe)
-                ?? throw new InvalidOperationException("UMultiFont::GetScalingFactor not found.");
-            // True window height (GSystemSettings.ResY). Every cave derives its boost from ResY (not the
-            // render-target height) so text is sized for the window, not ME's 16:9-locked render buffer
-            // (taller than the window on non-16:9 modes, which would over-scale text).
             uint gssResYVa = FindGssResYVa(data, pe)
                 ?? throw new InvalidOperationException("GSystemSettings.ResY not found.");
 
-            if (!TryFindHook(data, pe, DrawStringPrefix, DrawStringHookOffset, out int dsOff, out uint dsVa))
-                throw new InvalidOperationException("DrawString hook site not found.");
-            if (!TryFindHook(data, pe, WrappedPrintPrefix, WrappedPrintHookOffset, out int wpOff, out uint wpVa))
-                throw new InvalidOperationException("WrappedPrint hook site not found.");
+            if (!TryFindHook(data, pe, PageIndexPrefix, PageIndexHookOffset, out int pageOff, out uint pageVa))
+                throw new InvalidOperationException("Font page-selection hook site not found.");
+            if (!TryFindHook(data, pe, GsfPrefix, GsfHookOffset, out int gsfOff, out uint gsfVa))
+                throw new InvalidOperationException("Font scaling-factor hook site not found.");
 
-            // DrawStringCentered (subtitle centering), WrapString (subtitle/loading-hint wrap),
-            // DrawStringWrapped (loading-hint overlays), subtitle line-spacing and execTextSize (HUD
-            // layout) are optional - applied if their hook site is present.
-            bool doDsc = TryFindHook(data, pe, DrawStringCenteredPrefix, DrawStringCenteredHookOffset, out int dscOff, out uint dscVa);
-            bool doWs = TryFindHook(data, pe, WrapStringPrefix, WrapStringHookOffset, out int wsOff, out uint wsVa);
-            bool doTs = TryFindHook(data, pe, TextSizePrefix, TextSizeHookOffset, out int tsOff, out uint tsVa);
-            bool doDsw = TryFindHook(data, pe, DrawStringWrappedPrefix, DrawStringWrappedHookOffset, out int dswOff, out uint dswVa);
-            bool doDswC = TryFindHook(data, pe, DswConfinePrefix, DswConfineHookOffset, out int dswcOff, out uint dswcVa);
-            bool doDss = TryFindHook(data, pe, SubtitleSpacingPrefix, SubtitleSpacingHookOffset, out int dssOff, out uint dssVa);
+            // On re-apply, the page-selection detour targets the existing cave base.
+            uint? priorCaveBase = DetourTarget(data, pageOff, pageVa);
 
-            // If re-applying, DrawString's detour points at the existing cave base (code blocks are
-            // allocated before the consts, so it is the lowest cave VA). Capture it before restoring so
-            // the cave is reclaimed rather than regrown.
-            uint? priorCaveBase = data[dsOff] == 0xE9
-                ? dsVa + 5u + (uint)BitConverter.ToInt32(data, dsOff + 1)
-                : (uint?)null;
-
-            // Restore originals first so re-applying installs this build's caves cleanly.
-            RestoreIfDetoured(data, dsOff, DrawStringOrig);
-            RestoreIfDetoured(data, wpOff, WrappedPrintOrig);
-            if (doDsc) RestoreIfDetoured(data, dscOff, DrawStringCenteredOrig);
-            if (doWs) RestoreIfDetoured(data, wsOff, WrapStringOrig);
-            if (doDsw) RestoreIfDetoured(data, dswOff, DrawStringWrappedOrig);
-            if (doDswC) RestoreIfDetoured(data, dswcOff, DswConfineOrig);
-            if (doDss) RestoreIfDetoured(data, dssOff, SubtitleSpacingOrig);
-            if (doTs) RestoreIfDetoured(data, tsOff, TextSizeOrig);
-            if (!data.AsSpan(dsOff, DrawStringOrig.Length).SequenceEqual(DrawStringOrig))
-                throw new InvalidOperationException($"Unexpected bytes at DrawString hook 0x{dsVa:X8}.");
-            if (!data.AsSpan(wpOff, WrappedPrintOrig.Length).SequenceEqual(WrappedPrintOrig))
-                throw new InvalidOperationException($"Unexpected bytes at WrappedPrint hook 0x{wpVa:X8}.");
-            if (doDsc && !data.AsSpan(dscOff, DrawStringCenteredOrig.Length).SequenceEqual(DrawStringCenteredOrig))
-                doDsc = false; // unexpected bytes -> skip rather than risk a bad patch
-            if (doWs && !data.AsSpan(wsOff, WrapStringOrig.Length).SequenceEqual(WrapStringOrig))
-                doWs = false;
-            if (doDsw && !data.AsSpan(dswOff, DrawStringWrappedOrig.Length).SequenceEqual(DrawStringWrappedOrig))
-                doDsw = false;
-            if (doDswC && !data.AsSpan(dswcOff, DswConfineOrig.Length).SequenceEqual(DswConfineOrig))
-                doDswC = false;
-            if (doDss && !data.AsSpan(dssOff, SubtitleSpacingOrig.Length).SequenceEqual(SubtitleSpacingOrig))
-                doDss = false;
-            if (doTs && !data.AsSpan(tsOff, TextSizeOrig.Length).SequenceEqual(TextSizeOrig))
-                doTs = false;
+            RestoreIfDetoured(data, pageOff, PageIndexOrig);
+            RestoreIfDetoured(data, gsfOff, GsfOrig);
+            if (!IsOriginal(data, pageOff, PageIndexOrig))
+                throw new InvalidOperationException($"Unexpected bytes at font page-selection hook 0x{pageVa:X8}.");
+            if (!IsOriginal(data, gsfOff, GsfOrig))
+                throw new InvalidOperationException($"Unexpected bytes at font scaling-factor hook 0x{gsfVa:X8}.");
+            OptionalHooks optional = RestoreOptionalHooks(data, pe, out _);
 
             var cave = CaveSection.Open(data, versionTag: versionTag);
-            // Re-applying (e.g. one apply per resolution change) overwrites the prior font cave in place
-            // instead of reclaiming+reappending - so the cave never grows AND we never zero a co-resident
-            // patch (supersample/logging) that was allocated above this one. Deterministic layout means
-            // the same Alloc sequence reproduces the same offsets within the existing block.
+
+            // Re-apply overwrites the prior cave in place, so the cave never grows and a co-resident
+            // patch allocated above it, such as supersample or logging, is never zeroed.
+            // This relies on the Alloc sequence below being the same on every apply.
             if (priorCaveBase != null)
                 cave.ReuseFrom((int)(priorCaveBase.Value - cave.SectionVa));
 
-            // Code blocks first (each right-sized to its actual length), so the lowest cave VA is a
-            // detour target (the reuse/reclaim anchor); the float consts (absolute-addressed) follow.
-            uint dsCodeVa = cave.Alloc(DsCaveLen, 16);
-            uint wpCodeVa = cave.Alloc(WpCaveLen, 16);
-            uint dscCodeVa = doDsc ? cave.Alloc(DscCaveLen, 16) : 0u;
-            uint wsCodeVa = doWs ? cave.Alloc(WsCaveLen, 16) : 0u;
-            uint dswCodeVa = doDsw ? cave.Alloc(DswCaveLen, 16) : 0u;
-            uint dswcCodeVa = doDswC ? cave.Alloc(DswcCaveLen, 16) : 0u;
-            uint dssCodeVa = doDss ? cave.Alloc(DssCaveLen, 16) : 0u;
-            uint tsCodeVa = doTs ? cave.Alloc(TsCaveLen, 16) : 0u;
+            // The code blocks come first, so the page-selection block is the cave base.
+            uint pageCodeVa = cave.Alloc(PageIndexCaveLen, 16);
+            uint gsfCodeVa = cave.Alloc(GsfCaveLen, 16);
+            uint extCodeVa = optional.DoExtent ? cave.Alloc(ExtentCaveLen, 16) : 0u;
+            uint dswCodeVa = optional.DoDsw ? cave.Alloc(DswCaveLen, 16) : 0u;
             uint c1080Va = cave.Alloc(4, 4);
             uint c5625Va = cave.Alloc(4, 4);
-            uint cOneVa = cave.Alloc(4, 4);
             uint cHalfVa = cave.Alloc(4, 4);
+            uint cEpsVa = cave.Alloc(4, 4);
+            uint cInfVa = cave.Alloc(4, 4);
 
             cave.Write(c1080Va, BitConverter.GetBytes(StockAuthoredHeight));
             cave.Write(c5625Va, BitConverter.GetBytes(0.5625f));
-            cave.Write(cOneVa, BitConverter.GetBytes(1.0f));
             cave.Write(cHalfVa, BitConverter.GetBytes(0.5f));
-            cave.Write(dsCodeVa, BuildDrawStringCave(dsCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, dsVa + (uint)DrawStringOrig.Length));
-            cave.Write(wpCodeVa, BuildWrappedPrintCave(wpCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, wpVa + (uint)WrappedPrintOrig.Length));
-            if (doDsc)
-                cave.Write(dscCodeVa, BuildDrawStringCenteredCave(
-                    dscCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, dscVa + (uint)DrawStringCenteredOrig.Length));
-            if (doWs)
-                cave.Write(wsCodeVa, BuildWrapStringCave(
-                    wsCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, wsVa + (uint)WrapStringOrig.Length));
-            if (doDsw)
-                cave.Write(dswCodeVa, BuildDrawStringWrappedCave(
-                    dswCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, dswVa + (uint)DrawStringWrappedOrig.Length));
-            if (doDswC)
-                cave.Write(dswcCodeVa, BuildDswConfineCave(
-                    dswcCodeVa, gssResYVa, c5625Va, cHalfVa, dswcVa + (uint)DswConfineOrig.Length));
-            if (doDss)
-                cave.Write(dssCodeVa, BuildSubtitleSpacingCave(
-                    dssCodeVa, gsfVa, gssResYVa, c5625Va, c1080Va, dssVa + (uint)SubtitleSpacingOrig.Length));
-            if (doTs)
-                cave.Write(tsCodeVa, BuildTextSizeCave(
-                    tsCodeVa, gsfVa, gssResYVa, c5625Va, cOneVa, c1080Va, tsVa + (uint)TextSizeBlockLen));
+            cave.Write(cEpsVa, BitConverter.GetBytes(0.0001f));
+            cave.Write(cInfVa, BitConverter.GetBytes(float.PositiveInfinity));
+
+            cave.Write(pageCodeVa, BuildPageIndexCave(pageCodeVa, cEpsVa, cInfVa));
+            cave.Write(gsfCodeVa, BuildGsfCave(gsfCodeVa, gssResYVa, c5625Va));
+            if (optional.DoExtent)
+                cave.Write(extCodeVa, BuildExtentCave(
+                    extCodeVa, gssResYVa, c5625Va, c1080Va, optional.UiListVt, optional.ScrollbarVt,
+                    optional.ExtVa + (uint)ExtentDisplaced.Length));
+            if (optional.DoDsw)
+                cave.Write(dswCodeVa, BuildDswConfineCave(
+                    dswCodeVa, gssResYVa, c5625Va, cHalfVa, optional.DswVa + (uint)DswConfineOrig.Length));
             data = cave.Finalize();
 
             var pe2 = PeImageLayout.Parse(data);
-            if (!TryFindHook(data, pe2, DrawStringPrefix, DrawStringHookOffset, out dsOff, out dsVa) ||
-                !TryFindHook(data, pe2, WrappedPrintPrefix, WrappedPrintHookOffset, out wpOff, out wpVa))
+            if (!TryFindHook(data, pe2, PageIndexPrefix, PageIndexHookOffset, out pageOff, out pageVa) ||
+                !TryFindHook(data, pe2, GsfPrefix, GsfHookOffset, out gsfOff, out gsfVa))
                 throw new InvalidOperationException("Hook site vanished after cave finalize.");
 
-            WriteDetour(data, dsOff, dsVa, dsCodeVa, DrawStringOrig.Length);
-            WriteDetour(data, wpOff, wpVa, wpCodeVa, WrappedPrintOrig.Length);
-            if (doDsc && TryFindHook(data, pe2, DrawStringCenteredPrefix, DrawStringCenteredHookOffset, out dscOff, out dscVa))
-                WriteDetour(data, dscOff, dscVa, dscCodeVa, DrawStringCenteredOrig.Length);
-            if (doWs && TryFindHook(data, pe2, WrapStringPrefix, WrapStringHookOffset, out wsOff, out wsVa))
-                WriteDetour(data, wsOff, wsVa, wsCodeVa, WrapStringOrig.Length);
-            if (doDsw && TryFindHook(data, pe2, DrawStringWrappedPrefix, DrawStringWrappedHookOffset, out dswOff, out dswVa))
-                WriteDetour(data, dswOff, dswVa, dswCodeVa, DrawStringWrappedOrig.Length);
-            if (doDswC && TryFindHook(data, pe2, DswConfinePrefix, DswConfineHookOffset, out dswcOff, out dswcVa))
-                WriteDetour(data, dswcOff, dswcVa, dswcCodeVa, DswConfineOrig.Length);
-            if (doDss && TryFindHook(data, pe2, SubtitleSpacingPrefix, SubtitleSpacingHookOffset, out dssOff, out dssVa))
-                WriteDetour(data, dssOff, dssVa, dssCodeVa, SubtitleSpacingOrig.Length);
-            if (doTs && TryFindHook(data, pe2, TextSizePrefix, TextSizeHookOffset, out tsOff, out tsVa))
-                WriteDetour(data, tsOff, tsVa, tsCodeVa, TextSizeOrig.Length);
+            WriteDetour(data, pageOff, pageVa, pageCodeVa, PageIndexOrig.Length);
+            WriteDetour(data, gsfOff, gsfVa, gsfCodeVa, GsfOrig.Length);
+            if (optional.DoExtent && TryFindHook(data, pe2, ExtentPrefix, ExtentHookOffset, out int extOff, out uint extVa))
+                WriteDetour(data, extOff, extVa, extCodeVa, ExtentDisplaced.Length);
+            if (optional.DoDsw && TryFindHook(data, pe2, DswConfinePrefix, DswConfineHookOffset, out int dswOff, out uint dswVa))
+                WriteDetour(data, dswOff, dswVa, dswCodeVa, DswConfineOrig.Length);
 
             return data;
         }
@@ -334,8 +200,8 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] data = File.ReadAllBytes(exePath);
             if (OoaService.HasOoaSection(data))
             {
-                // EA: decrypt, restore detours, re-encrypt + trim. Only rewrite if a detour was present
-                // (re-encrypting an already-clean image would needlessly strip its signature).
+                // For EA, decrypt, restore the detours, then re-encrypt and trim. Rewrite only when a
+                // detour was present, since re-encrypting an already-clean image strips its signature.
                 bool eaChanged = false;
                 byte[] result;
                 try
@@ -357,241 +223,249 @@ namespace MirrorsEdgeTweaks.Helpers
                 PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
-        // Restores every detour in an in-memory PE image (already decrypted for EA) and reclaims the
-        // font cave region so a later re-Apply reuses it instead of growing the cave. Returns the image
-        // (the reclaim rewrites section bytes) and whether anything changed. No file I/O.
-        private static byte[] RemoveFromImage(byte[] data, out bool changed)
+        // Restores every detour, and reclaims the cave when no other patch was allocated above it,
+        // so a later apply reuses the space. EA images must already be decrypted.
+        internal static byte[] RemoveFromImage(byte[] data, out bool changed)
         {
             var pe = PeImageLayout.Parse(data);
-
-            // The existing cave base is DrawString's detour target (code is allocated before the
-            // consts). Capture it before restoring the detour so the cave can be reclaimed.
-            uint? caveBase = null;
-            if (TryFindHook(data, pe, DrawStringPrefix, DrawStringHookOffset, out int dsHookOff, out uint dsHookVa)
-                && data[dsHookOff] == 0xE9)
-                caveBase = dsHookVa + 5u + (uint)BitConverter.ToInt32(data, dsHookOff + 1);
-
             changed = false;
-            if (TryFindHook(data, pe, DrawStringPrefix, DrawStringHookOffset, out int dsOff, out _))
-                changed |= RestoreIfDetoured(data, dsOff, DrawStringOrig);
-            if (TryFindHook(data, pe, WrappedPrintPrefix, WrappedPrintHookOffset, out int wpOff, out _))
-                changed |= RestoreIfDetoured(data, wpOff, WrappedPrintOrig);
-            bool doDsc = TryFindHook(data, pe, DrawStringCenteredPrefix, DrawStringCenteredHookOffset, out int dscOff, out _);
-            if (doDsc) changed |= RestoreIfDetoured(data, dscOff, DrawStringCenteredOrig);
-            bool doWs = TryFindHook(data, pe, WrapStringPrefix, WrapStringHookOffset, out int wsOff, out _);
-            if (doWs) changed |= RestoreIfDetoured(data, wsOff, WrapStringOrig);
-            bool doDsw = TryFindHook(data, pe, DrawStringWrappedPrefix, DrawStringWrappedHookOffset, out int dswOff, out _);
-            if (doDsw) changed |= RestoreIfDetoured(data, dswOff, DrawStringWrappedOrig);
-            bool doDswC = TryFindHook(data, pe, DswConfinePrefix, DswConfineHookOffset, out int dswcOff, out _);
-            if (doDswC) changed |= RestoreIfDetoured(data, dswcOff, DswConfineOrig);
-            bool doDss = TryFindHook(data, pe, SubtitleSpacingPrefix, SubtitleSpacingHookOffset, out int dssOff, out _);
-            if (doDss) changed |= RestoreIfDetoured(data, dssOff, SubtitleSpacingOrig);
-            bool doTs = TryFindHook(data, pe, TextSizePrefix, TextSizeHookOffset, out int tsOff, out _);
-            if (doTs) changed |= RestoreIfDetoured(data, tsOff, TextSizeOrig);
 
-            // Reclaim the font cave so a later Apply starts fresh - but only when it's the topmost cave
-            // allocation (fail-safe: if a co-resident patch sits above it, the block is left in place
-            // and a re-Apply reuses it). caveBase != null implies the detours were just restored.
+            uint? caveBase = null;
+            if (TryFindHook(data, pe, PageIndexPrefix, PageIndexHookOffset, out int pageOff, out uint pageVa))
+            {
+                caveBase = DetourTarget(data, pageOff, pageVa);
+                changed |= RestoreIfDetoured(data, pageOff, PageIndexOrig);
+            }
+            if (TryFindHook(data, pe, GsfPrefix, GsfHookOffset, out int gsfOff, out _))
+                changed |= RestoreIfDetoured(data, gsfOff, GsfOrig);
+            OptionalHooks optional = RestoreOptionalHooks(data, pe, out bool optionalChanged);
+            changed |= optionalChanged;
+
             if (caveBase != null)
                 data = CaveSection.ReclaimIfTopmost(data, "", false, caveBase.Value,
-                    CaveFootprint(doDsc, doWs, doDsw, doDswC, doDss, doTs));
+                    CaveFootprint(optional.DoExtent, optional.DoDsw));
 
             return data;
         }
 
-        // Byte size of the font cave for the present hook set, mirroring the Alloc sequence in
-        // ApplyToImage (code blocks align-16, then the four 4-byte consts). Base-independent because the
-        // base is always 16-aligned (DrawString's block). Keep in sync with the allocation order.
-        private static int CaveFootprint(bool doDsc, bool doWs, bool doDsw, bool doDswC, bool doDss, bool doTs)
+        private sealed class OptionalHooks
+        {
+            public bool DoExtent;
+            public int ExtOff;
+            public uint ExtVa;
+            public uint UiListVt;
+            public uint ScrollbarVt;
+            public bool DoDsw;
+            public int DswOff;
+            public uint DswVa;
+        }
+
+        // Finds the optional hooks and restores any detour on them.
+        // Apply and Remove both use this, so Remove reclaims exactly the blocks that Apply allocated.
+        // A hook is skipped when its site is missing or holds unexpected bytes.
+        // The extent hook is also skipped when either gating vtable is missing.
+        private static OptionalHooks RestoreOptionalHooks(byte[] data, PeImageLayout pe, out bool changed)
+        {
+            var hooks = new OptionalHooks();
+            changed = false;
+
+            uint? uiListVt = FindVtableByCtor(data, pe, UiListCtorPattern, UiListVtableImmOffset);
+            uint? scrollbarVt = FindVtableByCtor(data, pe, UiScrollbarCtorPattern, UiScrollbarVtableImmOffset);
+            if (uiListVt.HasValue && scrollbarVt.HasValue
+                && TryFindHook(data, pe, ExtentPrefix, ExtentHookOffset, out hooks.ExtOff, out hooks.ExtVa))
+            {
+                changed |= RestoreIfDetoured(data, hooks.ExtOff, ExtentDisplaced);
+                hooks.DoExtent = IsOriginal(data, hooks.ExtOff, ExtentDisplaced);
+                hooks.UiListVt = uiListVt.Value;
+                hooks.ScrollbarVt = scrollbarVt.Value;
+            }
+
+            if (TryFindHook(data, pe, DswConfinePrefix, DswConfineHookOffset, out hooks.DswOff, out hooks.DswVa))
+            {
+                changed |= RestoreIfDetoured(data, hooks.DswOff, DswConfineOrig);
+                hooks.DoDsw = IsOriginal(data, hooks.DswOff, DswConfineOrig);
+            }
+
+            return hooks;
+        }
+
+        // Returns the cave size for the given optional hooks by mirroring ApplyToImage's Alloc sequence.
+        // The first block is 16-aligned, so the size does not depend on the cave base.
+        private static int CaveFootprint(bool doExtent, bool doDsw)
         {
             static int A16(int v) => (v + 15) & ~15;
             static int A4(int v) => (v + 3) & ~3;
-            int wm = DsCaveLen;                       // DrawString (base is 16-aligned)
-            wm = A16(wm) + WpCaveLen;                 // WrappedPrint
-            if (doDsc) wm = A16(wm) + DscCaveLen;
-            if (doWs) wm = A16(wm) + WsCaveLen;
+            int wm = PageIndexCaveLen;                 // page selection
+            wm = A16(wm) + GsfCaveLen;                 // scaling factor
+            if (doExtent) wm = A16(wm) + ExtentCaveLen;
             if (doDsw) wm = A16(wm) + DswCaveLen;
-            if (doDswC) wm = A16(wm) + DswcCaveLen;
-            if (doDss) wm = A16(wm) + DssCaveLen;
-            if (doTs) wm = A16(wm) + TsCaveLen;
-            wm = A4(wm) + 4;                          // c1080
-            wm = A4(wm) + 4;                          // c5625
-            wm = A4(wm) + 4;                          // cOne
-            wm = A4(wm) + 4;                          // cHalf
+            wm = A4(wm) + 4;                           // c1080
+            wm = A4(wm) + 4;                           // c5625
+            wm = A4(wm) + 4;                           // cHalf
+            wm = A4(wm) + 4;                           // cEps
+            wm = A4(wm) + 4;                           // cInf
             return wm;
         }
 
-        // Skips the boost (jumps to skipLabel) unless width > 1920, i.e. the 16:9 render height
-        // ResX*0.5625 exceeds the 1080 authored page. At/below that the stock GetScalingFactor is already
-        // correct, so boosting it oversizes sub-1080p / non-16:9 text. ResX is the INT before ResY.
-        private static void EmitBoostGate(MachineCodeBuilder mc, uint gssResYVa, string skipLabel)
+        // Builds the GetResolutionTestTableIndex replacement (thiscall, ret 4, index in eax).
+        // It returns the index of the nearest entry at or above H - eps, which matches stock.
+        // It returns the index of the largest entry when none qualifies, where stock returns 0.
+        // Qualifying entries lie at most eps below H, so ranking them by v - H matches stock's |v - H|.
+        // ecx = this, with the entry count at [this+0x154] and the entries at [this+0x150].
+        internal static byte[] BuildPageIndexCave(uint codeVa, uint cEpsVa, uint cInfVa)
+        {
+            var mc = new MachineCodeBuilder(codeVa);
+            mc.Emit(new byte[] { 0x8B, 0x81, 0x54, 0x01, 0x00, 0x00 });  // mov eax,[ecx+0x154]  num
+            mc.Emit(new byte[] { 0x85, 0xC0 });                          // test eax,eax
+            mc.EmitJle("ret0");
+            mc.Emit((byte)0x53);                                         // push ebx
+            mc.Emit((byte)0x57);                                         // push edi
+            mc.Emit(new byte[] { 0x8B, 0xD8 });                          // mov ebx,eax          num
+            mc.Emit(new byte[] { 0x8B, 0x91, 0x50, 0x01, 0x00, 0x00 });  // mov edx,[ecx+0x150]  data
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x44, 0x24, 0x0C });  // movss xmm0,[esp+0xC] H
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0xC8 });              // movss xmm1,xmm0
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5C, 0x0D }); mc.EmitUInt32(cEpsVa); // subss xmm1,[eps]     H-eps
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x15 }); mc.EmitUInt32(cInfVa); // movss xmm2,[+inf]    bestdiff
+            mc.Emit(new byte[] { 0xB8, 0xFF, 0xFF, 0xFF, 0xFF });        // mov eax,-1           best
+            mc.Emit(new byte[] { 0x33, 0xFF });                          // xor edi,edi          maxidx
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x1A });              // movss xmm3,[edx]     maxval=data[0]
+            mc.Emit(new byte[] { 0x33, 0xC9 });                          // xor ecx,ecx          i
+            mc.MarkLabel("loop");
+            mc.Emit(new byte[] { 0x3B, 0xCB });                          // cmp ecx,ebx
+            mc.EmitJge("done");
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x24, 0x8A });        // movss xmm4,[edx+ecx*4] v
+            mc.Emit(new byte[] { 0x0F, 0x2F, 0xE3 });                    // comiss xmm4,xmm3     v vs maxval
+            mc.EmitJbe("skipmax");
+            mc.Emit(new byte[] { 0x0F, 0x28, 0xDC });                    // movaps xmm3,xmm4     maxval=v
+            mc.Emit(new byte[] { 0x8B, 0xF9 });                          // mov edi,ecx          maxidx=i
+            mc.MarkLabel("skipmax");
+            mc.Emit(new byte[] { 0x0F, 0x2F, 0xE1 });                    // comiss xmm4,xmm1     v vs H-eps
+            mc.EmitJb("next");                                           //                      skip v below H-eps
+            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5C, 0xE0 });              // subss xmm4,xmm0      diff=v-H
+            mc.Emit(new byte[] { 0x0F, 0x2F, 0xE2 });                    // comiss xmm4,xmm2     diff vs bestdiff
+            mc.EmitJae("next");                                          //                      skip unless diff is smaller
+            mc.Emit(new byte[] { 0x0F, 0x28, 0xD4 });                    // movaps xmm2,xmm4     bestdiff=diff
+            mc.Emit(new byte[] { 0x8B, 0xC1 });                          // mov eax,ecx          best=i
+            mc.MarkLabel("next");
+            mc.Emit((byte)0x41);                                         // inc ecx
+            mc.EmitJmp("loop");
+            mc.MarkLabel("done");
+            mc.Emit(new byte[] { 0x83, 0xF8, 0xFF });                    // cmp eax,-1
+            mc.EmitJnz("have");
+            mc.Emit(new byte[] { 0x8B, 0xC7 });                          // mov eax,edi          best=maxidx
+            mc.MarkLabel("have");
+            mc.Emit((byte)0x5F);                                         // pop edi
+            mc.Emit((byte)0x5B);                                         // pop ebx
+            mc.Emit(new byte[] { 0xC2, 0x04, 0x00 });                    // ret 4
+            mc.MarkLabel("ret0");
+            mc.Emit(new byte[] { 0x33, 0xC0 });                          // xor eax,eax
+            mc.Emit(new byte[] { 0xC2, 0x04, 0x00 });                    // ret 4
+            return mc.Build();
+        }
+
+        // Builds the GetScalingFactor replacement (thiscall, ret 4, scale in st0).
+        // It returns min(H, ResY, ResX*0.5625)/RTT[idx] above 1920 wide.
+        // It returns the stock H/RTT[idx] at 1920 wide and below, or when ResY is 0.
+        // It returns 1.0 when idx is out of range, as stock does.
+        // The ResY and ResX terms bound text to the visible 16:9 height.
+        // The H term keeps canvases smaller than the screen at their stock scale.
+        // It calls GetResolutionTestTableIndex through vtable slot +0x12C, which reaches the replacement.
+        internal static byte[] BuildGsfCave(uint codeVa, uint gssResYVa, uint c5625Va)
         {
             uint resXVa = gssResYVa - 4;
+            var mc = new MachineCodeBuilder(codeVa);
+            mc.Emit((byte)0x56);                                         // push esi
+            mc.Emit(new byte[] { 0x8B, 0xF1 });                          // mov esi,ecx          this
+            mc.Emit(new byte[] { 0xFF, 0x74, 0x24, 0x08 });              // push dword [esp+8]   H
+            mc.Emit(new byte[] { 0x8B, 0x06 });                          // mov eax,[esi]        vtable
+            mc.Emit(new byte[] { 0x8B, 0x80, 0x2C, 0x01, 0x00, 0x00 });  // mov eax,[eax+0x12c]  GetResolutionTestTableIndex
+            mc.Emit(new byte[] { 0x8B, 0xCE });                          // mov ecx,esi
+            mc.Emit(new byte[] { 0xFF, 0xD0 });                          // call eax             eax=idx
+            mc.Emit(new byte[] { 0x3B, 0x86, 0x54, 0x01, 0x00, 0x00 });  // cmp eax,[esi+0x154]  num
+            mc.EmitJge("ret1");
+            mc.Emit(new byte[] { 0x8B, 0x8E, 0x50, 0x01, 0x00, 0x00 });  // mov ecx,[esi+0x150]  data
+            mc.Emit(new byte[] { 0xD9, 0x44, 0x24, 0x08 });              // fld dword [esp+8]    st0=H
             mc.Emit(new byte[] { 0x81, 0x3D }); mc.EmitUInt32(resXVa); mc.EmitUInt32(1920); // cmp dword [ResX],1920
-            mc.EmitJle(skipLabel);
+            mc.EmitJle("div");
+            mc.Emit(new byte[] { 0x83, 0x3D }); mc.EmitUInt32(gssResYVa); mc.Emit((byte)0x00); // cmp dword [ResY],0
+            mc.EmitJz("div");
+            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(resXVa);    // fild dword [ResX]    st0=ResX,st1=H
+            mc.Emit(new byte[] { 0xD8, 0x0D }); mc.EmitUInt32(c5625Va);   // fmul dword [0.5625]  st0=render,st1=H
+            mc.Emit(new byte[] { 0xDB, 0xF1 });                          // fcomi st0,st1
+            mc.Emit(new byte[] { 0xDB, 0xC1 });                          // fcmovnb st0,st1      st0=min(render,H),st1=H
+            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1             st0=min(render,H)
+            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(gssResYVa); // fild dword [ResY]    st0=ResY,st1=min
+            mc.Emit(new byte[] { 0xDB, 0xF1 });                          // fcomi st0,st1
+            mc.Emit(new byte[] { 0xDB, 0xC1 });                          // fcmovnb st0,st1      st0=min(ResY,render,H),st1=min
+            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1             st0=numerator
+            mc.MarkLabel("div");
+            mc.Emit(new byte[] { 0xD8, 0x34, 0x81 });                    // fdiv dword [ecx+eax*4]  st0=numerator/RTT[idx]
+            mc.Emit((byte)0x5E);                                         // pop esi
+            mc.Emit(new byte[] { 0xC2, 0x04, 0x00 });                    // ret 4
+            mc.MarkLabel("ret1");
+            mc.Emit(new byte[] { 0xD9, 0xE8 });                          // fld1
+            mc.Emit((byte)0x5E);                                         // pop esi
+            mc.Emit(new byte[] { 0xC2, 0x04, 0x00 });                    // ret 4
+            return mc.Build();
         }
 
-        // Emits x87 code that pushes the canvas/HUD scale factor onto st(0):
-        //   boost = FMin(ResY, render) / FMax(1.0, FMin(render, 1080)),  render = ResX * 0.5625
-        // i.e. visible height / the font page height the lie selects. Matches the bytecode UIStyle scale
-        // (FMin(SizeY, SizeX*0.5625) / FMin(SizeX*0.5625, 1080)) so canvas text tracks UI text at every
-        // aspect AND height: the numerator clamps to the 16:9-locked render height so wider-than-16:9 is
-        // bounded by the window and taller-than-16:9 by the (shorter) render. For 16:9 it reduces to
-        // ResY/FMin(ResY,1080). FMax(1.0, ..) guards div-by-zero. Branchless (FMin/FMax via fcmov), no GP
-        // clobber, net +1 on the x87 stack. ResX is the INT before ResY (ResY == ResX + 4).
-        private static void EmitBoost(MachineCodeBuilder mc, uint gssResYVa, uint c5625Va, uint c1080Va)
+        // Builds the FUIScreenValue_Extent::GetValue hook (thiscall, ret 8, value in st0).
+        // Above 1920 wide, it returns value*min(ResY, ResX*0.5625)/1080
+        // for a Pixels extent requested as Pixels, when it is a member of a UIList or UIScrollbar.
+        // It runs the displaced entry bytes and resumes the stock body in every other case.
+        // ecx = extent, with the value at +0 and the scale type at +4.
+        // [esp+4] = owner and [esp+8] = requested output type.
+        // The owner-range check rejects CellSize templates,
+        // which pass the list as their owner but live in heap arrays.
+        internal static byte[] BuildExtentCave(uint codeVa, uint gssResYVa, uint c5625Va, uint c1080Va,
+            uint uiListVt, uint scrollbarVt, uint returnVa)
         {
             uint resXVa = gssResYVa - 4;
-            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(resXVa);    // fild dword [ResX]   st0=ResX
-            mc.Emit(new byte[] { 0xD8, 0x0D }); mc.EmitUInt32(c5625Va);   // fmul dword [0.5625] st0=render
-            mc.Emit(new byte[] { 0xD9, 0x05 }); mc.EmitUInt32(c1080Va);   // fld dword [1080]    st0=1080,st1=render
+            var mc = new MachineCodeBuilder(codeVa);
+            mc.Emit(new byte[] { 0x81, 0x3D }); mc.EmitUInt32(resXVa); mc.EmitUInt32(1920); // cmp dword [ResX],1920
+            mc.EmitJle("keep");
+            mc.Emit(new byte[] { 0x8B, 0x44, 0x24, 0x04 });              // mov eax,[esp+4]      owner
+            mc.Emit(new byte[] { 0x85, 0xC0 });                          // test eax,eax
+            mc.EmitJz("keep");
+            mc.Emit(new byte[] { 0x80, 0x79, 0x04, 0x00 });              // cmp byte [ecx+4],0   extent is Pixels?
+            mc.EmitJnz("keep");
+            mc.Emit(new byte[] { 0x83, 0x7C, 0x24, 0x08, 0x00 });        // cmp dword [esp+8],0  output is Pixels?
+            mc.EmitJnz("keep");
+            mc.Emit(new byte[] { 0x3B, 0xC8 });                          // cmp ecx,eax          extent >= owner?
+            mc.EmitJb("keep");
+            mc.Emit(new byte[] { 0x8D, 0x90 }); mc.EmitUInt32(ExtentOwnerSpan); // lea edx,[eax+span]
+            mc.Emit(new byte[] { 0x3B, 0xCA });                          // cmp ecx,edx          extent < owner+span?
+            mc.EmitJae("keep");
+            mc.Emit(new byte[] { 0x8B, 0x10 });                          // mov edx,[eax]        owner vtable
+            mc.Emit(new byte[] { 0x81, 0xFA }); mc.EmitUInt32(uiListVt); // cmp edx,UIList vtable
+            mc.EmitJz("scale");
+            mc.Emit(new byte[] { 0x81, 0xFA }); mc.EmitUInt32(scrollbarVt); // cmp edx,UIScrollbar vtable
+            mc.EmitJnz("keep");
+            mc.MarkLabel("scale");
+            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(gssResYVa); // fild dword [ResY]    st0=ResY
+            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(resXVa);    // fild dword [ResX]    st0=ResX,st1=ResY
+            mc.Emit(new byte[] { 0xD8, 0x0D }); mc.EmitUInt32(c5625Va);   // fmul dword [0.5625]  st0=render,st1=ResY
             mc.Emit(new byte[] { 0xDB, 0xF1 });                          // fcomi st0,st1
-            mc.Emit(new byte[] { 0xDB, 0xC1 });                          // fcmovnb st0,st1     st0=FMin(render,1080),st1=render
-            mc.Emit(new byte[] { 0xD9, 0xE8 });                          // fld1               st0=1.0,st1=FMin,st2=render
-            mc.Emit(new byte[] { 0xDB, 0xF1 });                          // fcomi st0,st1
-            mc.Emit(new byte[] { 0xDA, 0xC1 });                          // fcmovb st0,st1      st0=FMax(1,FMin)=denom,st1=FMin,st2=render
-            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1            st0=denom,st1=render [drop FMin]
-            mc.Emit(new byte[] { 0xDB, 0x05 }); mc.EmitUInt32(gssResYVa); // fild dword [ResY]   st0=ResY,st1=denom,st2=render
-            mc.Emit(new byte[] { 0xDB, 0xF2 });                          // fcomi st0,st2
-            mc.Emit(new byte[] { 0xDB, 0xC2 });                          // fcmovnb st0,st2     st0=FMin(ResY,render)=num,st1=denom,st2=render
-            mc.Emit(new byte[] { 0xD8, 0xF1 });                          // fdiv st0,st1        st0=num/denom=boost,st1=denom,st2=render
-            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1            st0=boost,st1=render [drop denom]
-            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1            st0=boost [drop render]
-        }
-
-        // DrawString: on entry st(0) = (lied) FontScale. Scales by EmitBoost (ResY / FMin(ResX*0.5625,
-        // 1080)) so canvas + list text track the window at every aspect ratio.
-        //   ForcedViewportHeight ([ebp+0x2C]) null/zero  -> canvas/HUD:
-        //        if UMultiFont: st(0) = boost
-        //   ForcedViewportHeight set & non-zero          -> UI text:
-        //        if UMultiFont and under-scaled (e.g. list cells, which ignore UIStyle_Text.Scale):
-        //          st(0) = max(FontScale, boost/XScale) so effective scale reaches boost.
-        //          Labels already arrive at XScale=boost, so their candidate is 1.0 -> unchanged.
-        internal static byte[] BuildDrawStringCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "after");
-            mc.Emit(new byte[] { 0x8B, 0x45, 0x2C });               // mov eax,[ebp+0x2C]  ForcedViewportHeight ptr
-            mc.Emit(new byte[] { 0x85, 0xC0 });                     // test eax,eax
-            mc.EmitJz("canvas");                                    //  null -> canvas
-            mc.Emit(new byte[] { 0x83, 0x38, 0x00 });               // cmp dword [eax],0
-            mc.EmitJz("canvas");                                    //  *FVH == 0 -> canvas
-
-            // UI path: lift under-scaled MultiFont text (e.g. list cells) toward the boost.
-            mc.Emit(new byte[] { 0x8B, 0x55, 0x18 });               // mov edx,[ebp+0x18]  Font
-            mc.Emit(new byte[] { 0x8B, 0x12 });                     // mov edx,[edx]       vtable
-            mc.Emit(new byte[] { 0x81, 0xBA, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [edx+0x118],gsfVa
-            mc.EmitJnz("after");                                    //  not UMultiFont -> keep
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);             // st0=boost (st1=FontScale)
-            mc.Emit(new byte[] { 0xD8, 0x75, 0x20 });               // fdiv dword [ebp+0x20] XScale -> candidate
-            mc.Emit(new byte[] { 0xDB, 0xF1 });                     // fcomi st0,st1
-            mc.Emit(new byte[] { 0xDA, 0xD1 });                     // fcmovbe st0,st1     -> st0=max(candidate,FontScale)
-            mc.Emit(new byte[] { 0xDD, 0xD9 });                     // fstp st(1)          -> drop old FontScale
-            mc.EmitJmp("after");
-
-            mc.MarkLabel("canvas");
-            mc.Emit(new byte[] { 0x8B, 0x45, 0x18 });               // mov eax,[ebp+0x18]  Font
-            mc.Emit(new byte[] { 0x8B, 0x00 });                     // mov eax,[eax]       vtable
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("after");                                    //  console/plain UFont -> keep
-            mc.Emit(new byte[] { 0xDD, 0xD8 });                     // fstp st(0)
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);             // st0=boost
-
-            mc.MarkLabel("after");
-            mc.Emit(new byte[] { 0xD9, 0x45, 0x20 });               // fld [ebp+0x20]   XScale (displaced)
-            mc.Emit(new byte[] { 0x8B, 0x45, 0x1C });               // mov eax,[ebp+0x1C] (displaced)
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // WrappedPrint: on entry st(0) = (lied) FontScale, edi = Font (always HUD/canvas, no UI path).
-        // Non-UMultiFont (console/plain UFont) is kept; otherwise st(0) is replaced with the boost.
-        internal static byte[] BuildWrappedPrintCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "after");
-            mc.Emit(new byte[] { 0x8B, 0x07 });                     // mov eax,[edi]    vtable (edi=Font)
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("after");
-            mc.Emit(new byte[] { 0xDD, 0xD8 });                     // fstp st(0)
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);             // st0=boost
-            mc.MarkLabel("after");
-            mc.Emit(new byte[] { 0xD9, 0x84, 0x24, 0x90, 0x00, 0x00, 0x00 }); // fld [esp+0x90] (displaced)
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // DrawStringCentered: edi = Font, [esp+0x20] = measured XL. The original does mov eax,[esp+0x20];
-        // cdq (start of XL/2). For UMultiFont we replace eax with round(XL * boost) so the centering
-        // offset matches the upsized draw. Non-MultiFont -> XL unchanged.
-        internal static byte[] BuildDrawStringCenteredCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "keepXL");                 // before push ebx so the skip leaves esp balanced
-            mc.Emit((byte)0x53);                                    // push ebx
-            mc.Emit(new byte[] { 0x8B, 0x1F });                     // mov ebx,[edi]   Font vtable
-            mc.Emit(new byte[] { 0x81, 0xBB, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [ebx+0x118],gsfVa
-            mc.Emit((byte)0x5B);                                    // pop ebx
-            mc.EmitJnz("keepXL");                                   //  not UMultiFont -> keep
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);             // st0 = boost (FPU only, no GP clobber)
-            mc.Emit(new byte[] { 0xDB, 0x44, 0x24, 0x20 });         // fild [esp+0x20]      XL
-            mc.Emit(new byte[] { 0xDE, 0xC9 });                     // fmulp st1,st0        XL*boost
-            mc.Emit(new byte[] { 0x83, 0xEC, 0x04 });               // sub esp,4            scratch slot
-            mc.Emit(new byte[] { 0xDB, 0x1C, 0x24 });               // fistp [esp]          store scaled XL
-            mc.Emit((byte)0x58);                                    // pop eax              scaled XL
-            mc.EmitJmp("doneXL");
-            mc.MarkLabel("keepXL");
-            mc.Emit(new byte[] { 0x8B, 0x44, 0x24, 0x20 });         // mov eax,[esp+0x20]   XL (displaced)
-            mc.MarkLabel("doneXL");
-            mc.Emit((byte)0x99);                                    // cdq                  (displaced)
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // WrapString: edi = Parameters, st(0) = FontScale. For canvas (ViewportHeight==0) UMultiFont text,
-        // multiply FontScale by boost (ResY/FMin(ResX*0.5625,1080)) so the wrap width matches the upsized
-        // draw. UI callers (VH>0) and non-MultiFont are left unchanged.
-        internal static byte[] BuildWrapStringCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "keep");
-            mc.Emit(new byte[] { 0x83, 0xBF, 0x40, 0x00, 0x00, 0x00, 0x00 }); // cmp dword [edi+0x40],0  ViewportHeight
-            mc.EmitJnz("keep");                                    //  VH != 0 -> UI, keep
-            mc.Emit(new byte[] { 0x8B, 0x47, 0x18 });             // mov eax,[edi+0x18]  DrawFont
-            mc.Emit(new byte[] { 0x8B, 0x00 });                   // mov eax,[eax]       vtable
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("keep");                                    //  not UMultiFont -> keep
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);           // st0=boost (st1=FontScale), no GP clobber
-            mc.Emit(new byte[] { 0xDE, 0xC9 });                   // fmulp st1,st0        FontScale*boost
+            mc.Emit(new byte[] { 0xDB, 0xC1 });                          // fcmovnb st0,st1      st0=min(render,ResY),st1=ResY
+            mc.Emit(new byte[] { 0xDD, 0xD9 });                          // fstp st1             st0=min(render,ResY)
+            mc.Emit(new byte[] { 0xD8, 0x35 }); mc.EmitUInt32(c1080Va);   // fdiv dword [1080]    st0=scale
+            mc.Emit(new byte[] { 0xD8, 0x09 });                          // fmul dword [ecx]     st0=value*scale
+            mc.Emit(new byte[] { 0xC2, 0x08, 0x00 });                    // ret 8
             mc.MarkLabel("keep");
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x47, 0x10 }); // movss xmm0,[edi+0x10] (displaced)
+            mc.Emit(ExtentDisplaced);                                    // push ecx; push ebx; mov ebx,[esp+0xC]
             mc.EmitJmpNear(returnVa);
             return mc.Build();
         }
 
-        // DrawStringWrapped: edi = Font, st(0) = FontScale. For UMultiFont text, multiply FontScale by
-        // boost (ResY/FMin(ResX*0.5625,1080)) so the wrap measure matches the upsized draw (always canvas).
-        internal static byte[] BuildDrawStringWrappedCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "keep");
-            mc.Emit(new byte[] { 0x8B, 0x07 });                   // mov eax,[edi]   vtable (edi=Font)
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("keep");                                   //  not UMultiFont -> keep
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);           // st0=boost (st1=FontScale)
-            mc.Emit(new byte[] { 0xDE, 0xC9 });                   // fmulp st1,st0          FontScale*boost
-            mc.MarkLabel("keep");
-            mc.Emit(new byte[] { 0xD9, 0x5C, 0x24, 0x18 });       // fstp [esp+0x18]        (displaced)
-            mc.Emit(new byte[] { 0x8B, 0x4C, 0x24, 0x74 });       // mov ecx,[esp+0x74]     (displaced)
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // DrawStringWrapped 16:9 confine: just after the SEH prologue (esp=entry-0x60). Remaps the loading
-        // hint's CurX ([esp+0x6c], value param) and wrap width *XL (ptr [esp+0x74], fresh per render) into
-        // the centered 16:9 bink region. binkWidth = min(ResX, ResY*16/9); binkFrac = binkWidth/ResX;
-        // binkLeft = (ResX-binkWidth)/2. CurX = binkLeft + CurX*binkFrac; *XL *= binkFrac. SSE only (xmm not
-        // live yet; FPU stack untouched). No-op at <=16:9 (binkFrac=1, binkLeft=0).
+        // Builds the DrawStringWrapped hook. It runs after the SEH prologue, where esp = entry-0x60,
+        // and before the body touches xmm.
+        // TdGameEngine.OnLoadLevel places the loading hint with fullscreen fractions, X=0.35 and
+        // WrapWidth=0.55, but the bink is always 16:9, so the hint overruns it on wider modes.
+        // The cave remaps CurX ([esp+0x6c]) and the wrap width *XL ([esp+0x74]) into the 16:9 region:
+        //   binkWidth = min(ResX, ResY*16/9), binkFrac = binkWidth/ResX, binkLeft = (ResX-binkWidth)/2
+        //   CurX = binkLeft + CurX*binkFrac, *XL *= binkFrac
+        // CurX is a value parameter and *XL is a fresh local on every render,
+        // so the remap never accumulates. It is a no-op at 16:9 and narrower.
         internal static byte[] BuildDswConfineCave(uint codeVa, uint gssResYVa, uint c5625Va, uint cHalfVa, uint returnVa)
         {
             uint resXVa = gssResYVa - 4;
@@ -619,71 +493,11 @@ namespace MirrorsEdgeTweaks.Helpers
             return mc.Build();
         }
 
-        // DisplaySubtitleWordWrapped: edi = MediumFont, st(0) = FontScale (from GetScalingFactor), then
-        // fmul [esp+0x38] (GetMaxCharHeight) -> StrHeight. For UMultiFont we multiply FontScale by boost
-        // (ResY/FMin(ResX*0.5625,1080)) before the fmul so the line gap matches the upsized text.
-        internal static byte[] BuildSubtitleSpacingCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            EmitBoostGate(mc, gssResYVa, "keep");
-            mc.Emit(new byte[] { 0x8B, 0x07 });                   // mov eax,[edi]   vtable (edi=Font)
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("keep");                                   //  not UMultiFont -> keep
-            EmitBoost(mc, gssResYVa, c5625Va, c1080Va);           // st0=boost (st1=FontScale)
-            mc.Emit(new byte[] { 0xDE, 0xC9 });                   // fmulp st1,st0          FontScale*boost
-            mc.MarkLabel("keep");
-            mc.Emit(new byte[] { 0xD8, 0x4C, 0x24, 0x38 });       // fmul dword [esp+0x38]  * GetMaxCharHeight (displaced)
-            mc.Emit(new byte[] { 0x39, 0x6C, 0x24, 0x40 });       // cmp [esp+0x40],ebp     (displaced)
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // execTextSize: ebp = this (UCanvas), Font at [ebp+0x3c], YL_ptr in ebx; after ClippedStrLen the
-        // ints XLi/YLi live at [esp+0x34]/[esp+0x38] and XL_ptr at [esp+0x30]. The cave rebuilds the SSE
-        // convert+store block, multiplying both results by the boost for UMultiFont fonts (scale defaults
-        // to 1.0 for non-MultiFont or if ResY==0), then returns past the block.
-        internal static byte[] BuildTextSizeCave(uint codeVa, uint gsfVa, uint gssResYVa, uint c5625Va, uint cOneVa, uint c1080Va, uint returnVa)
-        {
-            var mc = new MachineCodeBuilder(codeVa);
-            uint resXVa = gssResYVa - 4;
-            mc.Emit(new byte[] { 0xB8, 0x00, 0x00, 0x80, 0x3F });   // mov eax,0x3F800000  (1.0f)
-            mc.Emit(new byte[] { 0x66, 0x0F, 0x6E, 0xD0 });         // movd xmm2,eax       scale = 1.0
-            EmitBoostGate(mc, gssResYVa, "stores");                 // after the scale=1.0 init, so the skip keeps scale=1.0
-            mc.Emit(new byte[] { 0x8B, 0x45, 0x3C });               // mov eax,[ebp+0x3c]  Font
-            mc.Emit(new byte[] { 0x8B, 0x00 });                     // mov eax,[eax]       vtable
-            mc.Emit(new byte[] { 0x81, 0xB8, 0x18, 0x01, 0x00, 0x00 }); mc.EmitUInt32(gsfVa); // cmp [eax+0x118],gsfVa
-            mc.EmitJnz("stores");                                   //  not UMultiFont -> scale = 1
-            mc.Emit(new byte[] { 0xA1 }); mc.EmitUInt32(gssResYVa); // mov eax,[GSS.ResY]
-            mc.Emit(new byte[] { 0x85, 0xC0 }); mc.EmitJz("stores"); // ResY==0 -> scale = 1
-            // scale = FMin(ResY, render) / FMax(1.0, FMin(render, 1080))  (render=ResX*0.5625; matches EmitBoost)
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x2A, 0xD0 });         // cvtsi2ss xmm2,eax    ResY
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x2A, 0x1D }); mc.EmitUInt32(resXVa);  // cvtsi2ss xmm3,[ResX]
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x59, 0x1D }); mc.EmitUInt32(c5625Va); // mulss xmm3,[0.5625]  render
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5D, 0xD3 });         // minss xmm2,xmm3      num=FMin(ResY,render)
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5D, 0x1D }); mc.EmitUInt32(c1080Va); // minss xmm3,[1080]
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5F, 0x1D }); mc.EmitUInt32(cOneVa);  // maxss xmm3,[1.0]     denom
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x5E, 0xD3 });         // divss xmm2,xmm3      num/denom
-            mc.MarkLabel("stores");
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x2A, 0x44, 0x24, 0x34 }); // cvtsi2ss xmm0,[esp+0x34]  XLi (displaced)
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x59, 0xC2 });         // mulss xmm0,xmm2
-            mc.Emit(new byte[] { 0x8B, 0x44, 0x24, 0x30 });         // mov eax,[esp+0x30]   XL_ptr
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x11, 0x00 });         // movss [eax],xmm0
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x2A, 0x44, 0x24, 0x38 }); // cvtsi2ss xmm0,[esp+0x38]  YLi
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x59, 0xC2 });         // mulss xmm0,xmm2
-            mc.Emit(new byte[] { 0x83, 0xC4, 0x18 });               // add esp,0x18         (displaced)
-            mc.Emit(new byte[] { 0xF3, 0x0F, 0x11, 0x03 });         // movss [ebx],xmm0
-            mc.EmitJmpNear(returnVa);
-            return mc.Build();
-        }
-
-        // Resolves the absolute VA of GSystemSettings.ResY (the true target/window height, written by
-        // every resolution change via FSystemSettings::SetResolution). The hooks need this, not the
-        // render-target/viewport height, which ME 16:9-locks to the width on non-16:9 modes (e.g.
-        // 2560x1080 renders at a 1440-tall buffer) - reading the render height over-scales text by
-        // renderH/windowH there. Anchored on UGameEngine::Init's
-        // Parse(appCmdLine(), TEXT("ResX="), GSystemSettings.ResX) /
-        // Parse(appCmdLine(), TEXT("ResY="), GSystemSettings.ResY), which push &ResX / &ResY as
-        // immediates right before the "ResX="/"ResY=" string. Cross-checked by ResY == ResX + 4.
+        // Returns the VA of GSystemSettings.ResY, which every resolution change writes.
+        // The caves use it instead of the render height, which ME locks to width*0.5625,
+        // so 2560x1080 renders 1440 tall and the render height would over-scale text.
+        // The fields are located through UGameEngine::Init's Parse(appCmdLine(), TEXT("ResX="), ResX)
+        // and the matching ResY call. ResY must sit 4 bytes after ResX.
         private static uint? FindGssResYVa(byte[] data, PeImageLayout pe)
         {
             uint? resx = FindParseTargetAddr(data, pe, "ResX=");
@@ -693,9 +507,9 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // For a Parse(..., TEXT(match), GSystemSettings.<field>) call, returns the &field immediate that
-        // is `push`ed immediately before `push <match-string-VA>`. Requires a unique match string and a
-        // unique push of it, so a stray substring or duplicate won't yield a false address.
+        // Returns the field address pushed just before the match string's address in a
+        // Parse(..., TEXT(match), GSystemSettings.<field>) call.
+        // Returns null when a copy of the string is pushed more than once, or when copies disagree.
         private static uint? FindParseTargetAddr(byte[] data, PeImageLayout pe, string match)
         {
             var text = pe.FindSectionByName(".text");
@@ -731,6 +545,30 @@ namespace MirrorsEdgeTweaks.Helpers
             return result;
         }
 
+        // Returns the vtable VA that a class's unique constructor writes with mov dword [reg], imm32.
+        // Returns null when the pattern is missing or ambiguous.
+        // Returns null when the immediate is not in a data section, since a vtable is never code.
+        private static uint? FindVtableByCtor(byte[] data, PeImageLayout pe, BytePattern ctor, int immOffset)
+        {
+            var text = pe.FindSectionByName(".text");
+            if (text == null) return null;
+            int start = (int)text.PointerToRawData;
+            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
+
+            int p = IndexOf(data, ctor, start, end);
+            if (p < 0) return null;
+            if (IndexOf(data, ctor, p + 1, end) >= 0) return null; // ambiguous
+            if (p + immOffset + 4 > data.Length) return null;
+            uint vt = BitConverter.ToUInt32(data, p + immOffset);
+            try
+            {
+                _ = pe.VaToOffset(vt);
+                if (pe.IsExecutableVa(vt)) return null;
+            }
+            catch { return null; }
+            return vt;
+        }
+
         private static void WriteDetour(byte[] data, int hookOff, uint hookVa, uint codeVa, int origLen)
         {
             byte[] detour = new byte[origLen];
@@ -746,6 +584,14 @@ namespace MirrorsEdgeTweaks.Helpers
             Buffer.BlockCopy(orig, 0, data, hookOff, orig.Length);
             return true;
         }
+
+        // Returns the target of the detour at hookOff.
+        // Returns null when the site holds no detour.
+        private static uint? DetourTarget(byte[] data, int hookOff, uint hookVa) =>
+            data[hookOff] == 0xE9 ? hookVa + 5u + (uint)BitConverter.ToInt32(data, hookOff + 1) : null;
+
+        private static bool IsOriginal(byte[] data, int hookOff, byte[] orig) =>
+            data.AsSpan(hookOff, orig.Length).SequenceEqual(orig);
 
         private static bool TryFindHook(byte[] data, PeImageLayout pe, BytePattern prefix, int hookOffset,
             out int hookOff, out uint hookVa)
@@ -765,32 +611,6 @@ namespace MirrorsEdgeTweaks.Helpers
             return true;
         }
 
-        private static uint? FindGsfVa(byte[] data, PeImageLayout pe)
-        {
-            int off = FindGsfOffset(data, pe);
-            return off < 0 ? null : pe.OffsetToVa(off);
-        }
-
-        private static int FindGsfOffset(byte[] data, PeImageLayout pe)
-        {
-            var text = pe.FindSectionByName(".text");
-            if (text == null) return -1;
-            int start = (int)text.PointerToRawData;
-            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
-
-            int tail = IndexOf(data, GsfUniqueTail, start, end);
-            if (tail < 0) return -1;
-            if (IndexOf(data, GsfUniqueTail, tail + 1, end) >= 0) return -1;
-
-            for (int i = tail; i >= Math.Max(start, tail - MaxPrologueScanBack); i--)
-            {
-                if (i + GsfPrologue.Length <= data.Length &&
-                    data.AsSpan(i, GsfPrologue.Length).SequenceEqual(GsfPrologue))
-                    return i;
-            }
-            return -1;
-        }
-
         private static int IndexOf(byte[] data, BytePattern pat, int start, int end)
         {
             int limit = end - pat.Length;
@@ -799,18 +619,17 @@ namespace MirrorsEdgeTweaks.Helpers
             return -1;
         }
 
-        // Fixed byte sequences (no wildcards) reuse the same matcher via the implicit conversion.
         private static int IndexOf(byte[] data, byte[] pat, int start, int end)
             => IndexOf(data, (BytePattern)pat, start, end);
 
-        // A byte pattern with optional wildcard positions. Lets a single hook signature stay unique
-        // across builds (wildcarding the few version-varying absolute-address operands) and survive its
-        // own detour (wildcarding the displaced bytes the E9 overwrites). A plain byte[] converts to an
-        // all-fixed pattern, so non-wildcard call sites are unchanged.
+        // Matches bytes with optional wildcards, so a locator can skip per-build absolute addresses
+        // and the bytes its own detour overwrites.
+        // A plain byte[] converts to a pattern without wildcards.
         private readonly struct BytePattern
         {
             private readonly byte[] _bytes;
-            private readonly bool[] _fixed; // true => _bytes[i] must match; false => wildcard
+            // False marks a wildcard position.
+            private readonly bool[] _fixed;
 
             private BytePattern(byte[] bytes, bool[] fixedMask)
             {
@@ -827,7 +646,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 return new BytePattern(bytes, fixedMask);
             }
 
-            // "8B 06 ?? FF": whitespace-separated hex bytes, with "??" marking a wildcard position.
+            // Parses whitespace-separated hex bytes such as "8B 06 ?? FF", where "??" is a wildcard.
             public static BytePattern Parse(string spec)
             {
                 string[] tokens = spec.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
@@ -836,7 +655,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 for (int i = 0; i < tokens.Length; i++)
                 {
                     if (tokens[i] == "??")
-                        continue; // wildcard: byte 0, not fixed
+                        continue;
                     bytes[i] = Convert.ToByte(tokens[i], 16);
                     fixedMask[i] = true;
                 }

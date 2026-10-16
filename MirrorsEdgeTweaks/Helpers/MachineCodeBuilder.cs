@@ -63,24 +63,19 @@ namespace MirrorsEdgeTweaks.Helpers
             EmitInt32(rel);
         }
 
-        public void EmitJz(string label)
-        {
-            int position = _code.Count;
-            Emit(new byte[] { 0x0F, 0x84, 0x00, 0x00, 0x00, 0x00 });
-            _pendingJumps.Add(new PendingJump(position, JumpKind.Jcc6, label));
-        }
+        public void EmitJz(string label) => EmitJcc(0x84, label);
+        public void EmitJnz(string label) => EmitJcc(0x85, label);
+        public void EmitJle(string label) => EmitJcc(0x8E, label);
+        public void EmitJge(string label) => EmitJcc(0x8D, label);
+        public void EmitJb(string label) => EmitJcc(0x82, label);
+        public void EmitJae(string label) => EmitJcc(0x83, label);
+        public void EmitJbe(string label) => EmitJcc(0x86, label);
 
-        public void EmitJnz(string label)
+        // condByte is the second opcode byte of the near form 0F 8x rel32, such as 0x8E for jle.
+        private void EmitJcc(byte condByte, string label)
         {
             int position = _code.Count;
-            Emit(new byte[] { 0x0F, 0x85, 0x00, 0x00, 0x00, 0x00 });
-            _pendingJumps.Add(new PendingJump(position, JumpKind.Jcc6, label));
-        }
-
-        public void EmitJle(string label)
-        {
-            int position = _code.Count;
-            Emit(new byte[] { 0x0F, 0x8E, 0x00, 0x00, 0x00, 0x00 });
+            Emit(new byte[] { 0x0F, condByte, 0x00, 0x00, 0x00, 0x00 });
             _pendingJumps.Add(new PendingJump(position, JumpKind.Jcc6, label));
         }
 
