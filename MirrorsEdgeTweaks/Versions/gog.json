@@ -13,6 +13,14 @@
         "FOutputDeviceFile.FileArchive": "0x01F978D4",
         "FOutputDeviceFile.Filename": "0x01F978D8",
         "FmtPercentS":              "0x01CD0740",
+        "GMalloc":                  "0x02018708",
+        "FFrame.Serialize":         "0x0113EE90",
+        "FFrame.SerializeSlot":     "0x01BC32DC",
+        "FStateFrame.SerializeSlot": "0x01BC3378",
+        "FFrame.GetStackTrace":     "0x0114F840",
+        "UObject.GetFullName":      "0x01104A10",
+        "UObject.execScriptTrace":  "0x011489C0",
+        "UObject.execScriptTraceEntry": "0x01F728C0",
         "GSystemSettings.ScreenPercentage": "0x01FFA890",
         "Const_001f":               "0x01AA2E64",
         "Const_1f":                 "0x01A94A98",
@@ -37,6 +45,13 @@
             "size": 6,
             "return_offset": 6,
             "scan_start": "0x00406B00",
+            "scan_size": 512
+        },
+        "fileSerialize_openCheck": {
+            "pattern": "39 5A 04 0F 84 C0 01 00 00",
+            "size": 9,
+            "return_offset": 9,
+            "scan_start": "0x01133900",
             "scan_size": 512
         },
         "scaleViewport_centering": {

@@ -157,6 +157,16 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
+        // The fixed size of a .text padding cave, or int.MaxValue for a growable .cave section.
+        public int Capacity
+        {
+            get
+            {
+                EnsureSection();
+                return _usingTextPadding ? _sectionRawSize : int.MaxValue;
+            }
+        }
+
         // Frees cave space down to `offset` (section-relative) zero filling the reclaimed range so a
         // reapplied patch reuses the same region instead of growing the cave. A patch that owns the
         // top of the cave calls this with its own base before reallocating
