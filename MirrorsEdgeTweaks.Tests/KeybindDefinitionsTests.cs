@@ -5,7 +5,7 @@ namespace MirrorsEdgeTweaks.Tests
     public class KeybindDefinitionsTests
     {
         [Fact]
-        public void KeybindMap_ContainsAllNineteenKeybindFields()
+        public void KeybindMap_ContainsExactlyTheExpectedKeybindFields()
         {
             string[] expected =
             {
@@ -15,10 +15,10 @@ namespace MirrorsEdgeTweaks.Tests
                 "LevelStatsKeyTextBox", "TriggersVolumesKeyTextBox", "ShowCollisionKeyTextBox",
                 "NoclipKeyTextBox", "SaveStateKeyTextBox", "LoadSavedStateKeyTextBox",
                 "SaveTimerLocationKeyTextBox", "DeleteViewedActorKeyTextBox",
-                "ScrollDownMacroKeyTextBox", "ScrollUpMacroKeyTextBox"
+                "SoftimerMenuKeyTextBox", "ScrollDownMacroKeyTextBox", "ScrollUpMacroKeyTextBox"
             };
 
-            Assert.Equal(19, KeybindDefinitions.KeybindMap.Count);
+            Assert.Equal(expected.Length, KeybindDefinitions.KeybindMap.Count);
             foreach (var name in expected)
             {
                 Assert.True(KeybindDefinitions.KeybindMap.ContainsKey(name), $"Missing keybind entry: {name}");
@@ -32,6 +32,7 @@ namespace MirrorsEdgeTweaks.Tests
         [InlineData("ScrollUpMacroKeyTextBox", KeybindType.Macro)]
         [InlineData("RestartLevelKeyTextBox", KeybindType.Standard)]
         [InlineData("KillBotsKeyTextBox", KeybindType.Standard)]
+        [InlineData("SoftimerMenuKeyTextBox", KeybindType.Standard)]
         public void KeybindMap_HasExpectedType(string field, KeybindType expectedType)
         {
             Assert.Equal(expectedType, KeybindDefinitions.KeybindMap[field].Type);
@@ -42,6 +43,7 @@ namespace MirrorsEdgeTweaks.Tests
         {
             Assert.Equal("RestartLevel", KeybindDefinitions.KeybindMap["RestartLevelKeyTextBox"].SetCommand);
             Assert.Equal("nxvis collision", KeybindDefinitions.KeybindMap["ShowCollisionKeyTextBox"].SetCommand);
+            Assert.Equal("SofTimerMenu", KeybindDefinitions.KeybindMap["SoftimerMenuKeyTextBox"].SetCommand);
         }
 
         [Fact]

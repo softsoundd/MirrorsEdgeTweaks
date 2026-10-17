@@ -1376,10 +1376,10 @@
 
                             <Expander Style="{StaticResource SectionExpander}">
                                 <Expander.Header>
-                                    <TextBlock Text="Macro Keybinds (Softimer)" Style="{StaticResource SectionExpanderHeaderText}" />
+                                    <TextBlock Text="Softimer Keybinds" Style="{StaticResource SectionExpanderHeaderText}" />
                                 </Expander.Header>
 
-                            <ItemsControl ItemsSource="{Binding Keybinds.MacroKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
+                            <ItemsControl ItemsSource="{Binding Keybinds.SoftimerKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
 
                             </Expander>
                             

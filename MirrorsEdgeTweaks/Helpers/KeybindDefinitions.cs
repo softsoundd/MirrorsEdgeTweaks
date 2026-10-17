@@ -15,8 +15,8 @@ namespace MirrorsEdgeTweaks.Helpers
         }
     }
 
-    // Static keybind metadata: the mapping of UI text-box names to their in-game console
-    // commands, and the WPF-key-to-UE3-key name translation table.
+    // KeybindMap holds each keybind's commands and type under the name KeybindsViewModel looks up.
+    // Ue3KeyMap translates WPF key names into UE3 key names.
     public static class KeybindDefinitions
     {
         public static readonly Dictionary<string, KeybindInfo> KeybindMap = new Dictionary<string, KeybindInfo>
@@ -42,6 +42,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 "TpToSavedLocation"),
             ["SaveTimerLocationKeyTextBox"] = new KeybindInfo("SaveTimerLocation"),
             ["DeleteViewedActorKeyTextBox"] = new KeybindInfo("DestroyViewedActor"),
+            ["SoftimerMenuKeyTextBox"] = new KeybindInfo("SofTimerMenu"),
             ["ScrollDownMacroKeyTextBox"] = new KeybindInfo("ScrollDownMacroKey", "ScrollDownMacroKey", KeybindType.Macro),
             ["ScrollUpMacroKeyTextBox"] = new KeybindInfo("ScrollUpMacroKey", "ScrollUpMacroKey", KeybindType.Macro),
         };

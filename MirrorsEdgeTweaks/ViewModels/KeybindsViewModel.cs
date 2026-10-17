@@ -35,6 +35,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
     public partial class KeybindsViewModel : ObservableObject
     {
+        private const string PlayerInputSection = "[Engine.PlayerInput]";
+
         private readonly IDialogService _dialogService;
         private readonly GameSession _session;
 
@@ -57,12 +59,13 @@ namespace MirrorsEdgeTweaks.ViewModels
         public KeybindEntryViewModel LoadSavedState { get; }
         public KeybindEntryViewModel SaveTimerLocation { get; }
         public KeybindEntryViewModel DeleteViewedActor { get; }
+        public KeybindEntryViewModel SoftimerMenu { get; }
         public KeybindEntryViewModel ScrollDownMacro { get; }
         public KeybindEntryViewModel ScrollUpMacro { get; }
 
         public IReadOnlyList<KeybindEntryViewModel> CustomKeybinds { get; }
         public IReadOnlyList<KeybindEntryViewModel> CheatTrainerKeybinds { get; }
-        public IReadOnlyList<KeybindEntryViewModel> MacroKeybinds { get; }
+        public IReadOnlyList<KeybindEntryViewModel> SoftimerKeybinds { get; }
 
         public KeybindsViewModel(IDialogService dialogService, GameSession session)
         {
@@ -139,6 +142,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
                 "Deletes the bot or object currently in view. Some objects connected to essential world geometry are excluded.");
 
+            SoftimerMenu = Make("SoftimerMenuKeyTextBox", "Softimer Menu:", "Softimer Menu Keybind Information",
+                "Opens the Softimer Menu, which provides various speedrunning-related features, including quick chapter + checkpoint launching and gameplay modifiers.\n\n" +
+                "Note: Requires the Tweaks Scripts package. The Softimer Menu is available while Softimer is active and when the player is in a level.");
+
             ScrollDownMacro = Make("ScrollDownMacroKeyTextBox", "Scroll Down Macro Key:", "Scroll Down Macro Key Information",
                 "Sets the keybind that macros the action assigned to 'Scroll Down' in the game's control settings.\n\n" +
                 "Note: Requires the Tweaks Scripts package. Macros are available while Softimer is active.");
@@ -156,9 +163,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 Noclip, SaveState, LoadSavedState, SaveTimerLocation, DeleteViewedActor,
             };
-            MacroKeybinds = new[]
+            SoftimerKeybinds = new[]
             {
-                ScrollDownMacro, ScrollUpMacro,
+                SoftimerMenu, ScrollDownMacro, ScrollUpMacro,
             };
         }
 
@@ -173,9 +180,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (_isLoading || _session.IsProcessingGameDirectory)
                 return;
 
-            var info = entry.Info;
-
-            if (info.Type == KeybindType.Macro)
+            if (entry.Info.Type == KeybindType.Macro)
             {
                 if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
                     return;
@@ -196,51 +201,40 @@ namespace MirrorsEdgeTweaks.ViewModels
             await Task.Yield();
 
             if (result is string ue3Key)
-            {
-                await _session.ApplyGate.RunAsync(async () =>
-                {
-                    if (string.IsNullOrEmpty(ue3Key))
-                    {
-                        entry.DisplayKey = string.Empty;
-                        switch (info.Type)
-                        {
-                            case KeybindType.GodMode:
-                                await RemoveGodModeKeybind();
-                                break;
-                            case KeybindType.TriggersVolumes:
-                                await RemoveTriggersVolumesKeybind();
-                                break;
-                            case KeybindType.Macro:
-                                await UpdateMacroKeybind(info.RemoveCommand, "");
-                                break;
-                            default:
-                                await RemoveKeybind(info.RemoveCommand);
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        entry.DisplayKey = ue3Key;
-                        switch (info.Type)
-                        {
-                            case KeybindType.GodMode:
-                                await UpdateGodModeKeybind(entry, ue3Key);
-                                break;
-                            case KeybindType.TriggersVolumes:
-                                await UpdateTriggersVolumesKeybind(entry, ue3Key);
-                                break;
-                            case KeybindType.Macro:
-                                if (!await UpdateMacroKeybind(info.SetCommand, ue3Key))
-                                    entry.DisplayKey = string.Empty;
-                                break;
-                            default:
-                                await UpdateKeybind(entry, info.SetCommand, ue3Key);
-                                break;
-                        }
-                    }
-                });
-            }
+                await ApplyKeyAsync(entry, ue3Key);
         }
+
+        // DisplayKey is updated only after the change is saved, so it never shows a rejected key.
+        internal Task ApplyKeyAsync(KeybindEntryViewModel entry, string ue3Key) =>
+            _session.ApplyGate.RunAsync(async () =>
+            {
+                var info = entry.Info;
+                bool saved;
+
+                if (string.IsNullOrEmpty(ue3Key))
+                {
+                    saved = info.Type switch
+                    {
+                        KeybindType.GodMode => await RemoveToggleKeybind(GodModeToggle),
+                        KeybindType.TriggersVolumes => await RemoveToggleKeybind(TriggersVolumesToggle),
+                        KeybindType.Macro => await UpdateMacroKeybind(info.RemoveCommand, ""),
+                        _ => await RemoveKeybind(info.RemoveCommand),
+                    };
+                }
+                else
+                {
+                    saved = info.Type switch
+                    {
+                        KeybindType.GodMode => await UpdateToggleKeybind(GodModeToggle, ue3Key),
+                        KeybindType.TriggersVolumes => await UpdateToggleKeybind(TriggersVolumesToggle, ue3Key),
+                        KeybindType.Macro => await UpdateMacroKeybind(info.SetCommand, ue3Key),
+                        _ => await UpdateKeybind(info.SetCommand, ue3Key),
+                    };
+                }
+
+                if (saved)
+                    entry.DisplayKey = ue3Key;
+            });
 
 
         public void LoadCustomKeybinds()
@@ -249,6 +243,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _isLoading = true;
 
+                foreach (var entry in CustomKeybinds.Concat(CheatTrainerKeybinds).Concat(SoftimerKeybinds))
+                {
+                    if (entry.Info.Type != KeybindType.Macro)
+                        entry.DisplayKey = string.Empty;
+                }
+
                 string tdInputPath = TdInputIniPath;
 
                 if (!File.Exists(tdInputPath))
@@ -256,35 +256,28 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 string[] lines = File.ReadAllLines(tdInputPath);
 
-                bool inPlayerInput = false;
-                foreach (string line in lines)
+                foreach (int i in PlayerInputLineIndexes(lines))
                 {
-                    if (line.Trim().StartsWith("["))
-                    {
-                        inPlayerInput = line.Trim() == "[Engine.PlayerInput]";
-                        continue;
-                    }
-
-                    if (!inPlayerInput)
-                        continue;
+                    string line = lines[i];
 
                     if (line.Contains("Command=\"RestartLevel\"")) SetFromBinding(line, RestartLevel);
                     else if (line.Contains("Command=\"RestartFromLastCheckpoint\"")) SetFromBinding(line, LoadLastCheckpoint);
                     else if (line.Contains("Command=\"TriggerRestartRaceblink\"")) SetFromBinding(line, RestartTimeTrial);
                     else if (line.Contains("Command=\"set TdPlayerController ReactionTimeEnergy 0")) SetFromBinding(line, ResetReactionTime);
-                    else if (line.Contains("Command=\"EnableGodMode\"")) SetFromBinding(line, GodMode);
+                    else if (GodModeToggle.IsKeyLine(line)) SetFromBinding(line, GodMode);
                     else if (line.Contains("Command=\"killbots\"")) SetFromBinding(line, KillBots);
                     else if (line.Contains("Command=\"FreeFlightCamera\"")) SetFromBinding(line, ThirdPerson);
                     else if (line.Contains("Command=\"Showhud\"")) SetFromBinding(line, ToggleHUD);
                     else if (line.Contains("Command=\"stat xunit\"")) SetFromBinding(line, FPSIndicator);
                     else if (line.Contains("Command=\"stat levels\"")) SetFromBinding(line, LevelStats);
-                    else if (line.Contains("Command=\"ShowTriggersAndVolumes\"")) SetFromBinding(line, TriggersVolumes);
+                    else if (TriggersVolumesToggle.IsKeyLine(line)) SetFromBinding(line, TriggersVolumes);
                     else if (line.Contains("Command=\"nxvis collision\"")) SetFromBinding(line, ShowCollision);
                     else if (line.Contains("Command=\"Noclip\"")) SetFromBinding(line, Noclip);
                     else if (line.Contains("Command=\"SaveLocation\"")) SetFromBinding(line, SaveState);
                     else if (line.Contains("Command=\"TpToSavedLocation")) SetFromBinding(line, LoadSavedState);
                     else if (line.Contains("Command=\"SaveTimerLocation\"")) SetFromBinding(line, SaveTimerLocation);
                     else if (line.Contains("Command=\"DestroyViewedActor\"")) SetFromBinding(line, DeleteViewedActor);
+                    else if (line.Contains("Command=\"SofTimerMenu\"")) SetFromBinding(line, SoftimerMenu);
                 }
             }
             catch (Exception ex)
@@ -299,16 +292,15 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private static void SetFromBinding(string line, KeybindEntryViewModel entry)
         {
-            int nameStart = line.IndexOf("Name=\"") + 6;
-            int nameEnd = line.IndexOf("\"", nameStart);
-            if (nameStart > 5 && nameEnd > nameStart)
-            {
-                entry.DisplayKey = line.Substring(nameStart, nameEnd - nameStart);
-            }
+            if (BindingName(line) is string name)
+                entry.DisplayKey = name;
         }
 
         public void LoadMacroKeybinds()
         {
+            ScrollDownMacro.DisplayKey = string.Empty;
+            ScrollUpMacro.DisplayKey = string.Empty;
+
             if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
                 return;
 
@@ -319,11 +311,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string settingsFilePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "TweaksScriptsSettings");
 
                 if (!File.Exists(settingsFilePath))
-                {
-                    ScrollDownMacro.DisplayKey = string.Empty;
-                    ScrollUpMacro.DisplayKey = string.Empty;
                     return;
-                }
 
                 var lines = File.ReadAllLines(settingsFilePath);
 
@@ -350,7 +338,109 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        private async Task UpdateKeybind(KeybindEntryViewModel entry, string command, string key)
+        private async Task<bool> UpdateKeybind(string command, string key)
+        {
+            bool written = await WriteKeybind(key, new[] { command }, lines =>
+            {
+                bool found = false;
+                foreach (int i in PlayerInputLineIndexes(lines))
+                {
+                    if (BindingCommand(lines[i]) == command && BindingName(lines[i]) != null)
+                    {
+                        lines[i] = WithBindingName(lines[i], key);
+                        found = true;
+                    }
+                }
+
+                return found ? new List<string>() : new List<string> { Binding(key, command) };
+            });
+
+            if (!written)
+                return false;
+
+            try
+            {
+                // These functions are not executable via keybinds until their exec flag is added.
+                if (command == "RestartFromLastCheckpoint")
+                {
+                    await ExecFlagPatcher.AddExecFlag(_session.Config.GameDirectoryPath, "TdSPGame", "RestartFromLastCheckpoint");
+                }
+                else if (command == "TriggerRestartRaceblink")
+                {
+                    await ExecFlagPatcher.AddExecFlag(_session.Config.GameDirectoryPath, "TdTimeTrialHUD", "TriggerRestartRaceblink");
+                }
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowMessage("Error", $"Failed to update keybind:\n\n{ex.Message}", DialogMessageType.Error);
+            }
+
+            return true;
+        }
+
+        // Also matches chains that start with command, such as those with an OnRelease part.
+        private Task<bool> RemoveKeybind(string command) =>
+            RemoveBindings(line => BindingCommand(line) is string bound &&
+                (bound == command || bound.StartsWith(command + " |", StringComparison.Ordinal)));
+
+        // The keybind's key runs one of two aliases, and each alias rebinds the key to the other.
+        private sealed record ToggleBinding(string EnableName, string DisableName, string EnableCommand, string DisableCommand)
+        {
+            // The game saves SetBind changes to TdInput.ini, so the key's line can name either alias.
+            public bool IsKeyLine(string line) =>
+                BindingCommand(line) is string command && (command == EnableName || command == DisableName);
+
+            public bool Owns(string line) =>
+                IsKeyLine(line) || (BindingName(line) is string name && (name == EnableName || name == DisableName));
+        }
+
+        private static readonly ToggleBinding GodModeToggle = new("EnableGodMode", "DisableGodMode",
+            "set TdPlayerController bGodMode 1 | set TdKillVolume CollisionType COLLIDE_NoCollision | set TdKillZoneVolume CollisionType COLLIDE_NoCollision | set TdKillZoneKiller CollisionType COLLIDE_NoCollision | set TdFallHeightVolume CollisionType COLLIDE_NoCollision | set TdBarbedWireVolume CollisionType COLLIDE_NoCollision",
+            "set TdPlayerController bGodMode 0 | set TdKillVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneKiller CollisionType COLLIDE_CustomDefault | set TdFallHeightVolume CollisionType COLLIDE_CustomDefault | set TdBarbedWireVolume CollisionType COLLIDE_CustomDefault");
+
+        private static readonly ToggleBinding TriggersVolumesToggle = new("ShowTriggersAndVolumes", "HideTriggersAndVolumes",
+            "show collision | set Trigger bHidden 0 | set TriggerVolume bHidden 0 | set BlockingVolume bHidden 0 | set TdAIBlockingVolume bHidden 0 | set TdAIKeepMovingVolume bHidden 0 | set TdAIPawnBlockingVolume bHidden 0 | set TdBalanceWalkVolume bHidden 0 | set TdBarbedWireVolume bHidden 0 | set TdCheckpointVolume bHidden 0 | set TdConfinedVolumePathNode bHidden 0 | set TdCoverGroupVolume bHidden 0 | set TdFallHeightVolume bHidden 0 | set TdKillVolume bHidden 0 | set TdKillZoneVolume bHidden 0 | set TdLadderVolume bHidden 0 | set TdLedgeWalkVolume bHidden 0 | set TdMovementExclusion bHidden 0 | set TdMovementVolume bHidden 0 | set TdMoveVolumeRenderComponent bHidden 0 | set TdPathLimitsVolume bHidden 0 | set TdSwingVolume bHidden 0 | set TdTriggerVolume bHidden 0 | set TdZiplineVolume bHidden 0",
+            "show collision | set Trigger bHidden 1 | set TriggerVolume bHidden 1 | set BlockingVolume bHidden 1 | set TdAIBlockingVolume bHidden 1 | set TdAIKeepMovingVolume bHidden 1 | set TdAIPawnBlockingVolume bHidden 1 | set TdBalanceWalkVolume bHidden 1 | set TdBarbedWireVolume bHidden 1 | set TdCheckpointVolume bHidden 1 | set TdConfinedVolumePathNode bHidden 1 | set TdCoverGroupVolume bHidden 1 | set TdFallHeightVolume bHidden 1 | set TdKillVolume bHidden 1 | set TdKillZoneVolume bHidden 1 | set TdLadderVolume bHidden 1 | set TdLedgeWalkVolume bHidden 1 | set TdMovementExclusion bHidden 1 | set TdMovementVolume bHidden 1 | set TdMoveVolumeRenderComponent bHidden 1 | set TdPathLimitsVolume bHidden 1 | set TdSwingVolume bHidden 1 | set TdTriggerVolume bHidden 1 | set TdZiplineVolume bHidden 1");
+
+        private Task<bool> UpdateToggleKeybind(ToggleBinding toggle, string key) =>
+            WriteKeybind(key, new[] { toggle.EnableName, toggle.DisableName }, lines =>
+            {
+                string keyLine = Binding(key, toggle.EnableName);
+                string enableLine = Binding(toggle.EnableName, $"{toggle.EnableCommand} | SetBind {key} {toggle.DisableName}");
+                string disableLine = Binding(toggle.DisableName, $"{toggle.DisableCommand} | SetBind {key} {toggle.EnableName}");
+                var pending = new List<string> { keyLine, enableLine, disableLine };
+
+                // The first copy of each line is rewritten in place, and later copies are dropped.
+                var duplicates = new List<int>();
+                foreach (int i in PlayerInputLineIndexes(lines))
+                {
+                    string? replacement =
+                        toggle.IsKeyLine(lines[i]) ? keyLine :
+                        BindingName(lines[i]) == toggle.EnableName ? enableLine :
+                        BindingName(lines[i]) == toggle.DisableName ? disableLine :
+                        null;
+
+                    if (replacement == null)
+                        continue;
+
+                    if (pending.Remove(replacement))
+                        lines[i] = replacement;
+                    else
+                        duplicates.Add(i);
+                }
+                for (int d = duplicates.Count - 1; d >= 0; d--)
+                    lines.RemoveAt(duplicates[d]);
+
+                return pending;
+            });
+
+        private Task<bool> RemoveToggleKeybind(ToggleBinding toggle) => RemoveBindings(toggle.Owns);
+
+
+        // Rejects key with a warning when a macro or a command outside ownCommands already uses it.
+        // Otherwise, updateBindings rewrites the keybind's lines and returns the ones still to add.
+        // Returns whether TdInput.ini was written.
+        private async Task<bool> WriteKeybind(string key, string[] ownCommands, Func<List<string>, List<string>> updateBindings)
         {
             try
             {
@@ -362,558 +452,167 @@ namespace MirrorsEdgeTweaks.ViewModels
                         $"Cannot set keybind, 'TdInput.ini' file is missing from \"{tdInputPath}\".\n\n" +
                         "Launch Mirror's Edge at least once to create the configuration file.",
                         DialogMessageType.Error);
-                    return;
+                    return false;
                 }
 
-                string? conflictingCommand = null;
-
-                await Task.Run(() =>
+                string? macroConflict = CheckMacroKeybindConflict(key);
+                if (macroConflict != null)
                 {
-                    string[] lines = File.ReadAllLines(tdInputPath);
-                    bool foundSection = false;
-                    bool foundBinding = false;
-                    int mouseSmoothingIndex = -1;
+                    await _dialogService.ShowMessageAsync("Duplicate Key Binding",
+                        $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
+                        "Choose a different key.",
+                        DialogMessageType.Warning);
+                    return false;
+                }
 
-                    foundSection = false;
-                    for (int i = 0; i < lines.Length; i++)
-                    {
-                        if (lines[i].Trim() == "[Engine.PlayerInput]")
-                        {
-                            foundSection = true;
-                            continue;
-                        }
+                var lines = new List<string>(await Task.Run(() => File.ReadAllLines(tdInputPath)));
 
-                        if (foundSection && lines[i].Trim().StartsWith("[") && lines[i].Trim().EndsWith("]"))
-                        {
-                            break;
-                        }
-
-                        if (foundSection && lines[i].Contains("Bindings=") && lines[i].Contains($"Name=\"{key}\""))
-                        {
-                            int cmdStart = lines[i].IndexOf("Command=\"") + 9;
-                            int cmdEnd = lines[i].IndexOf("\"", cmdStart);
-                            if (cmdStart > 8 && cmdEnd > cmdStart)
-                            {
-                                string existingCommand = lines[i].Substring(cmdStart, cmdEnd - cmdStart);
-                                if (existingCommand != command)
-                                {
-                                    conflictingCommand = existingCommand;
-                                    return;
-                                }
-                            }
-                        }
-                    }
-
-                    foundSection = false;
-                    for (int i = 0; i < lines.Length; i++)
-                    {
-                        if (lines[i].Trim() == "[Engine.PlayerInput]")
-                        {
-                            foundSection = true;
-                        }
-
-                        if (foundSection && lines[i].Contains("bEnableMouseSmoothing"))
-                        {
-                            mouseSmoothingIndex = i;
-                        }
-
-                        if (lines[i].Contains($"Command=\"{command}\""))
-                        {
-                            int nameStart = lines[i].IndexOf("Name=\"") + 6;
-                            int nameEnd = lines[i].IndexOf("\"", nameStart);
-                            if (nameStart > 5 && nameEnd > nameStart)
-                            {
-                                string beforeName = lines[i].Substring(0, nameStart);
-                                string afterName = lines[i].Substring(nameEnd);
-                                lines[i] = beforeName + key + afterName;
-                            }
-                            foundBinding = true;
-                        }
-                    }
-
-                    if (!foundBinding && mouseSmoothingIndex >= 0)
-                    {
-                        var newLines = new List<string>(lines);
-                        string newBinding = $"Bindings=(Name=\"{key}\",Command=\"{command}\",Control=False,Shift=False,Alt=False)";
-                        newLines.Insert(mouseSmoothingIndex + 1, newBinding);
-                        lines = newLines.ToArray();
-                    }
-
-                    FileAttributes attributes = File.GetAttributes(tdInputPath);
-                    bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-
-                    if (wasReadOnly)
-                    {
-                        File.SetAttributes(tdInputPath, attributes & ~FileAttributes.ReadOnly);
-                    }
-
-                    File.WriteAllLines(tdInputPath, lines);
-
-                    if (wasReadOnly)
-                    {
-                        File.SetAttributes(tdInputPath, attributes);
-                    }
-                });
-
+                string? conflictingCommand = FindConflictingCommand(lines, key, ownCommands);
                 if (conflictingCommand != null)
                 {
                     await _dialogService.ShowMessageAsync("Duplicate Key Binding",
                         $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
                         "Choose a different key or remove the existing binding in TdInput.ini first.",
                         DialogMessageType.Warning);
-
-                    entry.DisplayKey = string.Empty;
+                    return false;
                 }
 
-                if (conflictingCommand == null)
+                List<string> missingLines = updateBindings(lines);
+                if (missingLines.Count > 0)
                 {
-                    string? macroConflict = CheckMacroKeybindConflict(key);
-                    if (macroConflict != null)
+                    int insertIndex = FindBindingInsertIndex(lines);
+                    if (insertIndex < 0)
                     {
-                        conflictingCommand = macroConflict;
-                        await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                            $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                            "Choose a different key.",
-                            DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Error",
+                            $"Cannot set keybind because 'TdInput.ini' has no {PlayerInputSection} section.",
+                            DialogMessageType.Error);
+                        return false;
                     }
+
+                    lines.InsertRange(insertIndex, missingLines);
                 }
 
-                if (conflictingCommand == null)
-                {
-                    // need to add exec flags to these functions, by default they are not executable via keybinds
-                    if (command == "RestartFromLastCheckpoint")
-                    {
-                        await ExecFlagPatcher.AddExecFlag(_session.Config.GameDirectoryPath, "TdSPGame", "RestartFromLastCheckpoint");
-                    }
-                    else if (command == "TriggerRestartRaceblink")
-                    {
-                        await ExecFlagPatcher.AddExecFlag(_session.Config.GameDirectoryPath, "TdTimeTrialHUD", "TriggerRestartRaceblink");
-                    }
-                }
+                await Task.Run(() => WritePreservingReadOnly(tdInputPath, lines));
+                return true;
             }
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to update keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                return false;
             }
         }
 
-        private async Task RemoveKeybind(string command)
+        // Returns whether the bindings are gone, which includes when TdInput.ini does not exist.
+        private async Task<bool> RemoveBindings(Func<string, bool> isOwned)
         {
             try
             {
                 string tdInputPath = TdInputIniPath;
 
                 if (!File.Exists(tdInputPath))
-                {
-                    return;
-                }
+                    return true;
 
                 await Task.Run(() =>
                 {
                     string[] lines = File.ReadAllLines(tdInputPath);
-                    List<string> newLines = new List<string>();
-
-                    foreach (string line in lines)
-                    {
-                        if (!line.Contains($"Command=\"{command}\""))
-                        {
-                            newLines.Add(line);
-                        }
-                    }
-
-                    if (newLines.Count < lines.Length)
-                    {
-                        FileAttributes attributes = File.GetAttributes(tdInputPath);
-                        bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-
-                        if (wasReadOnly)
-                        {
-                            File.SetAttributes(tdInputPath, attributes & ~FileAttributes.ReadOnly);
-                        }
-
-                        File.WriteAllLines(tdInputPath, newLines.ToArray());
-
-                        if (wasReadOnly)
-                        {
-                            File.SetAttributes(tdInputPath, attributes);
-                        }
-                    }
+                    var owned = PlayerInputLineIndexes(lines).Where(i => isOwned(lines[i])).ToHashSet();
+                    if (owned.Count > 0)
+                        WritePreservingReadOnly(tdInputPath, lines.Where((_, i) => !owned.Contains(i)));
                 });
+                return true;
             }
             catch (Exception ex)
             {
                 _dialogService.ShowMessage("Error", $"Failed to remove keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                return false;
             }
         }
 
-
-        private async Task UpdateGodModeKeybind(KeybindEntryViewModel entry, string key)
+        // Bindings to one of ownCommands do not count as conflicts.
+        private static string? FindConflictingCommand(IReadOnlyList<string> lines, string key, params string[] ownCommands)
         {
-            try
+            foreach (int i in PlayerInputLineIndexes(lines))
             {
-                string tdInputPath = TdInputIniPath;
-
-                if (!File.Exists(tdInputPath))
-                {
-                    _dialogService.ShowMessage("File Not Found",
-                        "TdInput.ini not found. Launch Mirror's Edge at least once to create the configuration file.",
-                        DialogMessageType.Error);
-                    return;
-                }
-
-                var lines = await Task.Run(() => File.ReadAllLines(tdInputPath));
-                bool inPlayerInput = false;
-                string? conflictingCommand = null;
-
-                foreach (var line in lines)
-                {
-                    if (line.Trim().StartsWith("["))
-                    {
-                        inPlayerInput = line.Trim() == "[Engine.PlayerInput]";
-                    }
-                    else if (inPlayerInput && line.Contains($"Name=\"{key}\"") && line.Contains("Command="))
-                    {
-                        int commandStart = line.IndexOf("Command=\"") + 9;
-                        int commandEnd = line.IndexOf("\"", commandStart);
-                        if (commandStart > 8 && commandEnd > commandStart)
-                        {
-                            string existingCommand = line.Substring(commandStart, commandEnd - commandStart);
-
-                            if (existingCommand != "EnableGodMode" &&
-                                !existingCommand.Contains("bGodMode"))
-                            {
-                                conflictingCommand = existingCommand;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (conflictingCommand != null)
-                {
-                    await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
-                        "Choose a different key or remove the existing binding in TdInput.ini first.",
-                        DialogMessageType.Warning);
-                    entry.DisplayKey = string.Empty;
-                    return;
-                }
-
-                string? macroConflict = CheckMacroKeybindConflict(key);
-                if (macroConflict != null)
-                {
-                    await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                        "Choose a different key.",
-                        DialogMessageType.Warning);
-                    entry.DisplayKey = string.Empty;
-                    return;
-                }
-
-                var modifiedLines = new List<string>();
-                inPlayerInput = false;
-                bool foundEnableGodMode = false;
-                bool foundDisableGodMode = false;
-                bool foundEnableGodModeCommand = false;
-                int bEnableMouseSmoothingIndex = -1;
-
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    var line = lines[i];
-
-                    if (line.Trim().StartsWith("["))
-                    {
-                        inPlayerInput = line.Trim() == "[Engine.PlayerInput]";
-                        modifiedLines.Add(line);
-                    }
-                    else if (inPlayerInput && line.Contains("Command=\"EnableGodMode\"") && !line.Contains("Name=\"EnableGodMode\""))
-                    {
-                        if (!foundEnableGodMode)
-                        {
-                            modifiedLines.Add($"Bindings=(Name=\"{key}\",Command=\"EnableGodMode\",Control=False,Shift=False,Alt=False)");
-                            foundEnableGodMode = true;
-                        }
-                    }
-                    else if (inPlayerInput && line.Contains("Name=\"EnableGodMode\""))
-                    {
-                        modifiedLines.Add($"Bindings=(Name=\"EnableGodMode\",Command=\"set TdPlayerController bGodMode 1 | set TdKillVolume CollisionType COLLIDE_NoCollision | set TdKillZoneVolume CollisionType COLLIDE_NoCollision | set TdKillZoneKiller CollisionType COLLIDE_NoCollision | set TdFallHeightVolume CollisionType COLLIDE_NoCollision | set TdBarbedWireVolume CollisionType COLLIDE_NoCollision | SetBind {key} DisableGodMode\",Control=False,Shift=False,Alt=False)");
-                        foundEnableGodModeCommand = true;
-                    }
-                    else if (inPlayerInput && line.Contains("Name=\"DisableGodMode\""))
-                    {
-                        modifiedLines.Add($"Bindings=(Name=\"DisableGodMode\",Command=\"set TdPlayerController bGodMode 0 | set TdKillVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneKiller CollisionType COLLIDE_CustomDefault | set TdFallHeightVolume CollisionType COLLIDE_CustomDefault | set TdBarbedWireVolume CollisionType COLLIDE_CustomDefault | SetBind {key} EnableGodMode\",Control=False,Shift=False,Alt=False)");
-                        foundDisableGodMode = true;
-                    }
-                    else
-                    {
-                        if (inPlayerInput && line.Contains("bEnableMouseSmoothing"))
-                        {
-                            bEnableMouseSmoothingIndex = modifiedLines.Count;
-                        }
-                        modifiedLines.Add(line);
-                    }
-                }
-
-                if (!foundEnableGodMode || !foundEnableGodModeCommand || !foundDisableGodMode)
-                {
-                    if (bEnableMouseSmoothingIndex >= 0)
-                    {
-                        if (!foundEnableGodMode)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"{key}\",Command=\"EnableGodMode\",Control=False,Shift=False,Alt=False)");
-                            bEnableMouseSmoothingIndex++;
-                        }
-                        if (!foundEnableGodModeCommand)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"EnableGodMode\",Command=\"set TdPlayerController bGodMode 1 | set TdKillVolume CollisionType COLLIDE_NoCollision | set TdKillZoneVolume CollisionType COLLIDE_NoCollision | set TdKillZoneKiller CollisionType COLLIDE_NoCollision | set TdFallHeightVolume CollisionType COLLIDE_NoCollision | set TdBarbedWireVolume CollisionType COLLIDE_NoCollision | SetBind {key} DisableGodMode\",Control=False,Shift=False,Alt=False)");
-                            bEnableMouseSmoothingIndex++;
-                        }
-                        if (!foundDisableGodMode)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"DisableGodMode\",Command=\"set TdPlayerController bGodMode 0 | set TdKillVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneVolume CollisionType COLLIDE_CustomDefault | set TdKillZoneKiller CollisionType COLLIDE_CustomDefault | set TdFallHeightVolume CollisionType COLLIDE_CustomDefault | set TdBarbedWireVolume CollisionType COLLIDE_CustomDefault | SetBind {key} EnableGodMode\",Control=False,Shift=False,Alt=False)");
-                        }
-                    }
-                }
-
-                var fileInfo = new FileInfo(tdInputPath);
-                bool wasReadOnly = fileInfo.IsReadOnly;
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = false;
-                }
-
-                await Task.Run(() => File.WriteAllLines(tdInputPath, modifiedLines));
-
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                if (BindingName(lines[i]) == key && BindingCommand(lines[i]) is string command && !ownCommands.Contains(command))
+                    return command;
             }
-            catch (Exception ex)
+
+            return null;
+        }
+
+        // Returns the index just after bEnableMouseSmoothing in [Engine.PlayerInput].
+        // Returns the index just after the section header when that line is missing.
+        // Returns -1 when the section is missing.
+        private static int FindBindingInsertIndex(IReadOnlyList<string> lines)
+        {
+            foreach (int i in PlayerInputLineIndexes(lines))
             {
-                _dialogService.ShowMessage("Error", $"Failed to update God Mode keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                if (lines[i].TrimStart().StartsWith("bEnableMouseSmoothing"))
+                    return i + 1;
+            }
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Trim() == PlayerInputSection)
+                    return i + 1;
+            }
+
+            return -1;
+        }
+
+        private static IEnumerable<int> PlayerInputLineIndexes(IReadOnlyList<string> lines)
+        {
+            bool inPlayerInput = false;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                string trimmed = lines[i].Trim();
+                if (trimmed.StartsWith("["))
+                    inPlayerInput = trimmed == PlayerInputSection;
+                else if (inPlayerInput)
+                    yield return i;
             }
         }
 
-        private async Task RemoveGodModeKeybind()
+        private static string Binding(string name, string command) =>
+            $"Bindings=(Name=\"{name}\",Command=\"{command}\",Control=False,Shift=False,Alt=False)";
+
+        private static string? BindingName(string line) => ReadQuotedValue(line, "Name=\"");
+
+        private static string? BindingCommand(string line) => ReadQuotedValue(line, "Command=\"");
+
+        private static string WithBindingName(string line, string name)
         {
-            try
-            {
-                string tdInputPath = TdInputIniPath;
-
-                if (!File.Exists(tdInputPath))
-                    return;
-
-                var lines = await Task.Run(() => File.ReadAllLines(tdInputPath));
-                var modifiedLines = lines.Where(line =>
-                    !line.Contains("Command=\"EnableGodMode\"") &&
-                    !line.Contains("Name=\"EnableGodMode\"") &&
-                    !line.Contains("Name=\"DisableGodMode\"")).ToList();
-
-                var fileInfo = new FileInfo(tdInputPath);
-                bool wasReadOnly = fileInfo.IsReadOnly;
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = false;
-                }
-
-                await Task.Run(() => File.WriteAllLines(tdInputPath, modifiedLines));
-
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to remove God Mode keybind:\n\n{ex.Message}", DialogMessageType.Error);
-            }
+            int start = line.IndexOf("Name=\"", StringComparison.Ordinal) + "Name=\"".Length;
+            int end = line.IndexOf('"', start);
+            return line[..start] + name + line[end..];
         }
 
-
-        private async Task UpdateTriggersVolumesKeybind(KeybindEntryViewModel entry, string key)
+        private static string? ReadQuotedValue(string line, string prefix)
         {
-            try
-            {
-                string tdInputPath = TdInputIniPath;
+            int start = line.IndexOf(prefix, StringComparison.Ordinal);
+            if (start < 0)
+                return null;
 
-                if (!File.Exists(tdInputPath))
-                {
-                    _dialogService.ShowMessage("File Not Found",
-                        "TdInput.ini not found. Launch Mirror's Edge at least once to create the configuration file.",
-                        DialogMessageType.Error);
-                    return;
-                }
-
-                var lines = await Task.Run(() => File.ReadAllLines(tdInputPath));
-                bool inPlayerInput = false;
-                string? conflictingCommand = null;
-
-                foreach (var line in lines)
-                {
-                    if (line.Trim().StartsWith("["))
-                    {
-                        inPlayerInput = line.Trim() == "[Engine.PlayerInput]";
-                    }
-                    else if (inPlayerInput && line.Contains($"Name=\"{key}\"") && line.Contains("Command="))
-                    {
-                        int commandStart = line.IndexOf("Command=\"") + 9;
-                        int commandEnd = line.IndexOf("\"", commandStart);
-                        if (commandStart > 8 && commandEnd > commandStart)
-                        {
-                            string existingCommand = line.Substring(commandStart, commandEnd - commandStart);
-
-                            if (existingCommand != "ShowTriggersAndVolumes" &&
-                                !existingCommand.Contains("show collision"))
-                            {
-                                conflictingCommand = existingCommand;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (conflictingCommand != null)
-                {
-                    await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already bound to '{conflictingCommand}'.\n\n" +
-                        "Choose a different key or remove the existing binding in TdInput.ini first.",
-                        DialogMessageType.Warning);
-                    entry.DisplayKey = string.Empty;
-                    return;
-                }
-
-                string? macroConflict = CheckMacroKeybindConflict(key);
-                if (macroConflict != null)
-                {
-                    await _dialogService.ShowMessageAsync("Duplicate Key Binding",
-                        $"The key '{key}' is already assigned to '{macroConflict}'.\n\n" +
-                        "Choose a different key.",
-                        DialogMessageType.Warning);
-                    entry.DisplayKey = string.Empty;
-                    return;
-                }
-
-                string showCommand = "show collision | set Trigger bHidden 0 | set TriggerVolume bHidden 0 | set BlockingVolume bHidden 0 | set TdAIBlockingVolume bHidden 0 | set TdAIKeepMovingVolume bHidden 0 | set TdAIPawnBlockingVolume bHidden 0 | set TdBalanceWalkVolume bHidden 0 | set TdBarbedWireVolume bHidden 0 | set TdCheckpointVolume bHidden 0 | set TdConfinedVolumePathNode bHidden 0 | set TdCoverGroupVolume bHidden 0 | set TdFallHeightVolume bHidden 0 | set TdKillVolume bHidden 0 | set TdKillZoneVolume bHidden 0 | set TdLadderVolume bHidden 0 | set TdLedgeWalkVolume bHidden 0 | set TdMovementExclusion bHidden 0 | set TdMovementVolume bHidden 0 | set TdMoveVolumeRenderComponent bHidden 0 | set TdPathLimitsVolume bHidden 0 | set TdSwingVolume bHidden 0 | set TdTriggerVolume bHidden 0 | set TdZiplineVolume bHidden 0 | SetBind " + key + " HideTriggersAndVolumes";
-                string hideCommand = "show collision | set Trigger bHidden 1 | set TriggerVolume bHidden 1 | set BlockingVolume bHidden 1 | set TdAIBlockingVolume bHidden 1 | set TdAIKeepMovingVolume bHidden 1 | set TdAIPawnBlockingVolume bHidden 1 | set TdBalanceWalkVolume bHidden 1 | set TdBarbedWireVolume bHidden 1 | set TdCheckpointVolume bHidden 1 | set TdConfinedVolumePathNode bHidden 1 | set TdCoverGroupVolume bHidden 1 | set TdFallHeightVolume bHidden 1 | set TdKillVolume bHidden 1 | set TdKillZoneVolume bHidden 1 | set TdLadderVolume bHidden 1 | set TdLedgeWalkVolume bHidden 1 | set TdMovementExclusion bHidden 1 | set TdMovementVolume bHidden 1 | set TdMoveVolumeRenderComponent bHidden 1 | set TdPathLimitsVolume bHidden 1 | set TdSwingVolume bHidden 1 | set TdTriggerVolume bHidden 1 | set TdZiplineVolume bHidden 1 | SetBind " + key + " ShowTriggersAndVolumes";
-
-                var modifiedLines = new List<string>();
-                inPlayerInput = false;
-                bool foundShowTriggersAndVolumes = false;
-                bool foundShowCommand = false;
-                bool foundHideCommand = false;
-                int bEnableMouseSmoothingIndex = -1;
-
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    var line = lines[i];
-
-                    if (line.Trim().StartsWith("["))
-                    {
-                        inPlayerInput = line.Trim() == "[Engine.PlayerInput]";
-                        modifiedLines.Add(line);
-                    }
-                    else if (inPlayerInput && line.Contains("Command=\"ShowTriggersAndVolumes\"") && !line.Contains("Name=\"ShowTriggersAndVolumes\""))
-                    {
-                        if (!foundShowTriggersAndVolumes)
-                        {
-                            modifiedLines.Add($"Bindings=(Name=\"{key}\",Command=\"ShowTriggersAndVolumes\",Control=False,Shift=False,Alt=False)");
-                            foundShowTriggersAndVolumes = true;
-                        }
-                    }
-                    else if (inPlayerInput && line.Contains("Name=\"ShowTriggersAndVolumes\""))
-                    {
-                        modifiedLines.Add($"Bindings=(Name=\"ShowTriggersAndVolumes\",Command=\"{showCommand}\",Control=False,Shift=False,Alt=False)");
-                        foundShowCommand = true;
-                    }
-                    else if (inPlayerInput && line.Contains("Name=\"HideTriggersAndVolumes\""))
-                    {
-                        modifiedLines.Add($"Bindings=(Name=\"HideTriggersAndVolumes\",Command=\"{hideCommand}\",Control=False,Shift=False,Alt=False)");
-                        foundHideCommand = true;
-                    }
-                    else
-                    {
-                        if (inPlayerInput && line.Contains("bEnableMouseSmoothing"))
-                        {
-                            bEnableMouseSmoothingIndex = modifiedLines.Count;
-                        }
-                        modifiedLines.Add(line);
-                    }
-                }
-
-                if (!foundShowTriggersAndVolumes || !foundShowCommand || !foundHideCommand)
-                {
-                    if (bEnableMouseSmoothingIndex >= 0)
-                    {
-                        if (!foundShowTriggersAndVolumes)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"{key}\",Command=\"ShowTriggersAndVolumes\",Control=False,Shift=False,Alt=False)");
-                            bEnableMouseSmoothingIndex++;
-                        }
-                        if (!foundShowCommand)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"ShowTriggersAndVolumes\",Command=\"{showCommand}\",Control=False,Shift=False,Alt=False)");
-                            bEnableMouseSmoothingIndex++;
-                        }
-                        if (!foundHideCommand)
-                        {
-                            modifiedLines.Insert(bEnableMouseSmoothingIndex + 1, $"Bindings=(Name=\"HideTriggersAndVolumes\",Command=\"{hideCommand}\",Control=False,Shift=False,Alt=False)");
-                        }
-                    }
-                }
-
-                var fileInfo = new FileInfo(tdInputPath);
-                bool wasReadOnly = fileInfo.IsReadOnly;
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = false;
-                }
-
-                await Task.Run(() => File.WriteAllLines(tdInputPath, modifiedLines));
-
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowMessage("Error", $"Failed to update Triggers & Volumes keybind:\n\n{ex.Message}", DialogMessageType.Error);
-            }
+            start += prefix.Length;
+            int end = line.IndexOf('"', start);
+            return end > start ? line[start..end] : null;
         }
 
-        private async Task RemoveTriggersVolumesKeybind()
+        private static void WritePreservingReadOnly(string path, IEnumerable<string> lines)
         {
+            FileAttributes attributes = File.GetAttributes(path);
+            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
+            if (wasReadOnly)
+                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+
             try
             {
-                string tdInputPath = TdInputIniPath;
-
-                if (!File.Exists(tdInputPath))
-                    return;
-
-                var lines = await Task.Run(() => File.ReadAllLines(tdInputPath));
-                var modifiedLines = lines.Where(line =>
-                    !line.Contains("Command=\"ShowTriggersAndVolumes\"") &&
-                    !line.Contains("Name=\"ShowTriggersAndVolumes\"") &&
-                    !line.Contains("Name=\"HideTriggersAndVolumes\"")).ToList();
-
-                var fileInfo = new FileInfo(tdInputPath);
-                bool wasReadOnly = fileInfo.IsReadOnly;
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = false;
-                }
-
-                await Task.Run(() => File.WriteAllLines(tdInputPath, modifiedLines));
-
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = true;
-                }
+                File.WriteAllLines(path, lines);
             }
-            catch (Exception ex)
+            finally
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove Triggers & Volumes keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                if (wasReadOnly)
+                    File.SetAttributes(path, attributes);
             }
         }
 
@@ -963,36 +662,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (File.Exists(tdInputPath))
                 {
-                    string? conflictingCommand = null;
-
-                    await Task.Run(() =>
-                    {
-                        string[] iniLines = File.ReadAllLines(tdInputPath);
-                        bool inPlayerInput = false;
-
-                        for (int i = 0; i < iniLines.Length; i++)
-                        {
-                            if (iniLines[i].Trim() == "[Engine.PlayerInput]")
-                            {
-                                inPlayerInput = true;
-                                continue;
-                            }
-
-                            if (inPlayerInput && iniLines[i].Trim().StartsWith("[") && iniLines[i].Trim().EndsWith("]"))
-                                break;
-
-                            if (inPlayerInput && iniLines[i].Contains("Bindings=") && iniLines[i].Contains($"Name=\"{ue3Key}\""))
-                            {
-                                int cmdStart = iniLines[i].IndexOf("Command=\"") + 9;
-                                int cmdEnd = iniLines[i].IndexOf("\"", cmdStart);
-                                if (cmdStart > 8 && cmdEnd > cmdStart)
-                                {
-                                    conflictingCommand = iniLines[i].Substring(cmdStart, cmdEnd - cmdStart);
-                                    return;
-                                }
-                            }
-                        }
-                    });
+                    string[] iniLines = await Task.Run(() => File.ReadAllLines(tdInputPath));
+                    string? conflictingCommand = FindConflictingCommand(iniLines, ue3Key);
 
                     if (conflictingCommand != null)
                     {
