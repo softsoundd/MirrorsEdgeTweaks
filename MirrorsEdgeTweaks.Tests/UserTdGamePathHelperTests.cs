@@ -1,5 +1,6 @@
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Models;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -62,7 +63,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void TryNormalizeSelectedPath_AcceptsTdGameFolder()
         {
-            string tdGamePath = CreateTdGameLayout();
+            using var temp = new TempDirectory();
+            string tdGamePath = CreateTdGameLayout(temp.Path);
 
             bool success = UserTdGamePathHelper.TryNormalizeSelectedPath(tdGamePath, out string normalizedPath, out string? errorMessage);
 
@@ -74,7 +76,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void TryNormalizeSelectedPath_RejectsConfigFolder()
         {
-            string tdGamePath = CreateTdGameLayout();
+            using var temp = new TempDirectory();
+            string tdGamePath = CreateTdGameLayout(temp.Path);
             string configPath = Path.Combine(tdGamePath, "Config");
 
             bool success = UserTdGamePathHelper.TryNormalizeSelectedPath(configPath, out _, out string? errorMessage);
@@ -86,20 +89,12 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void TryNormalizeSelectedPath_RejectsFolderWithoutConfigSubdirectory()
         {
-            string invalidPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(invalidPath);
+            using var temp = new TempDirectory();
 
-            try
-            {
-                bool success = UserTdGamePathHelper.TryNormalizeSelectedPath(invalidPath, out _, out string? errorMessage);
+            bool success = UserTdGamePathHelper.TryNormalizeSelectedPath(temp.Path, out _, out string? errorMessage);
 
-                Assert.False(success);
-                Assert.NotNull(errorMessage);
-            }
-            finally
-            {
-                Directory.Delete(invalidPath, recursive: true);
-            }
+            Assert.False(success);
+            Assert.NotNull(errorMessage);
         }
 
         [Fact]
@@ -116,13 +111,13 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void ResolveTdGamePath_WithUserConfigInGameInstall_StillUsesDocumentsWhenNoHomeDirNotSet()
         {
-            string tdGamePath = CreateTdGameLayout();
-            string gameDirectory = Directory.GetParent(tdGamePath)!.FullName;
+            using var temp = new TempDirectory();
+            string tdGamePath = CreateTdGameLayout(temp.Path);
             File.WriteAllText(Path.Combine(tdGamePath, "Config", "TdEngine.ini"), "[Engine.Engine]\n");
 
             string resolved = UserTdGamePathHelper.ResolveTdGamePath(
                 userFolderPath: null,
-                gameDirectoryPath: gameDirectory);
+                gameDirectoryPath: temp.Path);
 
             Assert.Equal(UserTdGamePathHelper.GetDefaultTdGamePath(), resolved);
         }
@@ -207,36 +202,27 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void EnsureUserFolderLayout_CreatesPublishedForDocumentsHome()
         {
-            string root = Path.Combine(Path.GetTempPath(), "metweaks-test-" + Guid.NewGuid().ToString("N"));
-            string tdGamePath = Path.Combine(root, "TdGame");
-            Directory.CreateDirectory(Path.Combine(tdGamePath, "Config"));
+            using var temp = new TempDirectory();
+            string tdGamePath = CreateTdGameLayout(temp.Path);
 
             var config = new GameConfiguration
             {
                 UserFolderPath = tdGamePath
             };
 
-            try
-            {
-                UserTdGamePathHelper.EnsureUserFolderLayout(config);
+            UserTdGamePathHelper.EnsureUserFolderLayout(config);
 
-                Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Config")));
-                Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Published")));
-                Assert.False(Directory.Exists(Path.Combine(tdGamePath, "CookedPC")));
-            }
-            finally
-            {
-                Directory.Delete(root, recursive: true);
-            }
+            Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Config")));
+            Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Published")));
+            Assert.False(Directory.Exists(Path.Combine(tdGamePath, "CookedPC")));
         }
 
         [Fact]
         public void EnsureUserFolderLayout_CreatesCookedPcForNoHomeDirInstall()
         {
-            string root = Path.Combine(Path.GetTempPath(), "metweaks-test-" + Guid.NewGuid().ToString("N"));
-            string gameDirectory = Path.Combine(root, "Mirror's Edge");
-            string tdGamePath = Path.Combine(gameDirectory, "TdGame");
-            Directory.CreateDirectory(Path.Combine(tdGamePath, "Config"));
+            using var temp = new TempDirectory();
+            string gameDirectory = Path.Combine(temp.Path, "Mirror's Edge");
+            string tdGamePath = CreateTdGameLayout(gameDirectory);
 
             var config = new GameConfiguration
             {
@@ -244,18 +230,11 @@ namespace MirrorsEdgeTweaks.Tests
                 LaunchArguments = "-NOHOMEDIR"
             };
 
-            try
-            {
-                UserTdGamePathHelper.EnsureUserFolderLayout(config);
+            UserTdGamePathHelper.EnsureUserFolderLayout(config);
 
-                Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Config")));
-                Assert.True(Directory.Exists(Path.Combine(tdGamePath, "CookedPC")));
-                Assert.False(Directory.Exists(Path.Combine(tdGamePath, "Published")));
-            }
-            finally
-            {
-                Directory.Delete(root, recursive: true);
-            }
+            Assert.True(Directory.Exists(Path.Combine(tdGamePath, "Config")));
+            Assert.True(Directory.Exists(Path.Combine(tdGamePath, "CookedPC")));
+            Assert.False(Directory.Exists(Path.Combine(tdGamePath, "Published")));
         }
 
         [Fact]
@@ -267,9 +246,9 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.False(UserTdGamePathHelper.IsDefaultPath(@"C:\Other\TdGame"));
         }
 
-        private static string CreateTdGameLayout()
+        private static string CreateTdGameLayout(string root)
         {
-            string tdGamePath = Path.Combine(Path.GetTempPath(), "metweaks-test-" + Guid.NewGuid().ToString("N"), "TdGame");
+            string tdGamePath = Path.Combine(root, "TdGame");
             Directory.CreateDirectory(Path.Combine(tdGamePath, "Config"));
             return tdGamePath;
         }

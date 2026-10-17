@@ -1,5 +1,6 @@
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Tests.Fakes;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 using MirrorsEdgeTweaks.ViewModels;
 using System.IO.Compression;
 
@@ -28,11 +29,11 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task RunDownloadAndExtractAsync_DownloadsExtractsAndDeletesTempZip()
         {
-            string tempRoot = Path.Combine(Path.GetTempPath(), $"metweaks_dl_test_{Guid.NewGuid():N}");
-            string extractPath = Path.Combine(tempRoot, "extract");
+            using var temp = new TempDirectory();
+            string extractPath = Path.Combine(temp.Path, "extract");
             Directory.CreateDirectory(extractPath);
 
-            var fileService = new TempDirectoryFileService(Path.Combine(tempRoot, "tmp"));
+            var fileService = new TempDirectoryFileService(Path.Combine(temp.Path, "tmp"));
             var download = new FakeDownloadService();
             var session = new GameSession();
             var gameStatus = new GameStatusViewModel();
@@ -48,11 +49,11 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task RunDownloadAndExtractAsync_InvokesAfterExtractHook()
         {
-            string tempRoot = Path.Combine(Path.GetTempPath(), $"metweaks_dl_test_{Guid.NewGuid():N}");
-            string extractPath = Path.Combine(tempRoot, "extract");
+            using var temp = new TempDirectory();
+            string extractPath = Path.Combine(temp.Path, "extract");
             Directory.CreateDirectory(extractPath);
 
-            var fileService = new TempDirectoryFileService(Path.Combine(tempRoot, "tmp"));
+            var fileService = new TempDirectoryFileService(Path.Combine(temp.Path, "tmp"));
             var download = new FakeDownloadService();
             var session = new GameSession();
             var gameStatus = new GameStatusViewModel();
@@ -78,11 +79,11 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task RunDownloadAndExtractAsync_ReportsMonotonicProgressAndFlushesTo100()
         {
-            string tempRoot = Path.Combine(Path.GetTempPath(), $"metweaks_dl_test_{Guid.NewGuid():N}");
-            string extractPath = Path.Combine(tempRoot, "extract");
+            using var temp = new TempDirectory();
+            string extractPath = Path.Combine(temp.Path, "extract");
             Directory.CreateDirectory(extractPath);
 
-            var fileService = new TempDirectoryFileService(Path.Combine(tempRoot, "tmp"));
+            var fileService = new TempDirectoryFileService(Path.Combine(temp.Path, "tmp"));
             var download = new RapidProgressFakeDownloadService();
             var downloadProgress = new DownloadProgressViewModel();
             var vm = new TestBusyViewModel(new GameSession(), new GameStatusViewModel(), downloadProgress);
@@ -115,11 +116,11 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task RunDownloadAndExtractAsync_DoesNotRewriteStatusWithPercentDuringDownload()
         {
-            string tempRoot = Path.Combine(Path.GetTempPath(), $"metweaks_dl_test_{Guid.NewGuid():N}");
-            string extractPath = Path.Combine(tempRoot, "extract");
+            using var temp = new TempDirectory();
+            string extractPath = Path.Combine(temp.Path, "extract");
             Directory.CreateDirectory(extractPath);
 
-            var fileService = new TempDirectoryFileService(Path.Combine(tempRoot, "tmp"));
+            var fileService = new TempDirectoryFileService(Path.Combine(temp.Path, "tmp"));
             var download = new RapidProgressFakeDownloadService();
             var gameStatus = new GameStatusViewModel();
             var downloadProgress = new DownloadProgressViewModel();

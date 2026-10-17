@@ -1,5 +1,6 @@
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -62,7 +63,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void ApplyManifestForTesting_UpdatesResolvedUrls()
         {
-            string cachePath = Path.Combine(Path.GetTempPath(), $"metweaks_test_{Guid.NewGuid():N}", "asset-manifest.json");
+            using var temp = new TempDirectory();
+            string cachePath = Path.Combine(temp.Path, "asset-manifest.json");
             var provider = new AssetUrlProvider(cachePath, "https://example.invalid/manifest.json");
 
             provider.ApplyManifestForTesting("""{"version":1,"assetBase":"https://cdn.example.com/assets/"}""");
@@ -74,7 +76,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void ApplyManifestForTesting_UsesPerAssetOverrides()
         {
-            string cachePath = Path.Combine(Path.GetTempPath(), $"metweaks_test_{Guid.NewGuid():N}", "asset-manifest.json");
+            using var temp = new TempDirectory();
+            string cachePath = Path.Combine(temp.Path, "asset-manifest.json");
             var provider = new AssetUrlProvider(cachePath, "https://example.invalid/manifest.json");
 
             provider.ApplyManifestForTesting("""
@@ -94,7 +97,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public void ApplyManifestForTesting_IgnoresInvalidOverrideUrls()
         {
-            string cachePath = Path.Combine(Path.GetTempPath(), $"metweaks_test_{Guid.NewGuid():N}", "asset-manifest.json");
+            using var temp = new TempDirectory();
+            string cachePath = Path.Combine(temp.Path, "asset-manifest.json");
             var provider = new AssetUrlProvider(cachePath, "https://example.invalid/manifest.json");
 
             provider.ApplyManifestForTesting("""
@@ -113,9 +117,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task EnsureLoadedAsync_FallsBackToCachedManifestWhenFetchFails()
         {
-            string cacheDir = Path.Combine(Path.GetTempPath(), $"metweaks_test_{Guid.NewGuid():N}");
-            string cachePath = Path.Combine(cacheDir, "asset-manifest.json");
-            Directory.CreateDirectory(cacheDir);
+            using var temp = new TempDirectory();
+            string cachePath = Path.Combine(temp.Path, "asset-manifest.json");
             await File.WriteAllTextAsync(cachePath, """{"version":1,"assetBase":"https://cached.example.com/assets/"}""", CancellationToken.None);
 
             var provider = new AssetUrlProvider(cachePath, "https://example.invalid/manifest.json");
@@ -127,7 +130,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Fact]
         public async Task EnsureLoadedAsync_FallsBackToDefaultWhenFetchAndCacheFail()
         {
-            string cachePath = Path.Combine(Path.GetTempPath(), $"metweaks_test_{Guid.NewGuid():N}", "asset-manifest.json");
+            using var temp = new TempDirectory();
+            string cachePath = Path.Combine(temp.Path, "asset-manifest.json");
             var provider = new AssetUrlProvider(cachePath, "https://example.invalid/manifest.json");
 
             await provider.EnsureLoadedAsync(CancellationToken.None);
