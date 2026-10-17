@@ -80,7 +80,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 string? exePath = GetGameExePath();
                 if (exePath != null)
-                    ExePatcher.Reconcile(exePath);
+                    RenderTargetPatcher.Reconcile(exePath);
             }
             catch (OoaLicenseNotFoundException ooaEx)
             {

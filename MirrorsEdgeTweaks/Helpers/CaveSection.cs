@@ -35,8 +35,6 @@ namespace MirrorsEdgeTweaks.Helpers
         private int _numSections;
         private int _sectionsOffset;
 
-        private bool _forceTextPadding;
-
         private bool _reuse;
         private int _reuseCursor;
 
@@ -44,15 +42,12 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private CaveSection() { }
 
-        public string VersionTag => _versionTag;
-
-        public static CaveSection Open(byte[] peData, string versionTag = "", bool forceTextPadding = false)
+        public static CaveSection Open(byte[] peData, string versionTag = "")
         {
             var cs = new CaveSection
             {
                 _peData = peData,
-                _versionTag = versionTag,
-                _forceTextPadding = forceTextPadding
+                _versionTag = versionTag
             };
             cs.ParsePe();
             return cs;
@@ -82,15 +77,11 @@ namespace MirrorsEdgeTweaks.Helpers
             return (uint)(_sectionVa + off);
         }
 
-        // Frees a patch's cave block but ONLY when that block is the topmost allocation
-        // i.e. its end equals the watermark, so nothing else was allocated above it.
-        // The exact equality test is fail-safe so if another patch sits above
-        // (or the footprint is off) it returns the data unchanged rather than risk zeroing a
-        // co-resident patch's region
-        public static byte[] ReclaimIfTopmost(byte[] peData, string versionTag, bool forceTextPadding,
-            uint caveBaseVa, int footprintSize)
+        // Frees a patch's cave block when the block ends exactly at the watermark.
+        // Returns the data unchanged otherwise, so a block above it is never zeroed.
+        public static byte[] ReclaimIfTopmost(byte[] peData, uint caveBaseVa, int footprintSize)
         {
-            var cave = Open(peData, versionTag, forceTextPadding);
+            var cave = Open(peData);
             int baseOff = (int)(caveBaseVa - cave.SectionVa);
             if (baseOff >= InitialAlloc && baseOff + footprintSize == cave.CurrentWatermark)
             {
@@ -111,6 +102,18 @@ namespace MirrorsEdgeTweaks.Helpers
                     $"ReuseFrom offset {offset} outside [{InitialAlloc}..{_watermark}].");
             _reuse = true;
             _reuseCursor = offset;
+        }
+
+        // Returns the section-relative offset of the first match at or after fromOffset.
+        // Returns -1 when the allocated part of the cave has no match.
+        // Pending writes are not searched, because they only reach the image in Finalize.
+        public int IndexOf(ReadOnlySpan<byte> pattern, int fromOffset = 0)
+        {
+            EnsureSection();
+            int start = Math.Max(fromOffset, InitialAlloc);
+            if (start >= _watermark) return -1;
+            int idx = _peData.AsSpan(_sectionRawOffset + start, _watermark - start).IndexOf(pattern);
+            return idx < 0 ? -1 : start + idx;
         }
 
         public void Write(uint va, byte[] data)
@@ -217,7 +220,7 @@ namespace MirrorsEdgeTweaks.Helpers
         private void EnsureSection()
         {
             if (_sectionExists) return;
-            if (!_forceTextPadding && CanAddSection())
+            if (CanAddSection())
                 CreateSection();
             else
                 UseTextPadding();
@@ -344,12 +347,11 @@ namespace MirrorsEdgeTweaks.Helpers
 
             int newHdrOff = _sectionsOffset + _numSections * 40;
 
-            int needed = newRawOff + newRawSize;
-            if (needed > d.Length)
-            {
-                Array.Resize(ref d, needed);
-                _peData = d;
-            }
+            // Signed builds (Steam) keep their certificate where the new section goes, so it is left out of the copy.
+            d = new byte[newRawOff + newRawSize];
+            Buffer.BlockCopy(_peData, 0, d, 0, Math.Min(_peData.Length, newRawOff));
+            PeImageLayout.ClearCertificateEntry(d);
+            _peData = d;
 
             var hdr = new byte[40];
             Buffer.BlockCopy(SectionName, 0, hdr, 0, 8);

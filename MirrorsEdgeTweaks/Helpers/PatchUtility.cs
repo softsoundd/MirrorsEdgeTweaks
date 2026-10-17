@@ -154,7 +154,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new OoaLicenseNotFoundException(OoaService.GetExpectedLicensePath(data));
 
             byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-            OoaService.StripAuthenticode(data);
+            PeImageLayout.ClearCertificateEntry(data);
             OoaContext ctx = OoaService.DecryptSections(data, key);
             return new OoaSession { Key = key, Ctx = ctx };
         }
@@ -171,31 +171,6 @@ namespace MirrorsEdgeTweaks.Helpers
             OoaSession session = BeginOoa(data);
             data = patch(data);
             return FinishOoa(data, session);
-        }
-
-        // Centralised patch pipeline for executables that may carry EA's OOA encryption:
-        // reads the file, transparently decrypts if needed, applies the in-memory transform,
-        // re-encrypts, and writes back with backup + atomic replace. Returns false when the
-        // transform produced no change (nothing written).
-        public static bool UpdateExe(string exePath, Func<byte[], byte[]> transform)
-        {
-            byte[] original = File.ReadAllBytes(exePath);
-            byte[] result;
-
-            if (OoaService.HasOoaSection(original))
-            {
-                result = ApplyUnderOoa((byte[])original.Clone(), transform);
-            }
-            else
-            {
-                result = transform((byte[])original.Clone());
-            }
-
-            if (result.AsSpan().SequenceEqual(original))
-                return false;
-
-            WritePreservingAttributes(exePath, result);
-            return true;
         }
     }
 }

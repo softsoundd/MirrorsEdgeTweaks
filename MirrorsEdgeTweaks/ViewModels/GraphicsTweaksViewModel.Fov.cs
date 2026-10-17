@@ -70,7 +70,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     string? exePath = GetGameExePath();
                     if (exePath != null)
                     {
-                        try { ExePatcher.Reconcile(exePath); }
+                        try { RenderTargetPatcher.Reconcile(exePath); }
                         catch (OoaLicenseNotFoundException ooaEx)
                         {
                             Dispatch(() => _dialogService.ShowMessage("EA App License Required", ooaEx.Message, DialogMessageType.Warning));

@@ -27,6 +27,10 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         private const float StockAuthoredHeight = 1080f;
 
+        // The cave block ends with these floats, and ApplyToImage addresses each one by its slot.
+        private static readonly byte[] CaveConstants = new[] { StockAuthoredHeight, 0.5625f, 0.5f, 0.0001f, float.PositiveInfinity }
+            .SelectMany(f => BitConverter.GetBytes(f)).ToArray();
+
         // ---- UMultiFont::GetResolutionTestTableIndex (font page selection) ----------------------------
         // This function and GetScalingFactor are replaced whole.
         // Their locators wildcard the entry bytes so they still match after the detour.
@@ -82,6 +86,9 @@ namespace MirrorsEdgeTweaks.Helpers
         private static readonly int GsfCaveLen = BuildGsfCave(0, 0, 0).Length;
         private static readonly int ExtentCaveLen = BuildExtentCave(0, 0, 0, 0, 0, 0, 0).Length;
         private static readonly int DswCaveLen = BuildDswConfineCave(0, 0, 0, 0, 0).Length;
+
+        // The page-selection code opens the cave block, and its first instruction has no absolute operand.
+        private static readonly byte[] PageIndexEntry = BuildPageIndexCave(0, 0, 0)[..6];
 
         public static MultiFontScaleState DetectState(string exePath)
         {
@@ -146,29 +153,25 @@ namespace MirrorsEdgeTweaks.Helpers
 
             var cave = CaveSection.Open(data, versionTag: versionTag);
 
-            // Re-apply overwrites the prior cave in place, so the cave never grows and a co-resident
-            // patch allocated above it, such as supersample or logging, is never zeroed.
+            // Re-apply overwrites the prior block in place, so the cave never grows and blocks above it stay intact.
             // This relies on the Alloc sequence below being the same on every apply.
-            if (priorCaveBase != null)
-                cave.ReuseFrom((int)(priorCaveBase.Value - cave.SectionVa));
+            // Without a detour, the prior block is one that Remove could not reclaim.
+            int? priorOffset = priorCaveBase != null
+                ? (int)(priorCaveBase.Value - cave.SectionVa)
+                : FindLeftoverBlock(cave, CaveFootprint(optional.DoExtent, optional.DoDsw));
+            if (priorOffset != null)
+                cave.ReuseFrom(priorOffset.Value);
 
             // The code blocks come first, so the page-selection block is the cave base.
             uint pageCodeVa = cave.Alloc(PageIndexCaveLen, 16);
             uint gsfCodeVa = cave.Alloc(GsfCaveLen, 16);
             uint extCodeVa = optional.DoExtent ? cave.Alloc(ExtentCaveLen, 16) : 0u;
             uint dswCodeVa = optional.DoDsw ? cave.Alloc(DswCaveLen, 16) : 0u;
-            uint c1080Va = cave.Alloc(4, 4);
-            uint c5625Va = cave.Alloc(4, 4);
-            uint cHalfVa = cave.Alloc(4, 4);
-            uint cEpsVa = cave.Alloc(4, 4);
-            uint cInfVa = cave.Alloc(4, 4);
+            uint constVa = cave.Alloc(CaveConstants.Length, 4);
+            uint c1080Va = constVa, c5625Va = constVa + 4, cHalfVa = constVa + 8;
+            uint cEpsVa = constVa + 12, cInfVa = constVa + 16;
 
-            cave.Write(c1080Va, BitConverter.GetBytes(StockAuthoredHeight));
-            cave.Write(c5625Va, BitConverter.GetBytes(0.5625f));
-            cave.Write(cHalfVa, BitConverter.GetBytes(0.5f));
-            cave.Write(cEpsVa, BitConverter.GetBytes(0.0001f));
-            cave.Write(cInfVa, BitConverter.GetBytes(float.PositiveInfinity));
-
+            cave.Write(constVa, CaveConstants);
             cave.Write(pageCodeVa, BuildPageIndexCave(pageCodeVa, cEpsVa, cInfVa));
             cave.Write(gsfCodeVa, BuildGsfCave(gsfCodeVa, gssResYVa, c5625Va));
             if (optional.DoExtent)
@@ -242,7 +245,7 @@ namespace MirrorsEdgeTweaks.Helpers
             changed |= optionalChanged;
 
             if (caveBase != null)
-                data = CaveSection.ReclaimIfTopmost(data, "", false, caveBase.Value,
+                data = CaveSection.ReclaimIfTopmost(data, caveBase.Value,
                     CaveFootprint(optional.DoExtent, optional.DoDsw));
 
             return data;
@@ -299,12 +302,17 @@ namespace MirrorsEdgeTweaks.Helpers
             wm = A16(wm) + GsfCaveLen;                 // scaling factor
             if (doExtent) wm = A16(wm) + ExtentCaveLen;
             if (doDsw) wm = A16(wm) + DswCaveLen;
-            wm = A4(wm) + 4;                           // c1080
-            wm = A4(wm) + 4;                           // c5625
-            wm = A4(wm) + 4;                           // cHalf
-            wm = A4(wm) + 4;                           // cEps
-            wm = A4(wm) + 4;                           // cInf
-            return wm;
+            return A4(wm) + CaveConstants.Length;      // constants
+        }
+
+        // Returns the section offset of a block that Remove could not reclaim and that matches the footprint.
+        // Returns null when there is none.
+        private static int? FindLeftoverBlock(CaveSection cave, int footprint)
+        {
+            int constants = cave.IndexOf(CaveConstants);
+            int start = constants + CaveConstants.Length - footprint;
+            if (constants < 0 || start < 0) return null;
+            return cave.IndexOf(PageIndexEntry, start) == start ? start : null;
         }
 
         // Builds the GetResolutionTestTableIndex replacement (thiscall, ret 4, index in eax).

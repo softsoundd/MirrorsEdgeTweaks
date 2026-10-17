@@ -118,7 +118,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     throw new InvalidOperationException($"Missing required symbol: {s}");
             }
 
-            var cave = CaveSection.Open(data, versionTag: version, forceTextPadding: isOoa);
+            var cave = CaveSection.Open(data, versionTag: version);
 
             if (useFullMode)
                 data = ApplyFullMode(data, cave, sym, hooks, execHookVa, execReturnVa, preInitVa);
@@ -186,7 +186,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
 
             if (caveBase != null)
-                data = CaveSection.ReclaimIfTopmost(data, version, isOoa, caveBase.Value, footprint);
+                data = CaveSection.ReclaimIfTopmost(data, caveBase.Value, footprint);
 
             if (isOoa && ooa != null)
                 data = PatchUtility.FinishOoa(data, ooa);

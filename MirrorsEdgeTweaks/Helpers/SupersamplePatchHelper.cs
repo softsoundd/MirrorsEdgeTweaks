@@ -130,7 +130,7 @@ namespace MirrorsEdgeTweaks.Helpers
             var state = GetPatchStateFromData(data, addrs);
             if (state == SupersamplePatchState.Patched) return;
 
-            var cave = CaveSection.Open(data, versionTag: version, forceTextPadding: isOoa);
+            var cave = CaveSection.Open(data, versionTag: version);
 
             uint c1Va = cave.Alloc(44);
             uint c2Va = cave.Alloc(160);
@@ -217,10 +217,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     data[foff + i] = 0x90;
             }
 
-            // Reclaim the cave so a later enable reuses the space instead of growing it (topmost-guarded;
-            // a no-op if another patch was allocated above this one).
             if (caveBase != null)
-                data = CaveSection.ReclaimIfTopmost(data, version, isOoa, caveBase.Value, CaveFootprint);
+                data = CaveSection.ReclaimIfTopmost(data, caveBase.Value, CaveFootprint);
 
             if (isOoa && ooa != null)
                 data = PatchUtility.FinishOoa(data, ooa);

@@ -1,6 +1,7 @@
 using MirrorsEdgeTweaks.Helpers;
-using System.Buffers.Binary;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 using System.Text;
+using static MirrorsEdgeTweaks.Tests.TestSupport.SyntheticPe;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -14,10 +15,7 @@ namespace MirrorsEdgeTweaks.Tests
 
         private static readonly byte[] Ret4 = { 0xC2, 0x04, 0x00 };
 
-        // Layout of the synthetic image that the apply and remove tests patch.
-        private const uint ImageBase = 0x00400000;
-        private const uint TextRva = 0x1000, RdataRva = 0x2000;
-        private const int TextRaw = 0x400, TextSize = 0x400, RdataRaw = 0x800, RdataSize = 0x200;
+        // The apply and remove tests patch these hook sites in the synthetic image.
         private const int PageSite = TextRaw, GsfSite = TextRaw + 0x40, ExtentSite = TextRaw + 0x80;
         private const int DswSite = TextRaw + 0xC0 + 37;
 
@@ -116,6 +114,19 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public void Reapply_RewritesTheBlockRemoveCouldNotReclaim()
+        {
+            // A later patch allocated above the font block keeps Remove from reclaiming it.
+            var cave = CaveSection.Open(MultiFontScalePatcher.ApplyToImage(BuildPatchableImage(), "steam"));
+            cave.Alloc(64);
+            byte[] buried = cave.Finalize();
+
+            byte[] removed = MultiFontScalePatcher.RemoveFromImage((byte[])buried.Clone(), out _);
+
+            Assert.Equal(buried, MultiFontScalePatcher.ApplyToImage(removed, "steam"));
+        }
+
+        [Fact]
         public void ExtentHook_IsSkippedWithoutVtables_AndRoundTripStillReclaims()
         {
             byte[] stock = BuildPatchableImage(withVtableCtors: false);
@@ -171,30 +182,7 @@ namespace MirrorsEdgeTweaks.Tests
         // .rdata holds the vtables, the "ResX=" and "ResY=" strings and GSystemSettings.ResX and ResY.
         private static byte[] BuildPatchableImage(bool withVtableCtors = true)
         {
-            byte[] image = new byte[RdataRaw + RdataSize];
-
-            image[0] = (byte)'M';
-            image[1] = (byte)'Z';
-            const int peOffset = 0x80;
-            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(0x3C, 4), peOffset);
-            image[peOffset] = (byte)'P';
-            image[peOffset + 1] = (byte)'E';
-
-            int coff = peOffset + 4;
-            const ushort optHeaderSize = 0xE0;
-            BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(coff + 2, 2), 2);
-            BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(coff + 16, 2), optHeaderSize);
-
-            int opt = coff + 20;
-            BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(opt, 2), 0x10B);
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 28, 4), ImageBase);
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 32, 4), 0x1000); // SectionAlignment
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 36, 4), 0x200);  // FileAlignment
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 60, 4), 0x400);  // SizeOfHeaders, with room for .cave
-
-            int sectionTable = opt + optHeaderSize;
-            WriteSection(image, sectionTable, ".text", TextSize, TextRva, TextSize, TextRaw, 0x60000020);
-            WriteSection(image, sectionTable + 40, ".rdata", RdataSize, RdataRva, RdataSize, RdataRaw, 0x40000040);
+            byte[] image = SyntheticPe.Build();
 
             uint uiListVt = ImageBase + RdataRva, scrollbarVt = uiListVt + 0x10;
             uint resXString = ImageBase + RdataRva + 0x20, resYString = ImageBase + RdataRva + 0x40;
@@ -217,22 +205,6 @@ namespace MirrorsEdgeTweaks.Tests
             Put(image, TextRaw + 0x190, $"68 {Le(resX + 4)} 68 {Le(resYString)}");
 
             return image;
-        }
-
-        private static void Put(byte[] image, int offset, string hex) =>
-            Convert.FromHexString(hex.Replace(" ", "")).CopyTo(image, offset);
-
-        private static string Le(uint value) => Convert.ToHexString(BitConverter.GetBytes(value));
-
-        private static void WriteSection(byte[] buffer, int offset, string name, int virtualSize,
-            uint virtualAddress, int rawSize, int rawOffset, uint characteristics)
-        {
-            Encoding.ASCII.GetBytes(name).CopyTo(buffer, offset);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 8, 4), (uint)virtualSize);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 12, 4), virtualAddress);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 16, 4), (uint)rawSize);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 20, 4), (uint)rawOffset);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset + 36, 4), characteristics);
         }
     }
 }

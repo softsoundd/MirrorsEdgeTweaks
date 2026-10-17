@@ -20,7 +20,6 @@ namespace MirrorsEdgeTweaks.Services
     public sealed class OoaContext
     {
         internal List<SectionRange> Sections { get; } = new();
-        internal int OoaSectionRawEnd { get; set; }
 
         internal readonly struct SectionRange
         {
@@ -150,8 +149,7 @@ namespace MirrorsEdgeTweaks.Services
         public static OoaContext DecryptSections(byte[] data, byte[] key)
         {
             var blocks = ParseEncryptedBlocks(data);
-            var ooa = FindOoaSection(data);
-            var ctx = new OoaContext { OoaSectionRawEnd = ooa.RawOffset + ooa.RawSize };
+            var ctx = new OoaContext();
 
             for (int i = 0; i < blocks.Count; i++)
             {
@@ -358,22 +356,8 @@ namespace MirrorsEdgeTweaks.Services
 
         // Authenticode stripping
 
-        // Zeros the PE Certificate Table data directory entry so that
-        // WinVerifyTrust returns TRUST_E_NOSIGNATURE instead of
-        // TRUST_E_BAD_DIGEST for a modified binary.
-        public static void StripAuthenticode(byte[] data)
-        {
-            int peOff = (int)BitConverter.ToUInt32(data, 0x3C);
-            int optHdr = peOff + 24;
-            int certDdOff = optHdr + 96 + 4 * 8;
-            BitConverter.GetBytes(0u).CopyTo(data, certDdOff);
-            BitConverter.GetBytes(0u).CopyTo(data, certDdOff + 4);
-        }
-
-        // Truncates to the end of the highest section's raw data, dropping the Authenticode
-        // overlay. Cave-aware: when a patch appends a section past .ooa (the font fix's .cave),
-        // that section is the highest and is preserved. With no added section the result is the
-        // .ooa raw end, since .ooa is otherwise the last section.
+        // Truncates to the end of the highest section's raw data, which drops the certificate.
+        // An appended .cave section is the highest, so it is kept.
         public static byte[] TruncateToSections(byte[] data)
         {
             if (!TryGetSectionTable(data, out int secTableOff, out int numSections))

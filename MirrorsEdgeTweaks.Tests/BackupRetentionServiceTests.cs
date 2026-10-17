@@ -2,6 +2,7 @@ using MirrorsEdgeTweaks.Helpers;
 
 namespace MirrorsEdgeTweaks.Tests
 {
+    [Collection("BackupRoot")]
     public sealed class BackupRetentionServiceTests : IDisposable
     {
         private readonly string _tempRoot;
@@ -117,4 +118,9 @@ namespace MirrorsEdgeTweaks.Tests
             return backupDir;
         }
     }
+
+    // Every patch write stages its backup under the process-wide BackupRootOverrideForTests,
+    // so tests that redirect it must not run alongside tests that write files.
+    [CollectionDefinition("BackupRoot", DisableParallelization = true)]
+    public sealed class BackupRootTestCollection;
 }

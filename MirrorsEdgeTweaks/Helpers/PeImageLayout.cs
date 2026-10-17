@@ -7,6 +7,7 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         private const uint ExecuteSectionFlag = 0x20000000;
         private const int ResourceDirectoryIndex = 2;
+        private const int CertificateDirectoryIndex = 4;
 
         private readonly byte[] _buffer;
 
@@ -101,6 +102,14 @@ namespace MirrorsEdgeTweaks.Helpers
             return new PeImageLayout(buffer, imageBase, sectionAlignment, fileAlignment,
                 sizeOfHeaders, sections, peOffset, coffOffset, optOffset, sectionTableOffset,
                 resourceDirectoryRva, resourceDirectorySize);
+        }
+
+        // Makes WinVerifyTrust return TRUST_E_NOSIGNATURE rather than TRUST_E_BAD_DIGEST for a modified binary.
+        public static void ClearCertificateEntry(byte[] buffer)
+        {
+            int peOffset = BinaryPrimitives.ReadInt32LittleEndian(buffer.AsSpan(0x3C, 4));
+            int entryOffset = peOffset + 24 + 96 + CertificateDirectoryIndex * 8;
+            buffer.AsSpan(entryOffset, 8).Clear();
         }
 
         public int VaToOffset(uint va)
