@@ -88,6 +88,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
             bool isOoa = version == "ea";
             PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
+            if (HasUnsupportedLeftovers(data, version))
+                throw LegacyChangeDetector.ExeVerificationRequired();
 
             var addrs = VersionAddressTable.Load(version);
             if (addrs.Symbols.Count == 0)
@@ -145,6 +147,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 try { ooa = PatchUtility.BeginOoa(data); }
                 catch { return; }
             }
+            if (HasUnsupportedLeftovers(data, version))
+                throw LegacyChangeDetector.ExeVerificationRequired();
 
             VersionAddressTable addrs;
             try { addrs = VersionAddressTable.Load(version); }
@@ -192,6 +196,36 @@ namespace MirrorsEdgeTweaks.Helpers
                 data = PatchUtility.FinishOoa(data, ooa);
 
             WritePreservingAttributes(exePath, data);
+        }
+
+        // Returns whether a 4.4 release left app-init logging code that ApplyPatch and RemovePatch cannot manage.
+        // That release's RemovePatch left the app-init detour live,
+        // and its init block opens with a short jne that overflows.
+        internal static bool HasUnsupportedLeftovers(byte[] data, string version)
+        {
+            VersionAddressTable addrs;
+            try { addrs = VersionAddressTable.Load(version); }
+            catch { return false; }
+
+            if (addrs.Hooks.ContainsKey("preInit_fileLog") || !addrs.Hooks.TryGetValue("execLog", out var execDef))
+                return false;
+
+            uint? siteVa = FindAppInitSite(data, addrs.Symbols);
+            if (siteVa == null) return false;
+            int site = (int)(siteVa.Value - ImageBase);
+            if (site < 0 || site + 5 > data.Length || data[site] != 0xE9) return false;
+
+            try
+            {
+                VersionAddressTable.ResolveHook(data, execDef);
+                return true;
+            }
+            catch { }
+
+            uint initVa = siteVa.Value + 5u + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(site + 1, 4));
+            int initOff = (int)(initVa - ImageBase);
+            return initOff >= 0 && initOff + 8 <= data.Length
+                && data[initOff] == 0x83 && data[initOff + 1] == 0x3D && data[initOff + 7] == 0x75;
         }
 
         private enum AppInitRestore { NotPresent, Restored, Unrestored }

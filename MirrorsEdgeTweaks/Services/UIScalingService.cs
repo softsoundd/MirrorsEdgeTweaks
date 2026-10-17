@@ -48,6 +48,13 @@ namespace MirrorsEdgeTweaks.Services
                 if (!File.Exists(exePath))
                     throw new FileNotFoundException("MirrorsEdge.exe not found", exePath);
 
+                // The betas' blobs override this fix, and only a restore removes them.
+                foreach (string package in new[] { enginePath, tdGamePath })
+                {
+                    if (File.Exists(package) && LegacyChangeDetector.ContainsBetaHighResCommand(File.ReadAllBytes(package)))
+                        throw LegacyChangeDetector.PackageRestoreRequired(Path.GetFileName(package));
+                }
+
                 // The Engine.u subtitle blob issues "set" commands, which the 1.1.0.0 DLC exe disables.
                 EnsureSetCommandEnabled(gameDirectoryPath);
 

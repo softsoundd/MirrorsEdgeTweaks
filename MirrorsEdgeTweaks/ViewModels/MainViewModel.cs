@@ -20,6 +20,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameProcessMonitor _processMonitor;
         private readonly ISteamService _steamService;
         private readonly IAssetUrlProvider _assetUrls;
+        private readonly LegacyRestoreViewModel _legacyRestore;
 
         public GameSession Session { get; }
 
@@ -59,6 +60,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             CommunityModsViewModel communityMods,
             LaunchArgumentsViewModel launchArguments,
             LanguageSettingsViewModel language,
+            LegacyRestoreViewModel legacyRestore,
             IGameDataService gameData,
             IAppSettingsService settings,
             IGameLauncher gameLauncher,
@@ -100,6 +102,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _processMonitor = processMonitor;
             _steamService = steamService;
             _assetUrls = assetUrls;
+            _legacyRestore = legacyRestore;
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
             _processMonitor.RunningStateChanged += OnGameRunningChanged;
@@ -204,6 +207,21 @@ namespace MirrorsEdgeTweaks.ViewModels
                         Dispatch(() => GameStatus.Status = $"Decompression error: {ex.Message}");
                     }
                 });
+
+                try
+                {
+                    await _legacyRestore.RunAsync(path);
+                }
+                catch (Exception ex)
+                {
+                    await _dialogService.ShowMessageAsync("Older Tweaks Changes",
+                        $"Could not check the game files for changes from older versions of Tweaks:\n\n{ex.Message}",
+                        DialogMessageType.Warning);
+                }
+
+                // A restore hides the progress bar when its downloads finish.
+                DownloadProgress.IsDownloadProgressIndeterminate = true;
+                DownloadProgress.IsDownloadProgressVisible = true;
 
                 GameStatus.Status = "Loading package data...";
                 await Task.Run(() => _gameData.LoadPackages());

@@ -135,6 +135,22 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
+        internal static bool IsCompressed(string packagePath)
+        {
+            using var source = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (source.Length < sizeof(uint) * 2)
+                return false;
+
+            using var reader = new BinaryReader(source, Encoding.UTF8, leaveOpen: true);
+            if (reader.ReadUInt32() != PackageFileTag)
+                return false;
+            if (IsFullyCompressedPackage(reader.ReadUInt32()))
+                return true;
+
+            return TryReadUe3Summary(source, out var summary)
+                && summary.CompressionFlags != 0 && summary.CompressedChunks.Count > 0;
+        }
+
         private static bool IsFullyCompressedPackage(uint secondDword)
         {
             return secondDword is FullyCompressedMarkerA or FullyCompressedMarkerB or FullyCompressedMarkerC;

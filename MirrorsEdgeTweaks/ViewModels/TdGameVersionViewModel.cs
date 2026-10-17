@@ -13,12 +13,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDownloadService _download;
         private readonly IFileService _fileService;
         private readonly IAssetUrlProvider _assetUrls;
-        private readonly IUIScalingService _uiScaling;
         private readonly IGameDataService _gameData;
         private readonly IPackageService _packageService;
-        private readonly InputSettingsViewModel _input;
-        private readonly KeybindsViewModel _keybinds;
-        private readonly GraphicsTweaksViewModel _graphics;
+        private readonly ITweakSnapshotService _snapshots;
 
         private bool _isUpdatingComboBoxProgrammatically;
 
@@ -32,15 +29,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             IDownloadService download,
             IFileService fileService,
             IAssetUrlProvider assetUrls,
-            IUIScalingService uiScaling,
             IGameDataService gameData,
             IPackageService packageService,
+            ITweakSnapshotService snapshots,
             GameSession session,
             GameStatusViewModel gameStatus,
-            DownloadProgressViewModel downloadProgress,
-            InputSettingsViewModel input,
-            KeybindsViewModel keybinds,
-            GraphicsTweaksViewModel graphics)
+            DownloadProgressViewModel downloadProgress)
             : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
@@ -48,12 +42,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             _download = download;
             _fileService = fileService;
             _assetUrls = assetUrls;
-            _uiScaling = uiScaling;
             _gameData = gameData;
             _packageService = packageService;
-            _input = input;
-            _keybinds = keybinds;
-            _graphics = graphics;
+            _snapshots = snapshots;
         }
 
         private void SetVersionIndexSilently(int index)
@@ -110,8 +101,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            TdGameTouchpointSnapshot touchpointSnapshot = CaptureTdGameTouchpointSnapshot();
-
             _packageService.DisposePackage(_session.Package);
             _packageService.DisposePackage(_session.TdGamePackage);
             _session.Package = null;
@@ -119,10 +108,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             _gameStatus.IsGameTweaksEnabled = false;
 
-            await RunApplyAsync(() => DownloadAndExtractTdGameAsync(selectedVersionName, touchpointSnapshot));
+            await RunApplyAsync(() => DownloadAndExtractTdGameAsync(selectedVersionName));
         }
 
-        private async Task DownloadAndExtractTdGameAsync(string selectedVersionName, TdGameTouchpointSnapshot touchpointSnapshot)
+        private async Task DownloadAndExtractTdGameAsync(string selectedVersionName)
         {
             var config = _session.Config;
             if (string.IsNullOrEmpty(config.GameDirectoryPath))
@@ -148,9 +137,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameStatus.IsUiEnabled = false;
             _gameStatus.IsGameTweaksEnabled = false;
 
+            _gameStatus.Status = "Reading TdGame-linked settings...";
+            TweakSnapshot snapshot = await Task.Run(() => _snapshots.Capture());
+
             bool installSucceeded = false;
             bool packagesLoadedAtEnd = false;
-            TdGameTouchpointReapplyResult reapplyResult = new TdGameTouchpointReapplyResult();
+            TweakReapplyResult reapplyResult = new TweakReapplyResult();
 
             try
             {
@@ -193,7 +185,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             packagesLoadedAtEnd = true;
 
                             _gameStatus.Status = "Reapplying TdGame-linked settings...";
-                            reapplyResult = await ReapplyTdGameTouchpointSnapshotAsync(touchpointSnapshot);
+                            reapplyResult = await _snapshots.ReapplyAsync(snapshot, TweakScope.TdGame);
 
                             await Task.Delay(250);
                             await Task.Run(() => _gameData.LoadPackages());
@@ -235,180 +227,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        private TdGameTouchpointSnapshot CaptureTdGameTouchpointSnapshot()
-        {
-            var config = _session.Config;
-            TdGameTouchpointSnapshot snapshot = new TdGameTouchpointSnapshot
-            {
-                UniformSensitivityTargetValue = _input.GetUniformSensitivityTargetValue(),
-                GamepadButtonType = _input.GetGamepadButtonType(),
-                HasLoadLastCheckpointKeybind = !string.IsNullOrWhiteSpace(_keybinds.LoadLastCheckpoint.DisplayKey),
-                HasRestartTimeTrialKeybind = !string.IsNullOrWhiteSpace(_keybinds.RestartTimeTrial.DisplayKey)
-            };
-
-            if (config.TdGamePackagePath != null && File.Exists(config.TdGamePackagePath))
-            {
-                try
-                {
-                    var patchState = TdGamePatcher.DetectState(config.TdGamePackagePath);
-                    snapshot.FovSnapshot.DynamicPatchesApplied = patchState.CoreApplied || patchState.SensApplied
-                        || patchState.ClipApplied || patchState.OnlineSkipApplied;
-                    snapshot.FovSnapshot.SensEnabled = patchState.SensApplied;
-                    snapshot.FovSnapshot.ClipEnabled = patchState.ClipApplied;
-                    snapshot.FovSnapshot.OnlineSkipEnabled = patchState.OnlineSkipApplied;
-                }
-                catch { }
-            }
-            if (float.TryParse(_graphics.NewFovValue, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out float baseFov))
-            {
-                snapshot.FovSnapshot.BaseFov = baseFov;
-            }
-
-            if (!string.IsNullOrEmpty(config.GameDirectoryPath))
-            {
-                try
-                {
-                    snapshot.WasHighResFixActive = _uiScaling.IsUIScalingActive(config.GameDirectoryPath);
-                }
-                catch
-                {
-                    snapshot.WasHighResFixActive = false;
-                }
-            }
-
-            return snapshot;
-        }
-
-        private async Task<TdGameTouchpointReapplyResult> ReapplyTdGameTouchpointSnapshotAsync(TdGameTouchpointSnapshot snapshot)
-        {
-            var config = _session.Config;
-            TdGameTouchpointReapplyResult result = new TdGameTouchpointReapplyResult();
-
-            if (string.IsNullOrEmpty(config.TdGamePackagePath) || !File.Exists(config.TdGamePackagePath))
-            {
-                result.FailedSettings.Add("TdGame.u was not found after installation");
-                return result;
-            }
-
-            using var backupOperation = PatchUtility.BeginBackupOperation();
-
-            if (snapshot.FovSnapshot.HasValues)
-            {
-                try
-                {
-                    bool wroteFovValues = ReapplyTdGameFovSnapshot(config.TdGamePackagePath, snapshot.FovSnapshot);
-                    if (wroteFovValues)
-                    {
-                        result.ReappliedSettings.Add("FOV patches");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"FOV-related TdGame offsets ({ex.Message})");
-                }
-            }
-
-            if (snapshot.UniformSensitivityTargetValue.HasValue)
-            {
-                try
-                {
-                    float targetValue = snapshot.UniformSensitivityTargetValue.Value;
-                    await Task.Run(() => UniformSensitivityPatcher.Apply(config.TdGamePackagePath!, targetValue));
-                    result.ReappliedSettings.Add("Uniform sensitivity");
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"Uniform sensitivity ({ex.Message})");
-                }
-            }
-
-            if (!string.IsNullOrEmpty(snapshot.GamepadButtonType))
-            {
-                try
-                {
-                    string buttonType = snapshot.GamepadButtonType;
-                    await Task.Run(() => GamepadButtonPatcher.ApplyControllerImagePathSwap(config.TdGamePackagePath!, buttonType));
-                    result.ReappliedSettings.Add("Gamepad prompt mode");
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"Gamepad prompt mode ({ex.Message})");
-                }
-            }
-
-            if (snapshot.HasLoadLastCheckpointKeybind)
-            {
-                try
-                {
-                    await ExecFlagPatcher.AddExecFlag(config.GameDirectoryPath, "TdSPGame", "RestartFromLastCheckpoint");
-                    result.ReappliedSettings.Add("Load Last Checkpoint exec patch");
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"Load Last Checkpoint exec patch ({ex.Message})");
-                }
-            }
-
-            if (snapshot.HasRestartTimeTrialKeybind)
-            {
-                try
-                {
-                    await ExecFlagPatcher.AddExecFlag(config.GameDirectoryPath, "TdTimeTrialHUD", "TriggerRestartRaceblink");
-                    result.ReappliedSettings.Add("Restart Time Trial exec patch");
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"Restart Time Trial exec patch ({ex.Message})");
-                }
-            }
-
-            if (snapshot.WasHighResFixActive)
-            {
-                try
-                {
-                    await _graphics.ReapplyHighResUIFixIfNeededAsync(snapshot.WasHighResFixActive, showDialogs: false);
-                    result.ReappliedSettings.Add("Crosshair and cursor scaling (high-res UI fix)");
-                }
-                catch (Exception ex)
-                {
-                    result.FailedSettings.Add($"Crosshair and cursor scaling ({ex.Message})");
-                }
-            }
-
-            List<string> distinctReapplied = result.ReappliedSettings.Distinct(StringComparer.Ordinal).ToList();
-            result.ReappliedSettings.Clear();
-            result.ReappliedSettings.AddRange(distinctReapplied);
-
-            if (result.FailedSettings.Count == 0)
-                backupOperation.Complete();
-
-            return result;
-        }
-
-        private bool ReapplyTdGameFovSnapshot(string tdGamePackagePath, TdGameFovTouchpointSnapshot snapshot)
-        {
-            if (!snapshot.DynamicPatchesApplied) return false;
-
-            FileAttributes attributes = File.GetAttributes(tdGamePackagePath);
-            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
-
-            if (wasReadOnly)
-                File.SetAttributes(tdGamePackagePath, attributes & ~FileAttributes.ReadOnly);
-
-            try
-            {
-                TdGamePatcher.Apply(tdGamePackagePath, snapshot.SensEnabled, snapshot.ClipEnabled, snapshot.OnlineSkipEnabled);
-                return true;
-            }
-            finally
-            {
-                if (wasReadOnly)
-                    File.SetAttributes(tdGamePackagePath, attributes);
-            }
-        }
-
-        private static string BuildTdGameInstallSuccessMessage(string selectedVersionName, TdGameTouchpointReapplyResult reapplyResult)
+        private static string BuildTdGameInstallSuccessMessage(string selectedVersionName, TweakReapplyResult reapplyResult)
         {
             string message = $"Downloaded and installed '{selectedVersionName}' TdGame version.";
 

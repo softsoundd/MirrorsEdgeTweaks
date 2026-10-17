@@ -12,14 +12,108 @@ namespace MirrorsEdgeTweaks.Services
         public bool OnlineSkipApplied { get; set; }
     }
 
+    // TdGame.u edits from older releases that this patcher cannot recognise or undo.
+    [Flags]
+    internal enum LegacyTdGameChanges
+    {
+        None = 0,
+        NearClipBlock = 1,
+        UnzoomDelay = 2,
+        StaticNearClip = 4,
+        StaticFovScale = 8,
+        StaticUnzoomRate = 16,
+    }
+
     // Bidirectional patcher for TdGame.u
     public static class TdGamePatcher
     {
+        // The PlayerInput near-clip block opens its FOV-aware value with FMin(10.0, ...).
+        static readonly byte[] PlayerInputClipSignature = BytecodeBuilder.Concat(
+            new byte[] { BytecodeBuilder.OP_FMIN }, BytecodeBuilder.FloatConst(10.0f));
+
         public static TdGamePatchState DetectState(string tdGamePath)
         {
             byte[] data = File.ReadAllBytes(tdGamePath);
             using var pkg = UePackageLocator.LoadHeader(tdGamePath);
             return DetectStateCore(data, pkg);
+        }
+
+        internal static TdGamePatchState DetectState(byte[] data, UnrealPackage pkg) => DetectStateCore(data, pkg);
+
+        // The package must be fully loaded, because the checks read function tokens.
+        internal static LegacyTdGameChanges FindLegacyChanges(byte[] data, UnrealPackage pkg)
+        {
+            var found = LegacyTdGameChanges.None;
+            TdGamePatchState state = DetectStateCore(data, pkg);
+            ResolvedIndices r;
+            try { r = ResolveIndices(pkg, data); }
+            catch { return found; }
+
+            int piBcStart = r.PiSerialOffset + BytecodeBuilder.SCRIPT_HDR;
+            int piEnd = piBcStart + (int)PackageSplicer.ReadBSS(data, r.PiSerialOffset);
+            bool hasSens = BytecodeBuilder.FindPattern(data, BytecodeBuilder.SensSignature, piBcStart, piEnd) != -1;
+            bool hasClip = BytecodeBuilder.FindPattern(data, PlayerInputClipSignature, piBcStart, piEnd) != -1;
+            if (r.FovResult is { } fov)
+            {
+                // Releases up to the 4.5.0 betas wrote a shorter near-clip block, which Remove would cut at the current length.
+                if ((hasSens || hasClip) && !MatchesSensBlob(data, piBcStart, fov, r, hasSens, hasClip))
+                    found |= LegacyTdGameChanges.NearClipBlock;
+
+                // The FOVScale multiplier is the FloatConst that closes the LET.
+                int multiplier = piBcStart + fov.letEnd - 5;
+                if (!hasSens && data[multiplier - 1] == BytecodeBuilder.OP_FLOAT_CONST
+                    && Math.Abs(BitConverter.ToSingle(data, multiplier) - BytecodeBuilder.K_SENS) > 0.00001f)
+                    found |= LegacyTdGameChanges.StaticFovScale;
+            }
+
+            int uzBcStart = r.UzSerialOffset + BytecodeBuilder.SCRIPT_HDR;
+            int uzEnd = uzBcStart + (int)PackageSplicer.ReadBSS(data, r.UzSerialOffset);
+
+            // 4.4.1 wrote the zoom-rate blob into StartZoom's delay argument, which follows LocalVar(Rate).
+            // Removing that blob leaves a 20.0 delay after LocalVar(Rate), where stock passes 0.0.
+            foreach (byte[] afterRate in new[] { BytecodeBuilder.ZoomRateSignature,
+                BytecodeBuilder.FloatConst(BytecodeBuilder.K_STOCK_ZOOM_DELTA) })
+            {
+                for (int p = BytecodeBuilder.FindPattern(data, afterRate, uzBcStart, uzEnd); p != -1;
+                    p = BytecodeBuilder.FindPattern(data, afterRate, p + 1, uzEnd))
+                {
+                    if (p >= uzBcStart + 5 && data[p - 5] == BytecodeBuilder.OP_LOCAL_VAR)
+                        found |= LegacyTdGameChanges.UnzoomDelay;
+                }
+            }
+
+            if (!state.CoreApplied && r.UnzoomResult is { } uz)
+            {
+                float rate = BitConverter.ToSingle(data, uzBcStart + uz.elseFloatOff + 1);
+                if (Math.Abs(rate - BytecodeBuilder.K_STOCK_ZOOM_DELTA) > 0.001f)
+                    found |= LegacyTdGameChanges.StaticUnzoomRate;
+            }
+
+            if (!state.ClipApplied && r.ClipResult != null && !r.ClipHasStockValue)
+                found |= LegacyTdGameChanges.StaticNearClip;
+
+            return found;
+        }
+
+        static bool MatchesSensBlob(byte[] data, int piBcStart,
+            (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf) fov,
+            ResolvedIndices r, bool enableSens, bool enableClip)
+        {
+            byte[] expected;
+            try
+            {
+                expected = BytecodeBuilder.BuildSensBlob(fov.letEnd,
+                    fov.fovscaleLocal, fov.outerVar, fov.getfovVf, r.SncpVfunc,
+                    r.MyhudImp, r.SizexImp, r.SizeyImp,
+                    r.InstPawn, r.InstWeapon, r.TdweaponDcast,
+                    r.IsZoomingVf, r.InstFovangle, r.DefaultFovInst,
+                    enableSens, enableClip);
+            }
+            catch { return false; }
+
+            int start = piBcStart + fov.letEnd;
+            return start + expected.Length <= data.Length
+                && data.AsSpan(start, expected.Length).SequenceEqual(expected);
         }
 
         public static void Reconcile(string tdGamePath, bool enableSens, bool enableClip,
@@ -242,14 +336,18 @@ namespace MirrorsEdgeTweaks.Services
 
             ResolvedIndices resolved;
             TdGamePatchState state;
+            LegacyTdGameChanges legacy;
             using (var pkg = UePackageLocator.Load(tdGamePath))
             {
                 resolved = ResolveIndices(pkg, data);
                 state = DetectStateCore(data, pkg);
+                legacy = FindLegacyChanges(data, pkg);
             }
 
             if (!state.CoreApplied && !state.SensApplied && !state.ClipApplied
                 && !state.OnlineSkipApplied) return;
+            if ((legacy & (LegacyTdGameChanges.NearClipBlock | LegacyTdGameChanges.UnzoomDelay)) != 0)
+                throw Helpers.LegacyChangeDetector.PackageRestoreRequired("TdGame.u");
 
             // Collect all removals first (function serial offsets, deltas, export indices)
             // then apply them in a single coordinated pass from highest offset to lowest.
@@ -451,9 +549,8 @@ namespace MirrorsEdgeTweaks.Services
 
             bool hasSens = BytecodeBuilder.FindPattern(data, BytecodeBuilder.SensSignature,
                 piBcStart, piBcStart + piBss) != -1;
-            byte[] piClipSig = BytecodeBuilder.Concat(
-                new byte[] { BytecodeBuilder.OP_FMIN }, BytecodeBuilder.FloatConst(10.0f));
-            bool hasClip = BytecodeBuilder.FindPattern(data, piClipSig, piBcStart, piBcStart + piBss) != -1;
+            bool hasClip = BytecodeBuilder.FindPattern(data, PlayerInputClipSignature,
+                piBcStart, piBcStart + piBss) != -1;
 
             if (!hasSens && !hasClip) return;
 
@@ -563,6 +660,7 @@ namespace MirrorsEdgeTweaks.Services
             // Patch point token positions/spans located from UELib token stream up
             // front so the splice logic never needs to rescan raw bytecode
             public (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? ClipResult;
+            public bool ClipHasStockValue;
             public (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf)? FovResult;
             public (int startzoomOff, int zoomfovOff, byte[] controllerCtx)? VertigoResult;
             public (byte[] instDefaultfov, int elseFloatOff)? UnzoomResult;
@@ -607,8 +705,9 @@ namespace MirrorsEdgeTweaks.Services
             byte[] sfBc = Body(data, sf.SerialOffset);
             byte[] ezBc = Body(data, ez.SerialOffset);
 
-            r.ClipResult = ExtractContextCall(tzs.Tokens, tzsBc, 10.0f)
-                ?? ExtractContextCall(tzs.Tokens, tzsBc, null);
+            var stockClip = ExtractContextCall(tzs.Tokens, tzsBc, 10.0f);
+            r.ClipResult = stockClip ?? ExtractContextCall(tzs.Tokens, tzsBc, null);
+            r.ClipHasStockValue = stockClip != null;
             r.FovResult = FindFovScaleLet(pi.Tokens, piBc);
             r.VertigoResult = FindVertigoStartZoom(sm.Tokens, smBc);
             r.UnzoomResult = FindUnzoomPatches(uz.Tokens, uzBc);

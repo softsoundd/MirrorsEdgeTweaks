@@ -113,6 +113,8 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<ISettingsStore, SettingsStore>();
             services.AddSingleton<IAppSettingsService, AppSettingsService>();
             services.AddSingleton<IGameDataService, GameDataService>();
+            services.AddSingleton<ITweakSnapshotService, TweakSnapshotService>();
+            services.AddSingleton<PendingReapplyStore>();
             services.AddSingleton<IFolderPickerService, FolderPickerService>();
             services.AddSingleton<IGameProcessMonitor, GameProcessMonitor>();
 
@@ -135,6 +137,7 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<CommunityModsViewModel>();
             services.AddSingleton<LaunchArgumentsViewModel>();
             services.AddSingleton<LanguageSettingsViewModel>();
+            services.AddSingleton<LegacyRestoreViewModel>();
             services.AddSingleton<MainViewModel>();
 
             services.AddSingleton<MainWindow>();

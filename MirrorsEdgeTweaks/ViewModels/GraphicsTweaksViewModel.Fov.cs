@@ -86,38 +86,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 await Task.Run(() =>
                 {
-                    if (config.EnginePackagePath == null)
-                        return;
-
-                    var offsets = _session.Offsets;
-                    byte[] fovValueBytes = BitConverter.GetBytes(newFov);
-                    using var stream = new FileStream(config.EnginePackagePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-
-                    if (offsets.PlayerControllerDefaultFovOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerDefaultFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.PlayerControllerDesiredFovOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerDesiredFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.PlayerControllerFovAngleOffset != -1)
-                    {
-                        stream.Position = offsets.PlayerControllerFovAngleOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.CameraFovOffset != -1)
-                    {
-                        stream.Position = offsets.CameraFovOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
-                    if (offsets.CameraActorFovAngleOffset != -1)
-                    {
-                        stream.Position = offsets.CameraActorFovAngleOffset;
-                        stream.Write(fovValueBytes, 0, fovValueBytes.Length);
-                    }
+                    if (config.EnginePackagePath != null)
+                        EngineFovWriter.Write(config.EnginePackagePath, _session.Offsets, newFov);
                 });
 
                 _session.Config.Fov = NewFovValue;

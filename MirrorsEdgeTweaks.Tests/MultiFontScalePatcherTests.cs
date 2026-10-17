@@ -142,6 +142,15 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public void ApplyToImage_RefusesAnImageWithABetaHook()
+        {
+            byte[] image = BuildPatchableImage();
+            Put(image, TextRaw + 0x200, "8B 06 8B 90 18 01 00 00 51 8B CE D9 1C 24 FF D2 E9");
+
+            Assert.Throws<InvalidOperationException>(() => MultiFontScalePatcher.ApplyToImage(image, "steam"));
+        }
+
+        [Fact]
         public void DetectState_ReportsPatchedOnlyAfterApply()
         {
             byte[] stock = BuildPatchableImage();
@@ -180,7 +189,7 @@ namespace MirrorsEdgeTweaks.Tests
         // Builds a PE32 image that holds one stock copy of every site the patcher locates.
         // .text holds the hook sites, the vtable constructor writes and the Parse pushes.
         // .rdata holds the vtables, the "ResX=" and "ResY=" strings and GSystemSettings.ResX and ResY.
-        private static byte[] BuildPatchableImage(bool withVtableCtors = true)
+        internal static byte[] BuildPatchableImage(bool withVtableCtors = true)
         {
             byte[] image = SyntheticPe.Build();
 

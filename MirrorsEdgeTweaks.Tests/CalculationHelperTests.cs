@@ -89,6 +89,21 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Null(GameVersionHelper.GetDownloadUrl("Game Version: 1.0.0.0", "Nonexistent Fix", AssetUrls));
         }
 
+        [Theory]
+        [InlineData("1.0.0.0", "Base_Engine.zip")]
+        [InlineData("Game Version: 1.0.1.0", "Base_Engine.zip")]
+        [InlineData("Game Version: 1.1.0.0 (DLC)", "DLC_Engine.zip")]
+        public void GetEngineDownloadUrl_MapsVersionToAsset(string versionInfo, string expectedFile)
+        {
+            Assert.Equal(AssetUrls.For(expectedFile), GameVersionHelper.GetEngineDownloadUrl(versionInfo, AssetUrls));
+        }
+
+        [Fact]
+        public void GetEngineDownloadUrl_UnknownGameVersionReturnsNull()
+        {
+            Assert.Null(GameVersionHelper.GetEngineDownloadUrl("Game Version: 2.0.0.0", AssetUrls));
+        }
+
         [Fact]
         public void GetGameVersion_MissingDirectoryIsInvalid()
         {

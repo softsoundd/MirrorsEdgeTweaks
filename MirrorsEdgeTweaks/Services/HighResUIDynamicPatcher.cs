@@ -37,8 +37,8 @@ namespace MirrorsEdgeTweaks.Services
         public static void ApplyEngine(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) != -1)
-                return;
+            if (Helpers.LegacyChangeDetector.ContainsBetaHighResCommand(data))
+                throw Helpers.LegacyChangeDetector.PackageRestoreRequired("Engine.u");
 
             EngineRefs r;
             int serialOffset, insertBc;
@@ -62,6 +62,12 @@ namespace MirrorsEdgeTweaks.Services
 
             int exportStart = serialOffset;
             int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
+
+            // The betas' blob also contains HighResSignature, so only this exact blob counts as installed.
+            int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
+            if (BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss) != -1)
+                return;
+
             int origLen = data.Length;
             int insertFile = bcStart + insertBc;
 

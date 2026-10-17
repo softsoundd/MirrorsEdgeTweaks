@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
+using MirrorsEdgeTweaks.Models;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 
@@ -86,9 +87,14 @@ namespace MirrorsEdgeTweaks.ViewModels
             TryReapplySteamLanguageFix();
         }
 
-        private int? TryGetInstalledLanguageIndex()
+        private int? TryGetInstalledLanguageIndex() =>
+            ReadInstalledLanguageCode(_session.Config) is { } code ? MapTdEngineLanguageCodeToIndex(code) : null;
+
+        // Returns the Language= value from TdEngine.ini, such as "int".
+        // Returns null when the ini or the entry is missing.
+        internal static string? ReadInstalledLanguageCode(GameConfiguration config)
         {
-            string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
+            string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(config);
 
             if (!File.Exists(tdEnginePath))
                 return null;
@@ -98,14 +104,18 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string trimmedLine = line.Trim();
 
                 if (trimmedLine.StartsWith("Language="))
-                {
-                    string value = trimmedLine.Substring("Language=".Length).Trim();
-                    return MapTdEngineLanguageCodeToIndex(value);
-                }
+                    return trimmedLine.Substring("Language=".Length).Trim();
             }
 
             return null;
         }
+
+        // Returns the runtime-assets language pack for a Language= value.
+        // Returns null for an unknown language.
+        internal static string? LanguagePackFor(string languageCode) =>
+            MapTdEngineLanguageCodeToIndex(languageCode) is { } index
+                ? GetLanguageConfig(LanguageNames[index])?.ZipFileName
+                : null;
 
         private static int? MapTdEngineLanguageCodeToIndex(string value) => value.ToLower() switch
         {
@@ -341,7 +351,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             public string TdEngineLanguage { get; set; } = "";
         }
 
-        private LanguageConfig? GetLanguageConfig(string language)
+        private static LanguageConfig? GetLanguageConfig(string language)
         {
             return language switch
             {

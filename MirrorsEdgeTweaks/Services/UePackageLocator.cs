@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -112,6 +113,20 @@ namespace MirrorsEdgeTweaks.Services
         {
             return package.Names.FindIndex(n => n.ToString() == name);
         }
+
+        // Returns the property's value in the class default object, as UELib formats it.
+        // Returns null when the class or the property is missing.
+        public static string? ReadDefault(UnrealPackage package, string className, string propertyName)
+        {
+            if (package.FindObject<UClass>(className)?.Default is not UObject cdo)
+                return null;
+            cdo.Load<UObjectRecordStream>();
+            return cdo.Properties?.FirstOrDefault(p => p.Name == propertyName)?.Value;
+        }
+
+        public static float? ReadFloatDefault(UnrealPackage package, string className, string propertyName) =>
+            float.TryParse(ReadDefault(package, className, propertyName), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float value) ? value : null;
 
         public static int Pos(Token t) => t.StoragePosition;
 

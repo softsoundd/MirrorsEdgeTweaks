@@ -130,6 +130,9 @@ namespace MirrorsEdgeTweaks.Helpers
 
         internal static byte[] ApplyToImage(byte[] data, string versionTag)
         {
+            if (LegacyChangeDetector.HasBetaHighResHook(data))
+                throw LegacyChangeDetector.ExeVerificationRequired();
+
             var pe = PeImageLayout.Parse(data);
 
             uint gssResYVa = FindGssResYVa(data, pe)
@@ -558,14 +561,8 @@ namespace MirrorsEdgeTweaks.Helpers
         // Returns null when the immediate is not in a data section, since a vtable is never code.
         private static uint? FindVtableByCtor(byte[] data, PeImageLayout pe, BytePattern ctor, int immOffset)
         {
-            var text = pe.FindSectionByName(".text");
-            if (text == null) return null;
-            int start = (int)text.PointerToRawData;
-            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
-
-            int p = IndexOf(data, ctor, start, end);
+            int p = ctor.FindUniqueInText(data, pe);
             if (p < 0) return null;
-            if (IndexOf(data, ctor, p + 1, end) >= 0) return null; // ambiguous
             if (p + immOffset + 4 > data.Length) return null;
             uint vt = BitConverter.ToUInt32(data, p + immOffset);
             try
@@ -605,77 +602,15 @@ namespace MirrorsEdgeTweaks.Helpers
             out int hookOff, out uint hookVa)
         {
             hookOff = 0; hookVa = 0;
-            var text = pe.FindSectionByName(".text");
-            if (text == null) return false;
-            int start = (int)text.PointerToRawData;
-            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
-
-            int p = IndexOf(data, prefix, start, end);
+            int p = prefix.FindUniqueInText(data, pe);
             if (p < 0) return false;
-            if (IndexOf(data, prefix, p + 1, end) >= 0) return false; // ambiguous
 
             hookOff = p + hookOffset;
             hookVa = pe.OffsetToVa(hookOff);
             return true;
         }
 
-        private static int IndexOf(byte[] data, BytePattern pat, int start, int end)
-        {
-            int limit = end - pat.Length;
-            for (int i = start; i <= limit; i++)
-                if (pat.MatchesAt(data, i)) return i;
-            return -1;
-        }
-
         private static int IndexOf(byte[] data, byte[] pat, int start, int end)
-            => IndexOf(data, (BytePattern)pat, start, end);
-
-        // Matches bytes with optional wildcards, so a locator can skip per-build absolute addresses
-        // and the bytes its own detour overwrites.
-        // A plain byte[] converts to a pattern without wildcards.
-        private readonly struct BytePattern
-        {
-            private readonly byte[] _bytes;
-            // False marks a wildcard position.
-            private readonly bool[] _fixed;
-
-            private BytePattern(byte[] bytes, bool[] fixedMask)
-            {
-                _bytes = bytes;
-                _fixed = fixedMask;
-            }
-
-            public int Length => _bytes.Length;
-
-            public static implicit operator BytePattern(byte[] bytes)
-            {
-                var fixedMask = new bool[bytes.Length];
-                Array.Fill(fixedMask, true);
-                return new BytePattern(bytes, fixedMask);
-            }
-
-            // Parses whitespace-separated hex bytes such as "8B 06 ?? FF", where "??" is a wildcard.
-            public static BytePattern Parse(string spec)
-            {
-                string[] tokens = spec.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                var bytes = new byte[tokens.Length];
-                var fixedMask = new bool[tokens.Length];
-                for (int i = 0; i < tokens.Length; i++)
-                {
-                    if (tokens[i] == "??")
-                        continue;
-                    bytes[i] = Convert.ToByte(tokens[i], 16);
-                    fixedMask[i] = true;
-                }
-                return new BytePattern(bytes, fixedMask);
-            }
-
-            public bool MatchesAt(byte[] data, int at)
-            {
-                for (int j = 0; j < _bytes.Length; j++)
-                    if (_fixed[j] && data[at + j] != _bytes[j]) return false;
-                return true;
-            }
-        }
+            => ((BytePattern)pat).IndexOf(data, start, end);
     }
 }

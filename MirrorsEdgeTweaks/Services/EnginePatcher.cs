@@ -104,9 +104,11 @@ namespace MirrorsEdgeTweaks.Services
         {
             byte[] data = File.ReadAllBytes(enginePath);
             using var pkg = UePackageLocator.Load(enginePath);
-            var r = Resolve(pkg);
-            return DetectFromResolved(data, r);
+            return DetectState(data, pkg);
         }
+
+        internal static EnginePatchState DetectState(byte[] data, UnrealPackage pkg) =>
+            DetectFromResolved(data, Resolve(pkg));
 
         static EnginePatchState DetectFromResolved(byte[] data, Resolved r)
         {

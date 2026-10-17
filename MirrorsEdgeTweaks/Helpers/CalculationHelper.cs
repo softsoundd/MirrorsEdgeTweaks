@@ -77,22 +77,26 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
+        // Returns the runtime-assets prefix for the game version.
+        // Returns null for a version that has no assets.
+        private static string? AssetPrefix(string gameVersionInfo)
+        {
+            if (gameVersionInfo.Contains("1.0.0.0") || gameVersionInfo.Contains("1.0.1.0"))
+                return "Base_";
+            if (gameVersionInfo.Contains("1.1.0.0"))
+                return "DLC_";
+            return null;
+        }
+
+        public static string? GetEngineDownloadUrl(string gameVersionInfo, IAssetUrlProvider assetUrls) =>
+            AssetPrefix(gameVersionInfo) is { } prefix ? assetUrls.For(prefix + "Engine.zip") : null;
+
         public static string? GetDownloadUrl(string gameVersionInfo, string selectedFix, IAssetUrlProvider assetUrls)
         {
-            string baseUrl;
-
-            if (gameVersionInfo.Contains("1.0.0.0") || gameVersionInfo.Contains("1.0.1.0"))
-            {
-                baseUrl = assetUrls.AssetBase + "Base_";
-            }
-            else if (gameVersionInfo.Contains("1.1.0.0"))
-            {
-                baseUrl = assetUrls.AssetBase + "DLC_";
-            }
-            else
-            {
+            string? prefix = AssetPrefix(gameVersionInfo);
+            if (prefix == null)
                 return null;
-            }
+            string baseUrl = assetUrls.AssetBase + prefix;
 
             string fileName = selectedFix switch
             {
