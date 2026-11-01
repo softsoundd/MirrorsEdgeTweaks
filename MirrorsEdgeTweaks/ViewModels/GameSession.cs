@@ -29,6 +29,11 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public void NotifyUserFolderContextChanged() => UserFolderContextChanged?.Invoke();
 
+        // Raised after Tweaks Scripts is installed or uninstalled.
+        public event Action? TweaksScriptsChanged;
+
+        public void NotifyTweaksScriptsChanged() => TweaksScriptsChanged?.Invoke();
+
         [ObservableProperty]
         private bool _isGameLoaded;
     }

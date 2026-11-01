@@ -67,6 +67,22 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Contains("'Jump'", warning.Message);
         }
 
+        [Theory]
+        [InlineData("F7", "ScrollUpMacroKey F7")]
+        [InlineData("", "ScrollUpMacroKey")]
+        public async Task ApplyKeyAsync_MacroKey_RewritesItsSettingsLine(string key, string expectedLine)
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, dialogs, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[] { $"ScrollDownMacroKey {ScrollDownMacroKey}", "ScrollUpMacroKey F8" });
+
+            await viewModel.ApplyKeyAsync(viewModel.ScrollUpMacro, key);
+
+            Assert.Equal(new[] { $"ScrollDownMacroKey {ScrollDownMacroKey}", expectedLine }, File.ReadAllLines(settingsPath));
+            Assert.Equal(key, viewModel.ScrollUpMacro.DisplayKey);
+            Assert.Empty(dialogs.Messages);
+        }
+
         [Fact]
         public async Task ApplyKeyAsync_FreeKey_RebindsAndUpdatesField()
         {
@@ -201,6 +217,25 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public void LoadMacroKeybinds_ReadsLastLineForEachKey()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[]
+            {
+                "// ScrollDownMacroKey F1",
+                "ScrollDownMacroKey F2",
+                "  scrolldownmacrokey   F3  ",
+                "ScrollUpMacroKey F4",
+            });
+
+            viewModel.LoadMacroKeybinds();
+
+            Assert.Equal("F3", viewModel.ScrollDownMacro.DisplayKey);
+            Assert.Equal("F4", viewModel.ScrollUpMacro.DisplayKey);
+        }
+
+        [Fact]
         public void LoadMacroKeybinds_KeyNoLongerInFile_ClearsField()
         {
             using var temp = new TempDirectory();
@@ -212,13 +247,156 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(string.Empty, viewModel.ScrollDownMacro.DisplayKey);
         }
 
+        [Theory]
+        [InlineData("TimerVisibility true", 0)]
+        [InlineData("timervisibility ON", 0)]
+        [InlineData("TimerVisibility 1", 0)]
+        [InlineData("TimerVisibility false", 1)]
+        [InlineData("TimerVisibility off", 1)]
+        [InlineData("TimerVisibility 0", 1)]
+        [InlineData("TimerVisibility maybe", -1)]
+        [InlineData("TimerVisibility", -1)]
+        [InlineData("// TimerVisibility true", -1)]
+        public void LoadSoftimerSettings_MapsFileValueToComboBoxIndex(string line, int expectedIndex)
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[] { line });
+
+            viewModel.LoadSoftimerSettings();
+
+            Assert.Equal(expectedIndex, Setting(viewModel, "TimerVisibility").SelectedIndex);
+        }
+
+        [Fact]
+        public void LoadSoftimerSettings_KeyRepeated_UsesLastLine()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[] { "BagHUD true", "BagHUD false" });
+
+            viewModel.LoadSoftimerSettings();
+
+            Assert.Equal(1, Setting(viewModel, "BagHUD").SelectedIndex);
+        }
+
+        [Fact]
+        public void LoadSoftimerSettings_KeyNoLongerInFile_ClearsField()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[] { "BagHUD true" });
+            viewModel.LoadSoftimerSettings();
+            File.WriteAllLines(settingsPath, new[] { "Speedometer true" });
+
+            viewModel.LoadSoftimerSettings();
+
+            Assert.Equal(-1, Setting(viewModel, "BagHUD").SelectedIndex);
+        }
+
+        [Fact]
+        public async Task LoadSoftimerSettings_DoesNotRewriteSettingsFile()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path, out GameSession session);
+            File.WriteAllLines(settingsPath, new[] { "BagHUD ON" });
+
+            viewModel.LoadSoftimerSettings();
+            await WaitForAppliesAsync(session);
+
+            Assert.Equal(new[] { "BagHUD ON" }, File.ReadAllLines(settingsPath));
+        }
+
+        [Fact]
+        public async Task ApplySoftimerSettingAsync_RewritesEveryLineForThatKeyOnly()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, dialogs, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[]
+            {
+                "// TimerVisibility true",
+                "TimerVisibility true",
+                "SimpleTimer true",
+                $"ScrollDownMacroKey {ScrollDownMacroKey}",
+                "timervisibility on",
+            });
+
+            await viewModel.ApplySoftimerSettingAsync(Setting(viewModel, "TimerVisibility"), enabled: false);
+
+            Assert.Equal(new[]
+            {
+                "// TimerVisibility true",
+                "TimerVisibility false",
+                "SimpleTimer true",
+                $"ScrollDownMacroKey {ScrollDownMacroKey}",
+                "TimerVisibility false",
+            }, File.ReadAllLines(settingsPath));
+            Assert.Empty(dialogs.Messages);
+        }
+
+        [Fact]
+        public async Task ApplySoftimerSettingAsync_KeyNotInFile_AppendsLine()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, _, _, settingsPath) = CreateViewModel(temp.Path);
+            string[] before = File.ReadAllLines(settingsPath);
+
+            await viewModel.ApplySoftimerSettingAsync(Setting(viewModel, "InputOverlay"), enabled: true);
+
+            Assert.Equal(before.Append("InputOverlay true"), File.ReadAllLines(settingsPath));
+        }
+
+        [Fact]
+        public async Task ApplySoftimerSettingAsync_NoSettingsFile_WarnsAndClearsField()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, dialogs, _, settingsPath) = CreateViewModel(temp.Path);
+            File.WriteAllLines(settingsPath, new[] { "Speedometer false" });
+            viewModel.LoadSoftimerSettings();
+            File.Delete(settingsPath);
+            SoftimerSettingEntryViewModel speedometer = Setting(viewModel, "Speedometer");
+
+            await viewModel.ApplySoftimerSettingAsync(speedometer, enabled: true);
+
+            Assert.False(File.Exists(settingsPath));
+            Assert.Equal(-1, speedometer.SelectedIndex);
+            Assert.Equal("Tweaks Scripts Not Installed", Assert.Single(dialogs.Messages).Title);
+        }
+
+        [Fact]
+        public async Task SoftimerSettingSelectedIndex_Changed_WritesValueToSettingsFile()
+        {
+            using var temp = new TempDirectory();
+            var (viewModel, dialogs, _, settingsPath) = CreateViewModel(temp.Path, out GameSession session);
+            File.WriteAllLines(settingsPath, new[] { "BagHUD true", "Speedometer false" });
+            viewModel.LoadSoftimerSettings();
+
+            Setting(viewModel, "BagHUD").SelectedIndex = 1;
+            Setting(viewModel, "Speedometer").SelectedIndex = 0;
+            await WaitForAppliesAsync(session);
+
+            Assert.Equal(new[] { "BagHUD false", "Speedometer true" }, File.ReadAllLines(settingsPath));
+            Assert.Empty(dialogs.Messages);
+        }
+
         private static string Binding(string key, string command) =>
             $"Bindings=(Name=\"{key}\",Command=\"{command}\",Control=False,Shift=False,Alt=False)";
 
+        private static SoftimerSettingEntryViewModel Setting(KeybindsViewModel viewModel, string key) =>
+            viewModel.SoftimerSettings.Single(setting => setting.Key == key);
+
+        // The gate runs one apply at a time, so this completes after every apply queued before it.
+        private static Task WaitForAppliesAsync(GameSession session) =>
+            session.ApplyGate.RunAsync(() => Task.CompletedTask);
+
         private static (KeybindsViewModel ViewModel, RecordingDialogService Dialogs, string TdInputPath, string SettingsPath) CreateViewModel(
-            string root, params string[] extraBindings)
+            string root, params string[] extraBindings) =>
+            CreateViewModel(root, out _, extraBindings);
+
+        private static (KeybindsViewModel ViewModel, RecordingDialogService Dialogs, string TdInputPath, string SettingsPath) CreateViewModel(
+            string root, out GameSession session, params string[] extraBindings)
         {
-            var session = new GameSession();
+            session = new GameSession();
             session.Config.UserFolderPath = Path.Combine(root, "TdGame");
             session.Config.GameDirectoryPath = Path.Combine(root, "Game");
 
@@ -235,6 +413,7 @@ namespace MirrorsEdgeTweaks.Tests
             var viewModel = new KeybindsViewModel(dialogs, session);
             viewModel.LoadCustomKeybinds();
             viewModel.LoadMacroKeybinds();
+            viewModel.LoadSoftimerSettings();
             return (viewModel, dialogs, tdInputPath, settingsPath);
         }
     }

@@ -167,10 +167,16 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 SoftimerMenu, ScrollDownMacro, ScrollUpMacro,
             };
+            SoftimerSettings = CreateSoftimerSettings();
         }
 
         private string TdInputIniPath =>
             UserTdGamePathHelper.GetTdInputIniPath(_session.Config);
+
+        private string? TweaksScriptsSettingsPath =>
+            string.IsNullOrEmpty(_session.Config.GameDirectoryPath)
+                ? null
+                : TweaksScriptsSettingsHelper.GetPath(_session.Config.GameDirectoryPath);
 
         public void ShowInfo(KeybindEntryViewModel entry) =>
             _dialogService.ShowMessage(entry.InfoTitle, entry.InfoBody, DialogMessageType.Information);
@@ -182,10 +188,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (entry.Info.Type == KeybindType.Macro)
             {
-                if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+                if (TweaksScriptsSettingsPath is not string settingsFilePath)
                     return;
 
-                string settingsFilePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "TweaksScriptsSettings");
                 if (!File.Exists(settingsFilePath))
                 {
                     _dialogService.ShowMessage("Tweaks Scripts Not Installed",
@@ -301,33 +306,19 @@ namespace MirrorsEdgeTweaks.ViewModels
             ScrollDownMacro.DisplayKey = string.Empty;
             ScrollUpMacro.DisplayKey = string.Empty;
 
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            if (TweaksScriptsSettingsPath is not string settingsFilePath)
                 return;
 
             try
             {
                 _isLoading = true;
 
-                string settingsFilePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "TweaksScriptsSettings");
-
                 if (!File.Exists(settingsFilePath))
                     return;
 
-                var lines = File.ReadAllLines(settingsFilePath);
-
-                foreach (var line in lines)
-                {
-                    if (line.StartsWith("ScrollDownMacroKey"))
-                    {
-                        var parts = line.Split(new[] { ' ' }, 2);
-                        ScrollDownMacro.DisplayKey = parts.Length > 1 ? parts[1] : string.Empty;
-                    }
-                    else if (line.StartsWith("ScrollUpMacroKey"))
-                    {
-                        var parts = line.Split(new[] { ' ' }, 2);
-                        ScrollUpMacro.DisplayKey = parts.Length > 1 ? parts[1] : string.Empty;
-                    }
-                }
+                var values = TweaksScriptsSettingsHelper.ReadValues(File.ReadAllLines(settingsFilePath));
+                ScrollDownMacro.DisplayKey = values.GetValueOrDefault("ScrollDownMacroKey", string.Empty);
+                ScrollUpMacro.DisplayKey = values.GetValueOrDefault("ScrollUpMacroKey", string.Empty);
             }
             catch
             {
@@ -619,11 +610,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private string? CheckMacroKeybindConflict(string ue3Key, string? excludeSetting = null)
         {
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
-                return null;
-
-            string settingsFilePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "TweaksScriptsSettings");
-            if (!File.Exists(settingsFilePath))
+            if (TweaksScriptsSettingsPath is not string settingsFilePath || !File.Exists(settingsFilePath))
                 return null;
 
             var macroSettings = new Dictionary<string, string>
@@ -632,20 +619,12 @@ namespace MirrorsEdgeTweaks.ViewModels
                 ["ScrollUpMacroKey"] = "Scroll Up Macro Key"
             };
 
-            foreach (var line in File.ReadAllLines(settingsFilePath))
-            {
-                foreach (var kvp in macroSettings)
-                {
-                    if (kvp.Key == excludeSetting)
-                        continue;
+            var values = TweaksScriptsSettingsHelper.ReadValues(File.ReadAllLines(settingsFilePath));
 
-                    if (line.StartsWith(kvp.Key))
-                    {
-                        var parts = line.Split(new[] { ' ' }, 2);
-                        if (parts.Length > 1 && parts[1] == ue3Key)
-                            return kvp.Value;
-                    }
-                }
+            foreach (var kvp in macroSettings)
+            {
+                if (kvp.Key != excludeSetting && values.TryGetValue(kvp.Key, out string? value) && value == ue3Key)
+                    return kvp.Value;
             }
 
             return null;
@@ -653,7 +632,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task<bool> UpdateMacroKeybind(string settingName, string ue3Key)
         {
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            if (TweaksScriptsSettingsPath is not string settingsFilePath)
                 return false;
 
             if (!string.IsNullOrEmpty(ue3Key))
@@ -688,27 +667,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string settingsFilePath = Path.Combine(_session.Config.GameDirectoryPath, "Binaries", "TweaksScriptsSettings");
-
-                var lines = File.ReadAllLines(settingsFilePath).ToList();
-                bool found = false;
-
-                for (int i = 0; i < lines.Count; i++)
-                {
-                    if (lines[i].StartsWith(settingName))
-                    {
-                        lines[i] = string.IsNullOrEmpty(ue3Key) ? settingName : $"{settingName} {ue3Key}";
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found)
-                {
-                    lines.Add(string.IsNullOrEmpty(ue3Key) ? settingName : $"{settingName} {ue3Key}");
-                }
-
-                File.WriteAllLines(settingsFilePath, lines);
+                WriteTweaksScriptsSetting(settingsFilePath, settingName, ue3Key);
             }
             catch (Exception ex)
             {
@@ -718,5 +677,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             return true;
         }
+
+        private static void WriteTweaksScriptsSetting(string settingsFilePath, string key, string value) =>
+            WritePreservingReadOnly(settingsFilePath,
+                TweaksScriptsSettingsHelper.SetValue(File.ReadAllLines(settingsFilePath), key, value));
     }
 }

@@ -177,66 +177,15 @@ namespace MirrorsEdgeTweaks.ViewModels
                     "Tweaks Scripts",
                     customExtract: (tempZipPath, dest) => Task.Run(() =>
                     {
-                        string binariesPath = Path.Combine(dest, "Binaries");
-                        string settingsPath = Path.Combine(binariesPath, "TweaksScriptsSettings");
-                        Dictionary<string, string> existingSettings = new Dictionary<string, string>();
-
-                        if (File.Exists(settingsPath))
-                        {
-                            var lines = File.ReadAllLines(settingsPath);
-                            foreach (var line in lines)
-                            {
-                                var trimmedLine = line.Trim();
-                                if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//")) continue;
-
-                                var parts = trimmedLine.Split(new[] { ' ' }, 2);
-                                if (parts.Length > 0)
-                                {
-                                    string key = parts[0];
-                                    string value = parts.Length > 1 ? parts[1] : string.Empty;
-                                    existingSettings[key] = value;
-                                }
-                            }
-                        }
+                        string settingsPath = TweaksScriptsSettingsHelper.GetPath(dest);
+                        string[]? previousSettings = File.Exists(settingsPath) ? File.ReadAllLines(settingsPath) : null;
 
                         ZipFile.ExtractToDirectory(tempZipPath, dest, true);
 
-                        if (existingSettings.Count > 0 && File.Exists(settingsPath))
+                        if (previousSettings != null && File.Exists(settingsPath))
                         {
-                            var newLines = File.ReadAllLines(settingsPath).ToList();
-                            var updatedLines = new List<string>();
-
-                            foreach (var line in newLines)
-                            {
-                                var trimmedLine = line.Trim();
-                                if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("//"))
-                                {
-                                    updatedLines.Add(line);
-                                    continue;
-                                }
-
-                                var parts = trimmedLine.Split(new[] { ' ' }, 2);
-                                if (parts.Length > 0)
-                                {
-                                    string key = parts[0];
-                                    if (existingSettings.ContainsKey(key))
-                                    {
-                                        string oldValue = existingSettings[key];
-                                        string newLine = string.IsNullOrEmpty(oldValue) ? key : $"{key} {oldValue}";
-                                        updatedLines.Add(newLine);
-                                    }
-                                    else
-                                    {
-                                        updatedLines.Add(line);
-                                    }
-                                }
-                                else
-                                {
-                                    updatedLines.Add(line);
-                                }
-                            }
-
-                            File.WriteAllLines(settingsPath, updatedLines);
+                            File.WriteAllLines(settingsPath,
+                                TweaksScriptsSettingsHelper.MergeValues(File.ReadAllLines(settingsPath), previousSettings));
                         }
 
                         string exePath = Path.Combine(dest, "Binaries", "MirrorsEdge.exe");
@@ -262,6 +211,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _gameStatus.IsGameTweaksEnabled = true;
                 RefreshTweaksScriptsStatus();
+                _session.NotifyTweaksScriptsChanged();
             }
         }
 
@@ -352,6 +302,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally
             {
                 RefreshTweaksScriptsStatus();
+                _session.NotifyTweaksScriptsChanged();
             }
         }
 

@@ -52,6 +52,15 @@
                 </Button>
             </Grid>
         </DataTemplate>
+
+        <DataTemplate x:Key="SoftimerSettingRowTemplate">
+            <controls:SettingRow Margin="0,15,0,0" Label="{Binding Label}" Foreground="Black" InfoCommand="{Binding ShowInfoCommand}">
+                <ComboBox Style="{StaticResource MaterialDesignComboBox}" Foreground="Black" SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="Enabled" Foreground="Black"/>
+                    <ComboBoxItem Content="Disabled" Foreground="Black"/>
+                </ComboBox>
+            </controls:SettingRow>
+        </DataTemplate>
     </Window.Resources>
 
     <materialDesign:DialogHost Identifier="RootDialog">
@@ -773,7 +782,7 @@
                                 </ComboBox>
                             </controls:SettingRow>
 
-                            <TextBlock Text="Note: All following settings below set TdEngine.ini to read-only so Mirror's Edge does not overwrite your changes on launch. As a result, any video settings changed in-game will not be saved."
+                            <TextBlock Text="Note: Most of the following settings below set TdEngine.ini to read-only so Mirror's Edge does not overwrite your changes on launch. As a result, any video settings changed in-game will not be saved."
                                        FontSize="12"
                                        FontStyle="Italic"
                                        Foreground="Gray"
@@ -1381,10 +1390,16 @@
 
                             <Expander Style="{StaticResource SectionExpander}">
                                 <Expander.Header>
-                                    <TextBlock Text="Softimer Keybinds" Style="{StaticResource SectionExpanderHeaderText}" />
+                                    <TextBlock Text="Softimer Keybinds/Settings" Style="{StaticResource SectionExpanderHeaderText}" />
                                 </Expander.Header>
 
+                            <StackPanel>
+
                             <ItemsControl ItemsSource="{Binding Keybinds.SoftimerKeybinds}" ItemTemplate="{StaticResource KeybindRowTemplate}"/>
+
+                            <ItemsControl ItemsSource="{Binding Keybinds.SoftimerSettings}" ItemTemplate="{StaticResource SoftimerSettingRowTemplate}"/>
+
+                            </StackPanel>
 
                             </Expander>
                             

@@ -107,9 +107,16 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameData.PackagesReloaded += OnPackagesReloaded;
             _processMonitor.RunningStateChanged += OnGameRunningChanged;
             Session.UserFolderContextChanged += OnUserFolderContextChanged;
+            Session.TweaksScriptsChanged += OnTweaksScriptsChanged;
         }
 
         private void OnUserFolderContextChanged() => Dispatch(RefreshUserFolderDependentFeatures);
+
+        private void OnTweaksScriptsChanged() => Dispatch(() =>
+        {
+            Keybinds.LoadMacroKeybinds();
+            Keybinds.LoadSoftimerSettings();
+        });
 
         private void OnGameRunningChanged(bool running) => Dispatch(() =>
         {
@@ -250,6 +257,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 Input.RefreshMouseSmoothing();
                 Keybinds.LoadCustomKeybinds();
                 Keybinds.LoadMacroKeybinds();
+                Keybinds.LoadSoftimerSettings();
                 Init.RefreshIntroVideo();
                 Init.RefreshMainMenuDelay();
                 Init.RefreshTimeTrialCountdown();
@@ -464,6 +472,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             Input.RefreshMouseSmoothing();
             Keybinds.LoadCustomKeybinds();
             Keybinds.LoadMacroKeybinds();
+            Keybinds.LoadSoftimerSettings();
             Init.RefreshIntroVideo();
             Init.RefreshMainMenuDelay();
             Init.RefreshTimeTrialCountdown();

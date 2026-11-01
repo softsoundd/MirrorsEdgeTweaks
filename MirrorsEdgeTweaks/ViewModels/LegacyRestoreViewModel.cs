@@ -9,7 +9,7 @@ namespace MirrorsEdgeTweaks.ViewModels
     public class LegacyRestoreViewModel : BusyViewModel
     {
         private const string UnsupportedChangesIntro =
-            "Mirror's Edge Tweaks found changes from an older version of Tweaks that this version cannot manage:";
+            "Mirror's Edge Tweaks detected outdated patches from an older version of Tweaks in your game files.";
 
         private readonly IDialogService _dialogService;
         private readonly IDownloadService _download;
@@ -54,7 +54,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (pending == null)
                     _pending.Save(gameDirectoryPath, await Task.Run(() => _snapshots.Capture(report)));
-                await ShowVerifyDialogAsync(gameDirectoryPath, report);
+                await ShowVerifyDialogAsync(gameDirectoryPath);
             }
             else if (!report.IsEmpty)
             {
@@ -119,21 +119,20 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
             }
 
-            string findings = string.Join("\n", report.Changes.Select(c => $"• {c.FileName}: {c.Description}"));
             string noteText = notes.Count > 0 ? "\n\n" + string.Join("\n\n", notes) : string.Empty;
 
             if (assets.Count == 0)
             {
                 await _dialogService.ShowMessageAsync("Unsupported Game Files",
-                    $"{UnsupportedChangesIntro}\n\n{findings}{noteText}\n\n" +
-                    "Some tweaks cannot be applied to these files until they are restored.",
+                    $"{UnsupportedChangesIntro}{noteText}\n\n" +
+                    "Some tweaks cannot be applied to the affected files until they are restored.",
                     DialogMessageType.Warning);
                 return;
             }
 
             bool confirmed = await _dialogService.ShowConfirmationAsync("Restore Game Files",
-                $"{UnsupportedChangesIntro}\n\n{findings}{noteText}\n\n" +
-                "Download stock copies of these files and re-apply your tweaks? " +
+                $"{UnsupportedChangesIntro}{noteText}\n\n" +
+                "Download stock copies of the affected files and re-apply your tweaks? " +
                 "Until they are restored, some tweaks cannot be applied to them.");
             if (!confirmed)
                 return;
@@ -190,9 +189,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _decompressionService.RunDecompressor(package);
         }
 
-        private async Task ShowVerifyDialogAsync(string gameDir, LegacyChangeReport report)
+        private async Task ShowVerifyDialogAsync(string gameDir)
         {
-            string findings = string.Join("\n", report.Changes.Select(c => $"• {c.FileName}: {c.Description}"));
             string version = await Task.Run(() => ReadExeVersion(gameDir));
             string verify = version switch
             {
@@ -206,7 +204,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             };
 
             await _dialogService.ShowMessageAsync("Verify Game Files",
-                $"{UnsupportedChangesIntro}\n\n{findings}\n\n" +
+                $"{UnsupportedChangesIntro}\n\n" +
                 "Mirror's Edge Tweaks cannot download a stock MirrorsEdge.exe, so the game files need to be verified. " +
                 $"{verify}\n\n" +
                 "Your tweaks have been saved, and Mirror's Edge Tweaks will re-apply them the next time it starts. " +
