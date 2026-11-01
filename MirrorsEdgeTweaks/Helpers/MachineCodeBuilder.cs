@@ -99,6 +99,7 @@ namespace MirrorsEdgeTweaks.Helpers
         public void EmitJaeShort(string label) => EmitShort(0x73, label);
         public void EmitJaShort(string label) => EmitShort(0x77, label);
         public void EmitJbShort(string label) => EmitShort(0x72, label);
+        public void EmitJleShort(string label) => EmitShort(0x7E, label);
         public void EmitJmpShort(string label) => EmitShort(0xEB, label);
         public void EmitJecxzShort(string label) => EmitShort(0xE3, label);
 

@@ -80,6 +80,7 @@ namespace MirrorsEdgeTweaks.Services
         private const int NearZOff = 0x1C, NearWOff = 0x20, FarZOff = 0x24, FarWOff = 0x28;
         private const int NearVecOff = NearZOff - 8, FarVecOff = FarZOff - 8;
         private const int FlipTableOff = 0x2C;
+        private const int OneZOff = 0x38, OneWOff = 0x3C, OneVecOff = OneZOff - 8;
         private const int MatrixOff = 0x40;
         private const int CodeOff = 0x80;
 
@@ -360,6 +361,8 @@ namespace MirrorsEdgeTweaks.Services
             BinaryPrimitives.WriteSingleLittleEndian(block.AsSpan(NearWOff), 1f);
             BinaryPrimitives.WriteSingleLittleEndian(block.AsSpan(FarWOff), 1f);
             FlipTable.CopyTo(block, FlipTableOff);
+            BinaryPrimitives.WriteSingleLittleEndian(block.AsSpan(OneZOff), 1f);
+            BinaryPrimitives.WriteSingleLittleEndian(block.AsSpan(OneWOff), 1f);
 
             var mc = new MachineCodeBuilder(D(CodeOff));
             void CmpReversed() { mc.Emit(new byte[] { 0x83, 0x3D }); mc.EmitUInt32(D(ReversedOff)); mc.Emit(0x00); }
@@ -484,7 +487,7 @@ namespace MirrorsEdgeTweaks.Services
                 mc.Emit(row == 0 ? new byte[] { 0x0F, 0x10, 0x00 } : new byte[] { 0x0F, 0x10, 0x40, (byte)(row * 16) }); // movups xmm0,[eax+row]
                 mc.Emit(new byte[] { 0x0F, 0x11, 0x05 }); mc.EmitUInt32(D(MatrixOff + row * 16));                        // movups [Matrix+row],xmm0
             }
-            mc.Emit(new byte[] { 0xC7, 0x05 }); mc.EmitUInt32(D(HaveMatrixOff)); mc.EmitUInt32(1); // mov [HaveMatrix],1
+            mc.Emit(new byte[] { 0xC6, 0x05 }); mc.EmitUInt32(D(HaveMatrixOff)); mc.Emit(0x01); // mov byte [HaveMatrix],1
             mc.Emit(new byte[] { 0xFF, 0x74, 0x24, 0x10 });                  // push [esp+0x10]                ViewOrigin
             mc.Emit(new byte[] { 0xFF, 0x74, 0x24, 0x10 });                  // push [esp+0x10]                ViewProjectionMatrix
             mc.Emit(new byte[] { 0xFF, 0x74, 0x24, 0x10 });                  // push [esp+0x10]                View
@@ -552,6 +555,9 @@ namespace MirrorsEdgeTweaks.Services
 
             // SetDepthBoundsTest(bEnable, ClipSpaceNearPos, ClipSpaceFarPos) swaps the two points and replaces each z with w - z.
             // The original then computes 1 - max and 1 - min on both its NVDB and clip-plane paths.
+            // A near point with z <= 0 gives a min of 0, so it becomes a constant far point at depth 1.
+            // Such a point can lie behind the camera when the camera is inside the light,
+            // where dividing w - z by its negative w gives a negative bound.
             int setDepthBoundsTest = mc.CurrentOffset;
             CmpReversed();
             mc.EmitJzShort("sdb_go");
@@ -563,17 +569,23 @@ namespace MirrorsEdgeTweaks.Services
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x5C, 0x40, 0x08 });            // subss xmm0,[eax+8]             w - z
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x11, 0x05 }); mc.EmitUInt32(D(NearZOff)); // movss [NearZ],xmm0
             mc.Emit(new byte[] { 0x8B, 0x44, 0x24, 0x08 });                  // mov eax,[esp+8]                ClipSpaceNearPos
+            mc.Emit(new byte[] { 0xC7, 0x44, 0x24, 0x08 }); mc.EmitUInt32(D(NearVecOff)); // mov [esp+8],NearVec
+            mc.Emit(new byte[] { 0xC7, 0x44, 0x24, 0x0C }); mc.EmitUInt32(D(OneVecOff));  // mov [esp+0xC],OneVec
+            mc.Emit(new byte[] { 0x83, 0x78, 0x08, 0x00 });                  // cmp dword [eax+8],0            z, as a signed integer
+            mc.EmitJleShort("sdb_go");
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x10, 0x40, 0x0C });            // movss xmm0,[eax+0xC]
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x11, 0x05 }); mc.EmitUInt32(D(FarWOff));  // movss [FarW],xmm0
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x5C, 0x40, 0x08 });            // subss xmm0,[eax+8]
             mc.Emit(new byte[] { 0xF3, 0x0F, 0x11, 0x05 }); mc.EmitUInt32(D(FarZOff));  // movss [FarZ],xmm0
-            mc.Emit(new byte[] { 0xC7, 0x44, 0x24, 0x08 }); mc.EmitUInt32(D(NearVecOff)); // mov [esp+8],NearVec
             mc.Emit(new byte[] { 0xC7, 0x44, 0x24, 0x0C }); mc.EmitUInt32(D(FarVecOff));  // mov [esp+0xC],FarVec
             mc.MarkLabel("sdb_go");
             mc.EmitJmpNear(s.SetDepthBoundsTest);
 
             // SetVertexShaderParameter(Shader, BufferIndex, BaseIndex, NumBytes, Value) forgets the matrix
             // when a write starts below c4, so that reapply cannot overwrite the new constants.
+            // These writes pass through unchanged, because some shaders keep other matrices in c0-c3,
+            // such as the height fog's ScreenToWorld.
+            // The batched elements that draw debug lines therefore keep standard depth and show through geometry.
             int setVertexShaderParameter = mc.CurrentOffset;
             mc.Emit(new byte[] { 0x83, 0x7C, 0x24, 0x0C, 0x40 });            // cmp [esp+0xC],0x40             BaseIndex, in bytes
             mc.EmitJaeShort("svsp_go");

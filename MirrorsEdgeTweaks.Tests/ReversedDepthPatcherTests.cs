@@ -154,7 +154,7 @@ namespace MirrorsEdgeTweaks.Tests
         public void Block_HoldsTheInitialData_AndChainsToEveryOriginal()
         {
             const uint BlockVa = 0x02400000;
-            const int ReversedOff = 0x08, ZFuncOff = 0x0C, FlipTableOff = 0x2C;
+            const int ReversedOff = 0x08, ZFuncOff = 0x0C, FlipTableOff = 0x2C, OneZOff = 0x38, OneWOff = 0x3C;
             const uint D3DCMP_LESSEQUAL = 4;
             byte[] image = BuildRhiImage(BuildFlat());
             var sites = ReversedDepthPatcher.FindSites(image, PeImageLayout.Parse(image));
@@ -164,6 +164,10 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(ReversedOff)));
             Assert.Equal(D3DCMP_LESSEQUAL, BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(ZFuncOff)));
             Assert.Equal(new byte[] { 0, 1, 5, 3, 7, 2, 6, 4, 8 }, block[FlipTableOff..(FlipTableOff + 9)]);
+
+            // SetDepthBoundsTest passes this point as the far point when the near point's z is not positive.
+            Assert.Equal(1f, BinaryPrimitives.ReadSingleLittleEndian(block.AsSpan(OneZOff)));
+            Assert.Equal(1f, BinaryPrimitives.ReadSingleLittleEndian(block.AsSpan(OneWOff)));
 
             // Each wrapper calls or jumps to its original.
             Assert.True(ContainsRel32(block, BlockVa, 0xE8, sites.SetRenderTarget, e.SetRenderTarget));
