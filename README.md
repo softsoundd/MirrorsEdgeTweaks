@@ -82,6 +82,7 @@ dotnet test --configuration Release
 - **[UELib](https://github.com/EliotVU/Unreal-Library)** by Eliot van Uytfanghe (EliotVU) - Unreal Engine package reading
 - **[NativeSharpLzo](https://github.com/BigBang1112/NativeSharpLzo)** by BigBang1112 - Unreal Engine package decompression (wraps [LZO](http://www.oberhumer.com/opensource/lzo/) by Markus F. X. J. Oberhumer)
 - **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Audio backend upgrade
+- **[DXVK](https://github.com/doitsujin/dxvk)** by Philip Rebohle (doitsujin) - Provides the 32-bit float depth for the Z-fighting fix
 - **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** by the .NET Foundation - MVVM framework
 - **[Microsoft.Xaml.Behaviors.Wpf](https://github.com/microsoft/XamlBehaviorsWpf)** by Microsoft - XAML behaviors for WPF
 - **[MaterialDesignThemes](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)** by James Willock - UI theming and controls
