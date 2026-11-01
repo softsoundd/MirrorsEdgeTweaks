@@ -1,5 +1,6 @@
 using System.IO;
 using UELib;
+using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Services
 {
@@ -13,7 +14,6 @@ namespace MirrorsEdgeTweaks.Services
         const int UNPATCHED_BSS = 739;
         const int PHASE1_NET = 11;
         const int P1_OLD_LEN = 11;
-        const int BLOB_A_SIZE = 40;
 
         // Phase 1 shifts every jump that targets 0x0B3 or later.
         // Each entry holds a jump's script offset and its stock target.
@@ -38,6 +38,11 @@ namespace MirrorsEdgeTweaks.Services
             public byte[] ImpTpov = Array.Empty<byte>();
             public byte[] LocalBlendPct = Array.Empty<byte>();
             public byte[] LocalNewPov = Array.Empty<byte>();
+            public byte[] CameraCacheFov = Array.Empty<byte>();
+            public List<int> JumpPositions = new();
+
+            // Stays -1 unless UELib decoded UpdateCamera through to its EndOfScript token.
+            public int EndOfScriptOffset = -1;
 
             public byte[] ArPropertyToken = Array.Empty<byte>();  // InstVar(ConstrainedAspectRatio)
 
@@ -47,14 +52,17 @@ namespace MirrorsEdgeTweaks.Services
             // Holds phase 1's ConstrainedAspectRatio = ViewTarget.AspectRatio assignment.
             public byte[] P1New = Array.Empty<byte>();
 
-            // Holds the start of blob A's DefaultAspectRatio > FloatConst condition.
+            // Holds the start of blob A's condition, for the current and the legacy blob A.
             public byte[] P2Sig = Array.Empty<byte>();
+            public byte[] LegacyP2Sig = Array.Empty<byte>();
         }
 
-        static Resolved Resolve(UnrealPackage pkg)
+        static Resolved Resolve(UnrealPackage pkg, byte[] data)
         {
             var uc = UePackageLocator.FindFunction(pkg, "Camera", "UpdateCamera")
                 ?? throw new InvalidOperationException("Cannot find Camera.UpdateCamera in Engine.u");
+            var getFov = UePackageLocator.FindFunction(pkg, "Camera", "GetFOVAngle")
+                ?? throw new InvalidOperationException("Cannot find Camera.GetFOVAngle in Engine.u");
 
             var r = new Resolved { SerialOffset = uc.SerialOffset };
 
@@ -72,14 +80,20 @@ namespace MirrorsEdgeTweaks.Services
             int fovImp = UePackageLocator.FindImportObjRef(pkg, "FOV", "FloatProperty");
             int tpovImp = UePackageLocator.FindImportObjRef(pkg, "TPOV", "ScriptStruct");
 
-            // The UpdateCamera locals are found by name, so the possibly patched function body is never decompiled.
+            // The UpdateCamera locals are found by name, because the function body may already be patched.
             int blendPct = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "BlendPct", "UpdateCamera"));
             int newPov = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "NewPOV", "UpdateCamera"));
 
+            r.CameraCacheFov = FindCameraCacheFovRead(getFov, data);
+
             if (car == 0 || defaultFov == 0 || defaultAr == 0 || pcOwner == 0 || myHud == 0
                 || sizeX == 0 || sizeY == 0 || viewTarget == 0 || aspectRatio == 0 || tViewTarget == 0
-                || fovImp == 0 || tpovImp == 0 || blendPct == 0 || newPov == 0)
+                || fovImp == 0 || tpovImp == 0 || blendPct == 0 || newPov == 0 || r.CameraCacheFov.Length == 0)
                 throw new InvalidOperationException("Cannot resolve Engine.u camera properties");
+
+            r.JumpPositions = UePackageLocator.ExtractJumpPositions(uc.Tokens);
+            if (uc.Tokens.Count > 0 && uc.Tokens[^1] is EndOfScriptToken end)
+                r.EndOfScriptOffset = UePackageLocator.Pos(end);
 
             r.InstDefaultFov = BytecodeBuilder.InstVar(defaultFov);
             r.InstDefaultAr = BytecodeBuilder.InstVar(defaultAr);
@@ -102,8 +116,28 @@ namespace MirrorsEdgeTweaks.Services
                     BytecodeBuilder.I32(aspectRatio), BytecodeBuilder.I32(tViewTarget),
                     BytecodeBuilder.InstVar(viewTarget)));
             r.P2Sig = BytecodeBuilder.GetP2Signature(r.InstDefaultAr);
+            r.LegacyP2Sig = BytecodeBuilder.GetLegacyP2Signature(r.InstDefaultAr);
 
             return r;
+        }
+
+        // GetFOVAngle ends with return CameraCache.POV.FOV, which is the read that blob A compares DefaultFOV with.
+        static byte[] FindCameraCacheFovRead(UeFunctionInfo getFov, byte[] data)
+        {
+            var tokens = getFov.Tokens;
+            int bcStart = getFov.SerialOffset + BytecodeBuilder.SCRIPT_HDR;
+            for (int i = 0; i + 3 < tokens.Count; i++)
+            {
+                if (tokens[i] is not ReturnToken) continue;
+                if (tokens[i + 1] is not StructMemberToken || tokens[i + 2] is not StructMemberToken) continue;
+                if (tokens[i + 3] is not InstanceVariableToken cache
+                    || cache.Object?.Name?.ToString() != "CameraCache") continue;
+
+                int start = bcStart + UePackageLocator.Pos(tokens[i + 1]);
+                int end = bcStart + UePackageLocator.Pos(cache) + BytecodeBuilder.VAR_TOKEN_SIZE;
+                return data[start..end];
+            }
+            return Array.Empty<byte>();
         }
 
         public static EnginePatchState DetectState(string enginePath)
@@ -114,7 +148,7 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         internal static EnginePatchState DetectState(byte[] data, UnrealPackage pkg) =>
-            DetectFromResolved(data, Resolve(pkg));
+            DetectFromResolved(data, Resolve(pkg, data));
 
         static EnginePatchState DetectFromResolved(byte[] data, Resolved r)
         {
@@ -125,14 +159,22 @@ namespace MirrorsEdgeTweaks.Services
             return EnginePatchState.Unpatched;
         }
 
+        // Finds the blob A that releases up to the 4.5.0 betas inserted, which this patcher cannot undo.
+        internal static bool HasLegacyBlobA(byte[] data, UnrealPackage pkg) => HasLegacyBlobA(data, Resolve(pkg, data));
+
+        static bool HasLegacyBlobA(byte[] data, Resolved r) => BytecodeBuilder.FindPattern(data, r.LegacyP2Sig) != -1;
+
         public static void Apply(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
             Resolved r;
             using (var pkg = UePackageLocator.Load(enginePath))
             {
-                r = Resolve(pkg);
+                r = Resolve(pkg, data);
             }
+
+            if (HasLegacyBlobA(data, r))
+                throw Helpers.LegacyChangeDetector.PackageRestoreRequired("Engine.u");
 
             int origLen = data.Length;
 
@@ -198,12 +240,9 @@ namespace MirrorsEdgeTweaks.Services
             int pointBBc = fcPos - bcStart;
             int pointBFile = fcPos;
 
-            byte[] blobA = BytecodeBuilder.BuildBlobA(pointABc, r.InstDefaultFov, r.InstDefaultAr);
+            byte[] blobA = BytecodeBuilder.BuildBlobA(pointABc, r.InstDefaultFov, r.InstDefaultAr, r.CameraCacheFov);
             int blobBBc = pointBBc + blobA.Length;
-            byte[] blobB = BytecodeBuilder.BuildBlobB(blobBBc,
-                r.LocalBlendPct, r.LocalNewPov, r.InstPcOwner, r.InstMyHud,
-                r.InstSizeX, r.InstSizeY, r.InstDefaultFov,
-                r.ImpFov, r.ImpTpov);
+            byte[] blobB = BuildBlobB(blobBBc, r);
             int totalP2 = blobA.Length + blobB.Length;
 
             int funcEnd = fcPos + fillCache.Length + 20;
@@ -247,8 +286,11 @@ namespace MirrorsEdgeTweaks.Services
             Resolved r;
             using (var pkg = UePackageLocator.Load(enginePath))
             {
-                r = Resolve(pkg);
+                r = Resolve(pkg, data);
             }
+
+            if (HasLegacyBlobA(data, r))
+                throw Helpers.LegacyChangeDetector.PackageRestoreRequired("Engine.u");
 
             var state = DetectFromResolved(data, r);
             if (state == EnginePatchState.Unpatched) return;
@@ -258,49 +300,48 @@ namespace MirrorsEdgeTweaks.Services
             RemovePhase3(data, hdr);
 
             // Phase 2 is removed before phase 1, because phase 1's jump table does not account for phase 2's shifts.
-            if (BytecodeBuilder.FindPattern(data, r.P2Sig) != -1)
+            if (state == EnginePatchState.FullyPatched)
             {
                 int exportStart = r.SerialOffset;
                 int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
-                uint bss = PackageSplicer.ReadBSS(data, exportStart);
+                int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
                 int origLen = data.Length;
 
-                byte[] bc = new byte[(int)bss];
-                Buffer.BlockCopy(data, bcStart, bc, 0, (int)bss);
+                // The jump fixups need every token, so they refuse a script that UELib stopped decoding part way through.
+                if (r.EndOfScriptOffset != bss - 1)
+                    throw new InvalidOperationException("Cannot decode all of Camera.UpdateCamera's script");
 
-                var (checkVt, fillCache) = FindPhase2Patterns(bc);
-                int p2SigPos = BytecodeBuilder.FindPattern(data, r.P2Sig, bcStart, bcStart + (int)bss);
-
-                // Blob A opens with the JumpIfNot whose condition starts with the P2 signature.
-                int blobAStart = -1;
-                for (int i = p2SigPos - 1; i >= bcStart && i > p2SigPos - 50; i--)
-                {
-                    if (data[i] == BytecodeBuilder.OP_JUMP_IF_NOT)
-                    {
-                        blobAStart = i;
-                        break;
-                    }
-                }
-                if (blobAStart == -1)
-                    throw new InvalidOperationException("Cannot locate Blob A start for removal");
-
+                // Blob A's 3-byte JumpIfNot comes right before the condition that P2Sig matches.
+                int blobAStart = BytecodeBuilder.FindPattern(data, r.P2Sig, bcStart, bcStart + bss) - 3;
+                if (blobAStart < bcStart)
+                    throw new InvalidOperationException("Cannot locate blob A in Camera.UpdateCamera");
                 int blobABc = blobAStart - bcStart;
-                int blobBBc = blobABc + BLOB_A_SIZE;
-                byte[] blobB = BytecodeBuilder.BuildBlobB(blobBBc,
-                    r.LocalBlendPct, r.LocalNewPov, r.InstPcOwner, r.InstMyHud,
-                    r.InstSizeX, r.InstSizeY, r.InstDefaultFov,
-                    r.ImpFov, r.ImpTpov);
-                int totalP2 = BLOB_A_SIZE + blobB.Length;
+                byte[] blobA = BytecodeBuilder.BuildBlobA(blobABc, r.InstDefaultFov, r.InstDefaultAr, r.CameraCacheFov);
 
-                int blobBFile = blobAStart + BLOB_A_SIZE;
+                // Apply inserts blob B right before the FillCameraCache call.
+                byte[] bc = new byte[bss];
+                Buffer.BlockCopy(data, bcStart, bc, 0, bss);
+                var (_, fillCache) = FindPhase2Patterns(bc);
+                int fcPos = BytecodeBuilder.FindPattern(data, fillCache, bcStart, bcStart + bss);
+                int blobBLength = BuildBlobB(0, r).Length;
+                int blobBStart = fcPos - blobBLength;
+                int blobBBc = blobBStart - bcStart;
+                byte[] blobB = BuildBlobB(blobBBc, r);
+
+                if (!data.AsSpan(blobAStart, blobA.Length).SequenceEqual(blobA)
+                    || !data.AsSpan(blobBStart, blobB.Length).SequenceEqual(blobB))
+                    throw new InvalidOperationException("Engine.u's FOV scaling code does not match the code Tweaks inserts");
+
+                // The targets still use the layout with both blobs, so blob B's shift runs first.
+                PackageSplicer.ShiftJumpTargets(data, bcStart, r.JumpPositions, blobBBc + blobB.Length, -blobB.Length);
+                PackageSplicer.ShiftJumpTargets(data, bcStart, r.JumpPositions, blobABc + blobA.Length, -blobA.Length);
 
                 // Blob B is removed first, because removing blob A would move it.
-                data = PackageSplicer.RemoveBytes(data, blobBFile, blobB.Length);
-                data = PackageSplicer.RemoveBytes(data, blobAStart, BLOB_A_SIZE);
+                data = PackageSplicer.RemoveBytes(data, blobBStart, blobB.Length);
+                data = PackageSplicer.RemoveBytes(data, blobAStart, blobA.Length);
 
+                int totalP2 = blobA.Length + blobB.Length;
                 PackageSplicer.UpdateBSS(data, exportStart, -totalP2);
-                bss = PackageSplicer.ReadBSS(data, exportStart);
-                PackageSplicer.FixJumpTargets(data, bcStart, (int)bss, blobABc, -BLOB_A_SIZE);
 
                 hdr = PackageSplicer.ParseHeader(data);
                 PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, blobAStart, origLen, -totalP2);
@@ -359,6 +400,12 @@ namespace MirrorsEdgeTweaks.Services
             if (!data.AsSpan().SequenceEqual(before))
                 Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
+
+        static byte[] BuildBlobB(int insertBc, Resolved r) =>
+            BytecodeBuilder.BuildBlobB(insertBc,
+                r.LocalBlendPct, r.LocalNewPov, r.InstPcOwner, r.InstMyHud,
+                r.InstSizeX, r.InstSizeY, r.InstDefaultFov,
+                r.ImpFov, r.ImpTpov);
 
         static (byte[] checkVt, byte[] fillCache) FindPhase2Patterns(byte[] bc)
         {

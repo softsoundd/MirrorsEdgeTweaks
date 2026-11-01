@@ -208,6 +208,9 @@ namespace MirrorsEdgeTweaks.Helpers
                 && !IsUnitScale(scale)))
                 found.Add(new(LegacyFile.Engine, EngineName, StaticHighRes, LegacyIntent.HighResFix));
 
+            if (Check(() => EnginePatcher.HasLegacyBlobA(data, pkg)))
+                found.Add(new(LegacyFile.Engine, EngineName, "Dynamic FOV patch from 4.4.0 to the 4.5.0 betas", LegacyIntent.Fov));
+
             // The current FOV patch writes these defaults only after it has applied the dynamic FOV code.
             bool fovChanged = Check(() => EngineFovDefaults.Any(d =>
                 UePackageLocator.ReadFloatDefault(pkg, d.Class, d.Property) is { } value && !Near(value, d.Stock)));

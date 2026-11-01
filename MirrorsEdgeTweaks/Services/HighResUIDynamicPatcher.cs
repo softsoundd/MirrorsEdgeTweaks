@@ -51,7 +51,7 @@ namespace MirrorsEdgeTweaks.Services
                     ?? throw new InvalidOperationException("Cannot find HUD.PreCalcValues in Engine.u");
                 serialOffset = fn.SerialOffset;
                 insertBc = FindReturnInsertBc(fn.Tokens);
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
+                jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
 
             byte[] blob = BytecodeBuilder.BuildHighResApplyBlob(
@@ -68,7 +68,7 @@ namespace MirrorsEdgeTweaks.Services
             int origLen = data.Length;
             int insertFile = bcStart + insertBc;
 
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
+            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
             PackageSplicer.UpdateBSS(data, exportStart, blob.Length);
             data = PackageSplicer.InsertBytes(data, insertFile, blob);
 
@@ -93,7 +93,7 @@ namespace MirrorsEdgeTweaks.Services
                 var fn = UePackageLocator.FindFunction(pkg, "HUD", "PreCalcValues")
                     ?? throw new InvalidOperationException("Cannot find HUD.PreCalcValues in Engine.u");
                 serialOffset = fn.SerialOffset;
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
+                jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
 
             byte[] blob = BytecodeBuilder.BuildHighResApplyBlob(
@@ -108,7 +108,7 @@ namespace MirrorsEdgeTweaks.Services
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
+            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
             PackageSplicer.UpdateBSS(data, exportStart, -blob.Length);
             data = PackageSplicer.RemoveBytes(data, blobPos, blob.Length);
 
@@ -172,7 +172,7 @@ namespace MirrorsEdgeTweaks.Services
                     ?? throw new InvalidOperationException("Cannot find TdSPHUD.DrawLivingHUD in TdGame.u");
                 serialOffset = fn.SerialOffset;
                 exportIndex = fn.ExportIndex;
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
+                jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
 
                 // The blob runs after DrawLivingHUD's early returns, which guard against UnarmedCrossHair == none.
                 // It also runs after the crosshair is drawn, so new sizes show from the next frame.
@@ -186,7 +186,7 @@ namespace MirrorsEdgeTweaks.Services
             int exportStart = serialOffset;
             int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
 
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
+            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
             PackageSplicer.UpdateBSS(data, exportStart, blob.Length);
             data = PackageSplicer.InsertBytes(data, bcStart + insertBc, blob);
 
@@ -210,7 +210,7 @@ namespace MirrorsEdgeTweaks.Services
                     ?? throw new InvalidOperationException("Cannot find TdSPHUD.DrawLivingHUD in TdGame.u");
                 serialOffset = fn.SerialOffset;
                 exportIndex = fn.ExportIndex;
-                jumpPositions = ExtractJumpPositions(fn.Tokens);
+                jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
 
             byte[] blob = CrosshairBlob(r);
@@ -222,7 +222,7 @@ namespace MirrorsEdgeTweaks.Services
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
-            ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
+            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
             PackageSplicer.UpdateBSS(data, exportStart, -blob.Length);
             data = PackageSplicer.RemoveBytes(data, blobPos, blob.Length);
 
@@ -278,36 +278,6 @@ namespace MirrorsEdgeTweaks.Services
             if (pos < 0)
                 throw new InvalidOperationException("Cannot locate Return in TdSPHUD.DrawLivingHUD");
             return pos;
-        }
-
-        // Returns the offsets of the Jump, JumpIfNot and Case tokens.
-        // Token positions avoid a byte scan, which could mistake a data byte, such as a 0x06 in an ObjectConst, for a jump.
-        static List<int> ExtractJumpPositions(IList<Token> tokens)
-        {
-            var positions = new List<int>();
-            foreach (var t in tokens)
-                if (t is JumpToken || t is JumpIfNotToken || t is CaseToken)
-                    positions.Add(UePackageLocator.Pos(t));
-            return positions;
-        }
-
-        static void ShiftJumpTargets(byte[] data, int bcStart, List<int> jumpPositions, int thresholdBc, int delta)
-        {
-            foreach (int bcPos in jumpPositions)
-            {
-                int fieldPos = bcStart + bcPos + 1;
-                ushort cur = BitConverter.ToUInt16(data, fieldPos);
-
-                // A default case holds 0xFFFF in place of a target.
-                if (cur == 0xFFFF) continue;
-
-                if (cur >= thresholdBc)
-                {
-                    int nt = cur + delta;
-                    if (nt >= 0 && nt <= 0xFFFF)
-                        BitConverter.GetBytes((ushort)nt).CopyTo(data, fieldPos);
-                }
-            }
         }
     }
 }

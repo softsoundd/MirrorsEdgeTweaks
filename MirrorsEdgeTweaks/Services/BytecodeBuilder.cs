@@ -29,12 +29,15 @@ namespace MirrorsEdgeTweaks.Services
         public const byte OP_NOT_EQ_OBJ = 0x77;
         public const byte OP_NOT_PRE_BOOL = 0x81;
         public const byte OP_BOOL_AND = 0x82;
+        public const byte OP_SUBTRACT_PRE_F = 0xA9;
         public const byte OP_MULTIPLY_FF = 0xAB;
         public const byte OP_DIVIDE_FF = 0xAC;
         public const byte OP_ADD_FF = 0xAE;
         public const byte OP_SUBTRACT_FF = 0xAF;
+        public const byte OP_LESS_FF = 0xB0;
         public const byte OP_GREATER_FF = 0xB1;
         public const byte OP_LESS_EQUAL_FF = 0xB2;
+        public const byte OP_EQUAL_EQUAL_FF = 0xB4;
         public const byte OP_MULTIPLY_EQ_FF = 0xB6;
         public const byte OP_TAN = 0xBD;
         public const byte OP_ATAN = 0xBE;
@@ -147,16 +150,19 @@ namespace MirrorsEdgeTweaks.Services
             return Context(pcOwner, (ushort)inner.Length, 4, inner);
         }
 
-        public static byte[] StructMemberFov(byte[] impFov, byte[] impTpov, byte[] localVar)
+        public static byte[] StructMember(byte[] memberRef, byte[] structRef, byte[] structExpr)
         {
             var b = new List<byte> { OP_STRUCT_MEMBER };
-            b.AddRange(impFov);
-            b.AddRange(impTpov);
+            b.AddRange(memberRef);
+            b.AddRange(structRef);
             b.Add(0x00);
             b.Add(0x00);
-            b.AddRange(localVar);
+            b.AddRange(structExpr);
             return b.ToArray();
         }
+
+        public static byte[] StructMemberFov(byte[] impFov, byte[] impTpov, byte[] localVar) =>
+            StructMember(impFov, impTpov, localVar);
 
         public static byte[] BoolAnd(byte[] expr1, byte[] expr2)
         {
@@ -170,32 +176,32 @@ namespace MirrorsEdgeTweaks.Services
             return b.ToArray();
         }
 
-        // Blob A keeps the unscaled DefaultFOV in DefaultAspectRatio, so blob B always scales from the unscaled value.
-        public static byte[] BuildBlobA(int insertBc, byte[] instDefaultFov, byte[] instDefaultAr)
+        // Blob A stores the unscaled FOV in DefaultAspectRatio as a negative number, because the stock value there is positive.
+        // A DefaultFOV that differs from the FOV blob B left in CameraCache was set by a script, so blob A keeps it.
+        public static byte[] BuildBlobA(int insertBc, byte[] instDefaultFov, byte[] instDefaultAr, byte[] cameraCacheFov)
         {
-            // if (DefaultAspectRatio > 10.0) DefaultFOV = DefaultAspectRatio;
-            // else DefaultAspectRatio = DefaultFOV;
-            byte[] ifBody = Concat(new byte[] { OP_LET }, instDefaultFov, instDefaultAr);
-            byte[] elseBody = Concat(new byte[] { OP_LET }, instDefaultAr, instDefaultFov);
-            byte[] condition = Concat(
-                new byte[] { OP_GREATER_FF }, instDefaultAr,
-                FloatConst(10.0f), EndFP());
+            // if (DefaultAspectRatio < 0.0 && DefaultFOV == CameraCache.POV.FOV) DefaultFOV = -DefaultAspectRatio;
+            // else DefaultAspectRatio = -DefaultFOV;
+            byte[] condition = BoolAnd(
+                Concat(new byte[] { OP_LESS_FF }, instDefaultAr, FloatConst(0.0f), EndFP()),
+                Concat(new byte[] { OP_EQUAL_EQUAL_FF }, instDefaultFov, cameraCacheFov, EndFP()));
+            byte[] ifBody = Concat(new byte[] { OP_LET }, instDefaultFov,
+                new byte[] { OP_SUBTRACT_PRE_F }, instDefaultAr, EndFP());
+            byte[] elseBody = Concat(new byte[] { OP_LET }, instDefaultAr,
+                new byte[] { OP_SUBTRACT_PRE_F }, instDefaultFov, EndFP());
 
             int jnotTarget = insertBc + 3 + condition.Length + ifBody.Length + 3;
-            int jumpTarget = insertBc + 3 + condition.Length + ifBody.Length + 3 + elseBody.Length;
+            int jumpTarget = jnotTarget + elseBody.Length;
 
-            byte[] blob = Concat(
+            return Concat(
                 JumpIfNot((ushort)jnotTarget),
                 condition, ifBody,
                 Jump((ushort)jumpTarget),
                 elseBody);
-
-            if (blob.Length != 40)
-                throw new InvalidOperationException($"Blob A size mismatch: expected 40, got {blob.Length}");
-            return blob;
         }
 
         // Blob B widens NewPOV.FOV to keep the 16:9 vertical FOV when the HUD is wider than 16:9, then copies it to DefaultFOV.
+        // CalcSceneView sets LODDistanceFactor to GetFOVAngle() / DefaultFOV, so the copy keeps LOD and cull distances at their 16:9 values.
         public static byte[] BuildBlobB(int insertBc,
             byte[] localBlendPct, byte[] localNewPov,
             byte[] instPcOwner, byte[] instMyHud,
@@ -550,11 +556,12 @@ namespace MirrorsEdgeTweaks.Services
                 FloatConst(K_STOCK_ZOOM_DELTA), EndFP());
         }
 
+        // Stock UpdateCamera assigns the literal 1.7778, which is a different float from 16/9.
         public static byte[] BuildStockArAssignment(byte[] arPropertyToken)
         {
             return Concat(
                 new byte[] { OP_LET }, arPropertyToken,
-                FloatConst(REF_AR));
+                FloatConst(1.7778f));
         }
 
         // Builds the stock Context(DynamicCast(PawnOwner)).SetNearClippingPlane(10.0) call.
@@ -569,8 +576,14 @@ namespace MirrorsEdgeTweaks.Services
             return FloatConst(20.0f);
         }
 
-        // Matches the start of blob A's DefaultAspectRatio > 10.0 condition, which marks Engine.u's phase 2.
+        // Matches the start of blob A's DefaultAspectRatio < 0.0 condition, which marks Engine.u's phase 2.
         public static byte[] GetP2Signature(byte[] instDefaultAr)
+        {
+            return Concat(new byte[] { OP_BOOL_AND, OP_LESS_FF }, instDefaultAr);
+        }
+
+        // Matches the start of the DefaultAspectRatio > 10.0 condition in the blob A that releases up to the 4.5.0 betas inserted.
+        public static byte[] GetLegacyP2Signature(byte[] instDefaultAr)
         {
             return Concat(new byte[] { OP_GREATER_FF }, instDefaultAr, new byte[] { OP_FLOAT_CONST });
         }

@@ -59,6 +59,28 @@ namespace MirrorsEdgeTweaks.Services
             return count;
         }
 
+        // Shifts the targets at or above thresholdBc of the tokens that UePackageLocator.ExtractJumpPositions found.
+        // A default case holds 0xFFFF in place of a target, so it is left alone.
+        public static void ShiftJumpTargets(byte[] data, int bcStart, IEnumerable<int> jumpPositions, int thresholdBc, int delta)
+        {
+            foreach (int bcPos in jumpPositions)
+            {
+                byte opcode = data[bcStart + bcPos];
+                if (opcode != BytecodeBuilder.OP_JUMP_IF_NOT && opcode != BytecodeBuilder.OP_JUMP && opcode != BytecodeBuilder.OP_CASE)
+                    throw new InvalidOperationException($"No jump token at script offset 0x{bcPos:X4}");
+
+                int targetPos = bcStart + bcPos + 1;
+                ushort target = BitConverter.ToUInt16(data, targetPos);
+                if (target == 0xFFFF || target < thresholdBc)
+                    continue;
+
+                int newTarget = target + delta;
+                if (newTarget < 0 || newTarget >= 0xFFFF)
+                    throw new InvalidOperationException($"Jump target 0x{target:X4} at script offset 0x{bcPos:X4} cannot move by {delta}");
+                BitConverter.GetBytes((ushort)newTarget).CopyTo(data, targetPos);
+            }
+        }
+
         public static uint ReadBSS(byte[] data, int exportStart)
         {
             return BitConverter.ToUInt32(data, exportStart + BytecodeBuilder.BSS_REL);

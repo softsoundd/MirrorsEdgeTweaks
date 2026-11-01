@@ -138,5 +138,16 @@ namespace MirrorsEdgeTweaks.Services
             Buffer.BlockCopy(bc, t.StoragePosition, blob, 0, length);
             return blob;
         }
+
+        // Returns the offsets of the Jump, JumpIfNot and Case tokens.
+        // Token positions avoid a byte scan, which could mistake a data byte, such as a 0x06 in an ObjectConst, for a jump.
+        public static List<int> ExtractJumpPositions(IList<Token> tokens)
+        {
+            var positions = new List<int>();
+            foreach (var t in tokens)
+                if (t is JumpToken || t is JumpIfNotToken || t is CaseToken)
+                    positions.Add(Pos(t));
+            return positions;
+        }
     }
 }

@@ -226,5 +226,128 @@ namespace MirrorsEdgeTweaks.Tests
             int tanIdx = Array.IndexOf(blob, BytecodeBuilder.OP_TAN, jumpIdx);
             Assert.True(tanIdx > jumpIdx, "Expected Tan(GetFOVAngle()) only on non-zoom path");
         }
+
+        static readonly byte[] DefaultFovToken = BytecodeBuilder.InstVar(0x0B05);
+        static readonly byte[] DefaultArToken = BytecodeBuilder.InstVar(0x0AFC);
+
+        // Builds the CameraCache.POV.FOV read with the object references of a stock Engine.u.
+        static byte[] CameraCacheFovRead() => BytecodeBuilder.StructMember(
+            BytecodeBuilder.I32(-57), BytecodeBuilder.I32(-151),
+            BytecodeBuilder.StructMember(BytecodeBuilder.I32(0x0B08), BytecodeBuilder.I32(0x0B0A), BytecodeBuilder.InstVar(0x0AF3)));
+
+        [Fact]
+        public void StructMember_matchesStockCameraCacheFovRead()
+        {
+            byte[] stock =
+            {
+                0x35, 0xC7, 0xFF, 0xFF, 0xFF, 0x69, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+                0x35, 0x08, 0x0B, 0x00, 0x00, 0x0A, 0x0B, 0x00, 0x00, 0x00, 0x00,
+                0x01, 0xF3, 0x0A, 0x00, 0x00,
+            };
+
+            Assert.Equal(stock, CameraCacheFovRead());
+        }
+
+        [Fact]
+        public void BuildBlobA_jumpsLandOnElseBranchAndEnd()
+        {
+            const int insertBc = 0x6F;
+            byte[] blob = BytecodeBuilder.BuildBlobA(insertBc, DefaultFovToken, DefaultArToken, CameraCacheFovRead());
+
+            byte[] elseBody = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_LET }, DefaultArToken,
+                new byte[] { BytecodeBuilder.OP_SUBTRACT_PRE_F }, DefaultFovToken, BytecodeBuilder.EndFP());
+            Assert.Equal(elseBody, blob[^elseBody.Length..]);
+            int elseBc = insertBc + blob.Length - elseBody.Length;
+
+            Assert.Equal(BytecodeBuilder.OP_JUMP_IF_NOT, blob[0]);
+            Assert.Equal(elseBc, BitConverter.ToUInt16(blob, 1));
+
+            int jumpIdx = elseBc - insertBc - 3;
+            Assert.Equal(BytecodeBuilder.OP_JUMP, blob[jumpIdx]);
+            Assert.Equal(insertBc + blob.Length, BitConverter.ToUInt16(blob, jumpIdx + 1));
+        }
+
+        [Fact]
+        public void BuildBlobA_restoresOnlyWhileDefaultFovMatchesCameraCache()
+        {
+            byte[] cameraCacheFov = CameraCacheFovRead();
+            byte[] blob = BytecodeBuilder.BuildBlobA(0, DefaultFovToken, DefaultArToken, cameraCacheFov);
+
+            byte[] comparison = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_EQUAL_EQUAL_FF }, DefaultFovToken, cameraCacheFov, BytecodeBuilder.EndFP());
+            byte[] restore = BytecodeBuilder.Concat(
+                new byte[] { BytecodeBuilder.OP_LET }, DefaultFovToken,
+                new byte[] { BytecodeBuilder.OP_SUBTRACT_PRE_F }, DefaultArToken, BytecodeBuilder.EndFP());
+            int comparisonIdx = BytecodeBuilder.FindPattern(blob, comparison);
+            int restoreIdx = BytecodeBuilder.FindPattern(blob, restore);
+
+            Assert.NotEqual(-1, comparisonIdx);
+            Assert.True(restoreIdx > comparisonIdx, "Expected the restore to follow the CameraCache comparison");
+        }
+
+        [Fact]
+        public void PhaseTwoSignatures_matchOnlyTheirOwnBlobA()
+        {
+            // Holds blob A as releases up to the 4.5.0 betas inserted it at script offset 0x6F.
+            byte[] legacyBlobA =
+            {
+                0x07, 0x8C, 0x00, 0xB1, 0x01, 0xFC, 0x0A, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x20, 0x41, 0x16,
+                0x0F, 0x01, 0x05, 0x0B, 0x00, 0x00, 0x01, 0xFC, 0x0A, 0x00, 0x00,
+                0x06, 0x97, 0x00,
+                0x0F, 0x01, 0xFC, 0x0A, 0x00, 0x00, 0x01, 0x05, 0x0B, 0x00, 0x00,
+            };
+            byte[] blobA = BytecodeBuilder.BuildBlobA(0x6F, DefaultFovToken, DefaultArToken, CameraCacheFovRead());
+            byte[] signature = BytecodeBuilder.GetP2Signature(DefaultArToken);
+            byte[] legacySignature = BytecodeBuilder.GetLegacyP2Signature(DefaultArToken);
+
+            Assert.Equal(3, BytecodeBuilder.FindPattern(blobA, signature));
+            Assert.Equal(-1, BytecodeBuilder.FindPattern(blobA, legacySignature));
+            Assert.Equal(3, BytecodeBuilder.FindPattern(legacyBlobA, legacySignature));
+            Assert.Equal(-1, BytecodeBuilder.FindPattern(legacyBlobA, signature));
+        }
+
+        [Fact]
+        public void ShiftJumpTargets_movesOnlyTargetsAtOrAfterTheThreshold()
+        {
+            // The float's payload starts with 07 0D 00, which a byte scan would read as a JumpIfNot past the insertion point.
+            byte[] looksLikeJump = BytecodeBuilder.FloatConst(BitConverter.ToSingle(new byte[] { 0x07, 0x0D, 0x00, 0x40 }));
+
+            byte[] script = BytecodeBuilder.Concat(
+                BytecodeBuilder.JumpIfNot(15), new byte[] { BytecodeBuilder.OP_TRUE },
+                BytecodeBuilder.Jump(0),
+                looksLikeJump,
+                new byte[] { BytecodeBuilder.OP_CASE, 0xFF, 0xFF },
+                new byte[] { BytecodeBuilder.OP_END_OF_SCRIPT });
+            int[] jumpPositions = { 0, 4, 12 };
+            const int insertBc = 12;
+            byte[] inserted = { BytecodeBuilder.OP_NOTHING, BytecodeBuilder.OP_NOTHING };
+
+            PackageSplicer.ShiftJumpTargets(script, 0, jumpPositions, insertBc, inserted.Length);
+            byte[] patched = PackageSplicer.InsertBytes(script, insertBc, inserted);
+
+            Assert.Equal(15 + inserted.Length, BitConverter.ToUInt16(patched, 1));
+            Assert.Equal(BytecodeBuilder.OP_END_OF_SCRIPT, patched[15 + inserted.Length]);
+            Assert.Equal(0, BitConverter.ToUInt16(patched, 5));
+            Assert.Equal(looksLikeJump, patched[7..12]);
+            Assert.Equal(0xFFFF, BitConverter.ToUInt16(patched, insertBc + inserted.Length + 1));
+        }
+
+        [Fact]
+        public void ShiftJumpTargets_rejectsAnOffsetThatIsNotAJump()
+        {
+            byte[] script = BytecodeBuilder.Concat(BytecodeBuilder.FloatConst(1.0f), new byte[] { BytecodeBuilder.OP_END_OF_SCRIPT });
+
+            Assert.Throws<InvalidOperationException>(() =>
+                PackageSplicer.ShiftJumpTargets(script, 0, new[] { 0 }, 0, 4));
+        }
+
+        [Fact]
+        public void BuildStockArAssignment_usesTheStockLiteral()
+        {
+            byte[] assignment = BytecodeBuilder.BuildStockArAssignment(BytecodeBuilder.InstVar(0x0AFD));
+
+            Assert.Equal(new byte[] { 0xF3, 0x8E, 0xE3, 0x3F }, assignment[^4..]);
+        }
     }
 }
