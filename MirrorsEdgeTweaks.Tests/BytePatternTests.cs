@@ -1,5 +1,4 @@
 using MirrorsEdgeTweaks.Helpers;
-using Xunit;
 
 namespace MirrorsEdgeTweaks.Tests
 {

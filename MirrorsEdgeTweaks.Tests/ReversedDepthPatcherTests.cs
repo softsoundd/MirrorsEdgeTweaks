@@ -1,6 +1,5 @@
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
-using MirrorsEdgeTweaks.Tests.TestSupport;
 using System.Buffers.Binary;
 using static MirrorsEdgeTweaks.Tests.TestSupport.SyntheticPe;
 

@@ -1,5 +1,5 @@
-using System.IO;
 using MirrorsEdgeTweaks.Models;
+using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
 {

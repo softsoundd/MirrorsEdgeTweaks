@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
 using System.IO.Compression;
-using System.Threading;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
