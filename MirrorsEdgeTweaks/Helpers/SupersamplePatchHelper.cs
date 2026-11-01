@@ -17,7 +17,7 @@ namespace MirrorsEdgeTweaks.Helpers
         // Sum of the five cave.Alloc sizes in ApplyPatch (all 4-aligned, so no inter-block padding).
         // Used to reclaim the cave on Remove only when it is the topmost allocation. Keep in sync with
         // the Alloc calls in ApplyPatch.
-        private const int CaveFootprint = 44 + 160 + 68 + 52 + 56;
+        internal const int CaveFootprint = 44 + 160 + 68 + 52 + 56;
 
         private static readonly string[] RequiredSymbols =
         {

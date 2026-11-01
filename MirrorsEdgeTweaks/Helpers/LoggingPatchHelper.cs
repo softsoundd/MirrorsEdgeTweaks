@@ -40,10 +40,10 @@ namespace MirrorsEdgeTweaks.Helpers
         private const int CaveDataSize = 0x40;           // BuildCaveDataFull
         private const int AiDataSize = 4 + CaveDataSize; // archive ptr + string data
 
-        // On a fixed .text padding cave the restorations only apply when they leave this much room for the
-        // other cave patches, so applying logging first never stops them fitting later. It covers the
-        // high-res font hooks (~540), supersampling (~380) and the DLC set-command fix (~293) with margin.
-        private const int RestorationHeadroom = 1350;
+        // Reserves room for the other cave patches, so that they still fit when logging is applied first.
+        // It covers the high-res font hooks (~540), supersampling (~380), the DLC set-command fix (~293)
+        // and the render target fix's viewport blocks (~136), with margin.
+        private const int RestorationHeadroom = 1500;
 
         // The script-warning line: the object's full name, the function's full name, then the message.
         private static readonly byte[] WarnFormat = Encoding.Unicode.GetBytes("%s (%s) %s\0");
@@ -439,8 +439,8 @@ namespace MirrorsEdgeTweaks.Helpers
             baseVa = leftover is { } off ? cave.SectionVa + (uint)off : cave.Alloc(footprint);
         }
 
-        // A growable .cave section always takes the restorations. A fixed .text padding cave takes them
-        // only when they leave RestorationHeadroom free for the other cave patches.
+        // A growable .cave section always takes the restorations.
+        // A fixed .text padding cave takes them only when they leave RestorationHeadroom free for the other cave patches.
         private static bool IncludeRestorations(CaveSection cave, CaveContext ctx, bool appInitPresent)
         {
             if (!ctx.CanRestore) return false;

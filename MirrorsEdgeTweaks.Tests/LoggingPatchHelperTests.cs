@@ -299,6 +299,21 @@ namespace MirrorsEdgeTweaks.Tests
         private static byte[] BuildFixedCaveLoggingImage(int caveBytes)
             => PopulateLoggingSites(SyntheticPe.BuildFixedCave(caveBytes));
 
+        // Retail's padding is too small for the restorations, so only core logging applies.
+        // Its address table has no preInit hook, so logging takes the AppInit layout.
+        // The app-init site lies beyond the synthetic images,
+        // so the init block's size is added to the footprint measured here.
+        internal static int RetailFootprint(int paddingBytes)
+        {
+            var table = LoggingTable(fullMode: false);
+            byte[] stock = BuildFixedCaveLoggingImage(paddingBytes);
+            byte[] patched = LoggingPatchHelper.ApplyToImage((byte[])stock.Clone(), "retail", table)!;
+            int measured = CaveSection.Open(patched).CurrentWatermark - CaveSection.Open(stock).CurrentWatermark;
+            int initBytes = AppInitLayout(0, table.Symbols, withInit: true).Footprint
+                - AppInitLayout(0, table.Symbols, withInit: false).Footprint;
+            return measured + initBytes;
+        }
+
         private static byte[] PopulateLoggingSites(byte[] image)
         {
             PutVa(image, ExecSite, "8B 44 24 14 3B C7");

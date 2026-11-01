@@ -139,8 +139,12 @@ namespace MirrorsEdgeTweaks.Services
 
             if (scope.HasFlag(TweakScope.Exe))
             {
+                // Below 100%, the view is smaller than the scene buffer, which the render target fix handles.
                 if (snapshot.Fov != null)
                     await Step(result, "FOV patches", () => RenderTargetPatcher.Reconcile(exePath));
+                else if (ReadScreenPercentage(config) < 100)
+                    await Step(result, "Render resolution", () => RenderTargetPatcher.Reconcile(exePath));
+
                 if (NeedsSupersampling(config, exePath))
                     await Step(result, "Supersampling", () => SupersamplePatchHelper.ApplyPatch(exePath));
 
@@ -254,14 +258,17 @@ namespace MirrorsEdgeTweaks.Services
             return UePackageLocator.ReadFloatDefault(pkg, "Camera", "DefaultFOV");
         }
 
-        // Render resolutions above 100% need the supersampling patch.
-        private static bool NeedsSupersampling(GameConfiguration config, string exePath)
+        private static bool NeedsSupersampling(GameConfiguration config, string exePath) =>
+            ReadScreenPercentage(config) > 100
+            && SupersamplePatchHelper.GetPatchState(exePath) == SupersamplePatchState.Unpatched;
+
+        private static double? ReadScreenPercentage(GameConfiguration config)
         {
             string? percentage = ConfigFileHelper.ReadIniValue(
                 UserTdGamePathHelper.GetTdEngineIniPath(config), "SystemSettings", "ScreenPercentage");
             return double.TryParse(percentage, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
-                && value > 100
-                && SupersamplePatchHelper.GetPatchState(exePath) == SupersamplePatchState.Unpatched;
+                ? value
+                : null;
         }
 
         private static void WriteConsoleHeight(string enginePath, long offset)

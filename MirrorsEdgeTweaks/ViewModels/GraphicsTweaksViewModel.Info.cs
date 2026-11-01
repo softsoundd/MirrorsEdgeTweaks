@@ -25,7 +25,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "and camera transitions, and does not break the skybox (unlike the keybind FOV method). " +
                 "It also fixes the FOV being reset to 85° when reloading from deaths, compensates the vertigo " +
                 "zoom effect, and maintains affected ADS FOV with the sniper rifle.\n\n" +
-                "A render target fix is also applied to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution).\n\n" +
+                "A render target fix is also applied to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution). " +
+                "The fix also keeps the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
                 "Options:\n\n" +
                 "• Compensated near clipping plane: adjusts the near clipping plane based on FOV and aspect ratio " +
                 "to reduce viewmodel and geometry clipping at higher FOVs or wider aspect ratios. Keep in mind that Z-fighting becomes more prevalent " +
@@ -38,7 +39,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "(e.g. Custom Resolution Utility, NVIDIA Control Panel). Once configured, they appear here.\n\n" +
                 "Selecting a resolution also applies the following fixes:\n\n" +
                 "• Removes the hardcoded 16:9 aspect ratio constraint, allowing the game to render correctly at any aspect ratio without letterboxing or pillarboxing.\n\n" +
-                "• Applies a render target fix to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution).\n\n" +
+                "• Applies a render target fix to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution). " +
+                "The fix also keeps the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
                 "• Enables dynamic FOV scaling so the game automatically applies HOR+ correction at aspect ratios wider than 16:9, and VERT+ at narrower ratios.\n\n" +
                 "• Compensates cutscene zoom rates, vertigo effects, and unzoom timing to work correctly and consistently at any FOV and aspect ratio.\n\n" +
                 "Selecting a resolution with a horizontal pixel count greater than 1920 will also prompt you with the option to fix blurry in-game text and apply other UI fixes. " +

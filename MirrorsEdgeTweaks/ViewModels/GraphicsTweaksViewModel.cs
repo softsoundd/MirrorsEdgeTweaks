@@ -559,7 +559,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private void ApplyRenderResolution() => EnqueueApply(ApplyRenderResolutionCore);
 
-        private void ApplyRenderResolutionCore()
+        private async Task ApplyRenderResolutionCore()
         {
             if (string.IsNullOrEmpty(IniPath))
             {
@@ -617,6 +617,18 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage("Error", $"Failed to apply render resolution: {ex.Message}", DialogMessageType.Error);
                 RevertRenderResolution();
+                return;
+            }
+
+            // Below 100%, the view is smaller than the scene buffer, which the render target fix handles.
+            if (percentage < 100 && GetGameExePath() is { } gameExePath)
+            {
+                try { await Task.Run(() => RenderTargetPatcher.Reconcile(gameExePath)); }
+                catch (OoaLicenseNotFoundException ooaEx)
+                {
+                    _dialogService.ShowMessage("EA App License Required", ooaEx.Message, DialogMessageType.Warning);
+                }
+                catch { }
             }
         }
 
