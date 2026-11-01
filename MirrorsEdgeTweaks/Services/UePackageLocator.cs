@@ -9,14 +9,16 @@ namespace MirrorsEdgeTweaks.Services
     internal sealed class UeFunctionInfo
     {
         public int SerialOffset;
-        public int ExportIndex;    // 1-based package export index (objref)
+
+        // Holds the 1-based export index, which is also the export's object reference.
+        public int ExportIndex;
+
         public IList<Token> Tokens = Array.Empty<Token>();
     }
 
     internal static class UePackageLocator
     {
-        // Loads the package summary plus the name/import/export tables, but doesn't
-        // construct or deserialise the objects (that is what InitializePackage does).
+        // Loads the summary and the name, import and export tables, but not the objects, which InitializePackage constructs.
         public static UnrealPackage LoadHeader(string path)
         {
             return UnrealLoader.LoadPackage(path, FileAccess.Read)
@@ -55,8 +57,8 @@ namespace MirrorsEdgeTweaks.Services
             };
         }
 
-        // Returns the negative object reference of an import. outerName disambiguates same-named
-        // properties on different classes (e.g. Texture2D.SizeX vs HUD.SizeX vs Canvas.SizeX).
+        // Returns the negative object reference of an import.
+        // outerName tells apart properties with the same name on different classes, such as Texture2D.SizeX and HUD.SizeX.
         public static int FindImportObjRef(UnrealPackage package, string name, string? className = null,
             string? outerName = null)
         {
@@ -71,8 +73,7 @@ namespace MirrorsEdgeTweaks.Services
             return 0;
         }
 
-        // Uses the export table directly so it finds exports even when UELib did not construct
-        // a UObject for them
+        // Searches the export table, so it also finds exports that UELib did not construct a UObject for.
         public static int FindExportIndex(UnrealPackage package, string name, string outerName)
         {
             var export = package.Exports
@@ -81,7 +82,7 @@ namespace MirrorsEdgeTweaks.Services
             return export == null ? 0 : package.Exports.IndexOf(export) + 1;
         }
 
-        // Works against the export table alone (does not require InitializePackage).
+        // Works without InitializePackage, because it only reads the export table.
         public static int FindExportSerialOffset(UnrealPackage package, string className, string name)
         {
             var export = package.Exports
@@ -97,8 +98,7 @@ namespace MirrorsEdgeTweaks.Services
                 && o.Outer?.Name?.ToString() == outerName);
         }
 
-        // Three-level match - disambiguates e.g. PlayerController.ConsoleCommand.ReturnValue from
-        // other ConsoleCommand.ReturnValue properties belonging to different classes.
+        // grandOuterName tells PlayerController.ConsoleCommand.ReturnValue apart from the ConsoleCommand.ReturnValue of other classes.
         public static UObject? FindExportObject(UnrealPackage package, string name, string outerName, string grandOuterName)
         {
             return package.Objects.FirstOrDefault(o => (int)o.PackageIndex > 0
@@ -128,6 +128,8 @@ namespace MirrorsEdgeTweaks.Services
             float.TryParse(ReadDefault(package, className, propertyName), NumberStyles.Float, CultureInfo.InvariantCulture,
                 out float value) ? value : null;
 
+        // In Mirror's Edge, a token's Position equals its StoragePosition,
+        // so this offset is both a jump target and an offset into the serialized script.
         public static int Pos(Token t) => t.StoragePosition;
 
         public static byte[] Harvest(byte[] bc, Token t, int length)

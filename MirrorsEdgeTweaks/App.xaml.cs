@@ -21,8 +21,7 @@ namespace MirrorsEdgeTweaks
         {
             base.OnStartup(e);
 
-            // A second instance racing the first on game files or metweaksconfig.ini can corrupt
-            // both; refuse to start and let the user switch to the running instance.
+            // A second instance could corrupt the game files or metweaksconfig.ini by writing them alongside the first.
             _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool isFirstInstance);
             if (!isFirstInstance)
             {
@@ -54,8 +53,8 @@ namespace MirrorsEdgeTweaks
 
         private void RegisterGlobalExceptionHandlers()
         {
-            // UI-thread exceptions: log, tell the user, and keep the app alive when possible -
-            // an unhandled binding/command exception should not take down a patching session.
+            // UI thread exceptions are logged and shown, and the app keeps running,
+            // so a failed binding or command does not end a patching session.
             DispatcherUnhandledException += (_, args) =>
             {
                 LogCrash("DispatcherUnhandledException", args.Exception);
@@ -68,11 +67,11 @@ namespace MirrorsEdgeTweaks
                 args.Handled = true;
             };
 
-            // Non-UI thread exceptions: the process is going down; capture what happened first.
+            // The process ends after an exception on another thread, so this can only log it.
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
                 LogCrash("AppDomainUnhandledException", args.ExceptionObject as Exception);
 
-            // Faulted tasks nobody awaited: log and mark observed so they never crash the process.
+            // Faulted tasks that nothing awaited are logged and marked as observed, so they cannot crash the process.
             TaskScheduler.UnobservedTaskException += (_, args) =>
             {
                 LogCrash("UnobservedTaskException", args.Exception);

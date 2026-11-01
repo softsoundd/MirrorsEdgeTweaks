@@ -20,8 +20,8 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static string GetBackupDirectoryForPath(string path) =>
             Path.Combine(BackupRoot, ComputePathHash(path));
 
-        // Wrap multi-file patch flows. Call Complete() only after the full operation succeeds;
-        // otherwise staged backups are left for manual recovery.
+        // Wraps a multi-file patch flow.
+        // Its staged backups stay for manual recovery unless Complete() is called after the whole operation succeeds.
         public static BackupOperationScope BeginBackupOperation()
         {
             var scope = new BackupOperationScope();
@@ -37,11 +37,10 @@ namespace MirrorsEdgeTweaks.Helpers
                 stack.Pop();
         }
 
-        // Single safe writer for every binary patch target (exe, .u, .upk). Provides:
-        //  1. Read-only attribute preservation (cleared for the write, restored afterwards).
-        //  2. A pre-write backup cleared on success unless a BackupOperationScope is active.
-        //  3. An atomic temp-file + rename write, so a crash mid-write can never leave a
-        //     half-written game file behind.
+        // Every binary patch target, such as the exe, .u and .upk files, is written through this.
+        // A read-only attribute is cleared for the write and restored afterwards.
+        // The pre-write backup is deleted on success, unless a BackupOperationScope is active.
+        // The content goes to a temporary file that is renamed over the target, so a crash cannot leave a half-written file.
         public static void WritePreservingAttributes(string path, byte[] content)
         {
             FileAttributes attributes = File.GetAttributes(path);
@@ -95,8 +94,7 @@ namespace MirrorsEdgeTweaks.Helpers
             BackupRetentionService.PruneBackupForPath(path);
         }
 
-        // Short stable hash of the full path so identically named files from different game
-        // installs get separate backup folders.
+        // Hashes the full path, so files with the same name from different game installs get separate backup folders.
         private static string ComputePathHash(string path)
         {
             byte[] hash = System.Security.Cryptography.SHA256.HashData(
@@ -116,11 +114,10 @@ namespace MirrorsEdgeTweaks.Helpers
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    // Replacing via rename needs delete access on the destination, which Windows
-                    // refuses while any handle is open on it without FileShare.Delete (e.g. a
-                    // UELib package reader that has not been disposed yet, or an antivirus scan).
-                    // Fall back to an in-place rewrite - not atomic, but always permitted when the
-                    // file itself is writable, and identical to the pre-pipeline behaviour.
+                    // Renaming over the destination needs delete access, which Windows refuses
+                    // while any handle without FileShare.Delete is open on it,
+                    // such as an undisposed UELib package reader or an antivirus scan.
+                    // The in-place rewrite is not atomic, but it is allowed whenever the file is writable.
                     File.WriteAllBytes(path, content);
                     File.Delete(tempPath);
                 }

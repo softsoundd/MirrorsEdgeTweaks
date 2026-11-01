@@ -95,7 +95,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             catch
             {
-                // Network or parse errors fall through to cache/default.
+                // Network and parse errors fall back to the cache or the defaults.
             }
 
             if (TryLoadCachedManifest())
@@ -161,7 +161,7 @@ namespace MirrorsEdgeTweaks.Services
                 }
                 catch
                 {
-                    // Cache write failure should not block using the fetched manifest.
+                    // A failed cache write must not stop the fetched manifest from being used.
                 }
             }
 

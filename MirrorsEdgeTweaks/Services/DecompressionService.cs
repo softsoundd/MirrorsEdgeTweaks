@@ -169,7 +169,8 @@ namespace MirrorsEdgeTweaks.Services
 
             ushort version = reader.ReadUInt16();
             ushort licenseeVersion = reader.ReadUInt16();
-            // Mirror's Edge uses UE3 version 536/43
+
+            // Mirror's Edge packages are UE3 version 536 with licensee version 43.
             if (version != 536 || licenseeVersion != 43)
             {
                 summary = default;
@@ -358,7 +359,7 @@ namespace MirrorsEdgeTweaks.Services
                 throw new InvalidDataException($"Invalid compressed chunk header tag: 0x{tag:X8}.");
             }
 
-            _ = reader.ReadInt32(); // BlockSize (not needed here)
+            _ = reader.ReadInt32(); // BlockSize
             int totalCompressedSize = reader.ReadInt32();
             int totalUncompressedSize = reader.ReadInt32();
             if (totalCompressedSize < 0 || totalUncompressedSize < 0)
@@ -411,7 +412,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             catch (Exception) when (compressedData.Length == expectedUncompressedSize)
             {
-                // UE3 occasionally stores uncompressed blocks inside a compressed container
+                // UE3 occasionally stores uncompressed blocks inside a compressed container.
                 byte[] uncompressedCopy = new byte[expectedUncompressedSize];
                 Buffer.BlockCopy(compressedData, 0, uncompressedCopy, 0, expectedUncompressedSize);
                 return uncompressedCopy;
@@ -557,7 +558,8 @@ namespace MirrorsEdgeTweaks.Services
                 throw new EndOfStreamException("Unexpected EOF while reading Unreal ANSI string.");
             }
 
-            int byteCount = Math.Max(0, length - 1); // FString length includes null terminator
+            // The length includes the null terminator.
+            int byteCount = Math.Max(0, length - 1);
             return Encoding.Latin1.GetString(asciiBytes, 0, byteCount);
         }
 

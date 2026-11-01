@@ -79,9 +79,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 });
 
-                // Intermediate reload purely to re-find the FOV offsets after the reconcile above;
-                // notify: false suppresses the feature-VM refresh fan-out, which would otherwise run
-                // twice (the finally block below does the single, final notifying reload).
+                // This reload only finds the FOV offsets again for EngineFovWriter.
+                // The reload in the finally block refreshes the view models.
                 await _gameData.ReloadPackagesAsync(notify: false);
 
                 await Task.Run(() =>
@@ -125,8 +124,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             RefreshScalingStatus();
         }
 
-        // Reads the (expensive, Engine.u-loading) dynamic-FOV-scaling patch state off the UI thread,
-        // then applies it on the UI thread so the status-bar progress bar keeps animating.
+        // Reads the dynamic FOV scaling patch state, which loads Engine.u, off the UI thread,
+        // then applies it on the UI thread, so the status bar's progress bar keeps animating.
         public async Task RefreshEnginePatchStateAsync()
         {
             bool applied = false;

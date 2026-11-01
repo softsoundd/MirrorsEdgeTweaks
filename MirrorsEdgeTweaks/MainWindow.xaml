@@ -21,8 +21,6 @@
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
-        <!-- Shared row template for all keybind entries (Custom / Cheat-Trainer / Macro sections).
-             Replaces the 19 previously copy-pasted per-keybind grids. -->
         <DataTemplate x:Key="KeybindRowTemplate">
             <Grid Margin="0,15,0,0">
                 <Grid.ColumnDefinitions>

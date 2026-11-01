@@ -12,7 +12,7 @@ namespace MirrorsEdgeTweaks.Services
         public bool OnlineSkipApplied { get; set; }
     }
 
-    // TdGame.u edits from older releases that this patcher cannot recognise or undo.
+    // Each flag marks a TdGame.u edit from an older release that this patcher cannot recognise or undo.
     [Flags]
     internal enum LegacyTdGameChanges
     {
@@ -24,7 +24,6 @@ namespace MirrorsEdgeTweaks.Services
         StaticUnzoomRate = 16,
     }
 
-    // Bidirectional patcher for TdGame.u
     public static class TdGamePatcher
     {
         // The PlayerInput near-clip block opens its FOV-aware value with FMin(10.0, ...).
@@ -145,7 +144,7 @@ namespace MirrorsEdgeTweaks.Services
                 resolved = ResolveIndices(pkg, data);
             }
 
-            // ToggleZoomState: near clip
+            // ToggleZoomState's SetNearClippingPlane call becomes the clip blob.
             int clipNet = 0;
             int tzsSo = resolved.TzsSerialOffset;
             if (enableClip)
@@ -170,7 +169,7 @@ namespace MirrorsEdgeTweaks.Services
                 data = PackageSplicer.ReplaceBytes(data, replaceStart, ctxLen, clipBlob);
             }
 
-            // PlayerInput: sensitivity + near clip
+            // PlayerInput gets the sensitivity and near-clip blocks after its FOVScale assignment.
             int sensNet = 0;
             int piSo = resolved.PiSerialOffset;
             if (enableSens || enableClip)
@@ -201,7 +200,7 @@ namespace MirrorsEdgeTweaks.Services
                 data = PackageSplicer.InsertBytes(data, insertFile, sensBlob);
             }
 
-            // StartMove: vertigo
+            // StartMove's vertigo zoom targets DefaultFOV - 6.0 in place of ZoomFOV.
             int smSo = resolved.SmSerialOffset;
             int smShift = 0;
             if (smSo > tzsSo) smShift += clipNet;
@@ -228,7 +227,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateBSS(data, smSoAdj, vertigoNet);
             data = PackageSplicer.ReplaceBytes(data, smReplaceStart, vertigoOrigSize, vertigoReplacement);
 
-            // UnZoom else-branch
+            // UnZoom's else-branch zoom rate of 20.0 becomes FMax(20.0, DefaultFOV - FOVAngle).
             int uzSo = resolved.UzSerialOffset;
             int uzShift = 0;
             if (uzSo > tzsSo) uzShift += clipNet;
@@ -252,7 +251,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateBSS(data, uzSoAdj, uzElseNet);
             data = PackageSplicer.ReplaceBytes(data, uzElseFile, uzElseOrigSize, uzElseReplacement);
 
-            // SetFOV: cutscene zoom rate
+            // SetFOV scales the cutscene zoom rate by how far NewFOV is from DefaultFOV.
             int sfSo = resolved.SfSerialOffset;
             int sfShift = 0;
             if (sfSo > tzsSo) sfShift += clipNet;
@@ -277,7 +276,7 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateBSS(data, sfSoAdj, setfovNet);
             data = PackageSplicer.InsertBytes(data, sfInsertFile, setfovBlob);
 
-            // StartConnection: online skip
+            // StartConnection skips the online login when no connection is required.
             int scSo = resolved.ScSerialOffset;
             int onlineSkipNet = 0;
             if (enableOnlineSkip && scSo > 0
@@ -309,8 +308,8 @@ namespace MirrorsEdgeTweaks.Services
                 onlineSkipNet = onlineSkipBlob.Length;
 
                 int scInsertFile = scBcStart + elseTarget;
-                // Strict > semantics: existing JumpIfNot targeting elseTarget should
-                // still land at our new code, so threshold is elseTarget + 1
+
+                // Jumps to elseTarget keep their target, so the JumpIfNot that skips to the else branch lands on the blob.
                 PackageSplicer.FixJumpTargets(data, scBcStart, scBss, elseTarget + 1, onlineSkipNet);
                 PackageSplicer.UpdateBSS(data, scSoAdj, onlineSkipNet);
                 data = PackageSplicer.InsertBytes(data, scInsertFile, onlineSkipBlob);
@@ -349,9 +348,6 @@ namespace MirrorsEdgeTweaks.Services
             if ((legacy & (LegacyTdGameChanges.NearClipBlock | LegacyTdGameChanges.UnzoomDelay)) != 0)
                 throw Helpers.LegacyChangeDetector.PackageRestoreRequired("TdGame.u");
 
-            // Collect all removals first (function serial offsets, deltas, export indices)
-            // then apply them in a single coordinated pass from highest offset to lowest.
-            // This ensures each removal doesn't shift offsets for the others.
             var ops = new List<RemovalOp>();
 
             AnalyzeOnlineSkipRemoval(data, resolved, state, ops);
@@ -363,7 +359,7 @@ namespace MirrorsEdgeTweaks.Services
 
             if (ops.Count == 0) return;
 
-            // Sort by file position descending so we remove from end to start
+            // The removals run from the highest file offset to the lowest, so none shifts the offsets of those still to run.
             ops.Sort((a, b) => b.FilePos.CompareTo(a.FilePos));
 
             foreach (var op in ops)
@@ -401,13 +397,24 @@ namespace MirrorsEdgeTweaks.Services
         {
             public int FilePos;
             public int RemoveCount;
-            public byte[]? ReplacementBytes; // null = pure removal, non-null = replacement
-            public int BssDelta; // net change to BSS (negative)
-            public int ExportSerialOffset; // current serial offset of the containing export
-            public int OriginalSerialOffset; // original serial offset (for export table fixup)
+
+            // Null removes the bytes without replacing them.
+            public byte[]? ReplacementBytes;
+
+            public int BssDelta;
+            public int ExportSerialOffset;
+
+            // The export table fixup uses these after every removal has run.
+            public int OriginalSerialOffset;
             public int ExportIndex;
-            public int SkipSizeFixPos; // -1 if no skip-size fix needed
-            public int JumpFixThresholdBc; // 0 (default) to derive from FilePos, > 0 to use directly
+
+            // Holds the file offset of the skip size of the context that contains the change.
+            // Holds -1 when no skip size needs fixing.
+            public int SkipSizeFixPos;
+
+            // Jumps to targets at or above this script offset are shifted.
+            // Zero takes the threshold from FilePos.
+            public int JumpFixThresholdBc;
         }
 
         static void AnalyzeOnlineSkipRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
@@ -422,7 +429,7 @@ namespace MirrorsEdgeTweaks.Services
                 scBcStart, scBcStart + scBss);
             if (sigPos == -1) return;
 
-            // The blob starts 3 bytes before the signature (JumpIfNot + u16 target)
+            // The blob opens with a JumpIfNot and its 2-byte target, so it starts 3 bytes before the signature.
             int blobStart = sigPos - 3;
             if (blobStart < scBcStart) return;
             int blobSize = 30;
@@ -438,8 +445,8 @@ namespace MirrorsEdgeTweaks.Services
                 OriginalSerialOffset = r.ScSerialOffset,
                 ExportIndex = r.ScExportIndex,
                 SkipSizeFixPos = -1,
-                // Apply used strict > (threshold = elseTarget + 1), so the JumpIfNot
-                // targeting elseTarget was never shifted. Removal must match.
+
+                // Jumps to the blob's start keep their target, as they did when Apply inserted the blob.
                 JumpFixThresholdBc = elseTargetBc + 1,
             });
         }
@@ -593,7 +600,7 @@ namespace MirrorsEdgeTweaks.Services
                 tzsBcStart, tzsBcStart + tzsBss);
             if (sigPos == -1) return;
 
-            // Walk back to find the JumpIfNot that starts the clip blob
+            // The clip blob opens with the nearest JumpIfNot before its signature.
             int blobStart = -1;
             for (int i = sigPos - 1; i >= tzsBcStart && i > sigPos - 80; i--)
             {
@@ -601,7 +608,7 @@ namespace MirrorsEdgeTweaks.Services
             }
             if (blobStart == -1) return;
 
-            // Find blob end via the Jump instruction's target
+            // The clip blob ends at the target of its Jump.
             for (int i = blobStart + 3; i < tzsBcStart + tzsBss; i++)
             {
                 if (data[i] == BytecodeBuilder.OP_JUMP)
@@ -653,12 +660,11 @@ namespace MirrorsEdgeTweaks.Services
             public byte[] InstZoomFov = Array.Empty<byte>();
             public byte[] UzDefaultFov = Array.Empty<byte>();
 
-            // Online skip: delegate property export index (4-byte LE i32) and FName (8 bytes)
+            // The online skip blob calls OnPlayOffline through its delegate property's 4-byte export index and its 8-byte name.
             public byte[] OnPlayOfflinePropI32 = Array.Empty<byte>();
             public byte[] OnPlayOfflineFnameBytes = Array.Empty<byte>();
 
-            // Patch point token positions/spans located from UELib token stream up
-            // front so the splice logic never needs to rescan raw bytecode
+            // The patch points are found in UELib's token stream up front, so the splice logic never rescans raw bytecode.
             public (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? ClipResult;
             public bool ClipHasStockValue;
             public (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf)? FovResult;
@@ -717,14 +723,11 @@ namespace MirrorsEdgeTweaks.Services
                 ? r.ClipResult.Value.vfunc
                 : HarvestVFunc(tzs.Tokens, tzsBc, "SetNearClippingPlane");
 
-            // Tokens harvested from UnZoom (TdWeapon cast, Pawn, Weapon, IsZoomingOrZoomed, DefaultFOV).
             ExtractZoomTokens(uz.Tokens, uzBc, r);
-
-            // DefaultFOV / FOVAngle from EndZoom (both InstanceVariables of TdPlayerController).
             r.DefaultFovInst = HarvestInst(ez.Tokens, ezBc, "DefaultFOV");
             r.InstFovangle = HarvestInst(ez.Tokens, ezBc, "FOVAngle");
 
-            // Controller context chain at the very start of StartMove (Context.DynamicCast(...));
+            // StartMove opens with a context on the cast controller, which the vertigo replacement reuses.
             if (sm.Tokens.Count >= 2 && sm.Tokens[0] is ContextToken && sm.Tokens[1] is DynamicCastToken)
                 r.ControllerCtx = UePackageLocator.Harvest(smBc, sm.Tokens[1], 20);
 
@@ -809,14 +812,13 @@ namespace MirrorsEdgeTweaks.Services
                     r.IsZoomingVf = UePackageLocator.Harvest(uzBc, t, BytecodeBuilder.NAME_TOKEN_SIZE);
             }
 
-            // DefaultFOV instance var (used to rebuild the UnZoom else-branch).
+            // Remove rebuilds the UnZoom else-branch replacement from this DefaultFOV token.
             r.UzDefaultFov = HarvestInst(tokens, uzBc, "DefaultFOV");
         }
 
-        // Token-based patch-point location. Position == StoragePosition for Mirror's Edge
-        // so a token's bytecode offset doubles as its file offset within the function body
-
-        // Context(DynamicCast(owner)).VirtualFunc(FloatConst) - the SetNearClippingPlane calls.
+        // Finds Context(DynamicCast(owner)).VirtualFunc(FloatConst) calls, such as ToggleZoomState's SetNearClippingPlane calls.
+        // Returns the first call whose constant is floatValue.
+        // Returns the last call when floatValue is null.
         static (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)?
             ExtractContextCall(IList<Token> tokens, byte[] bc, float? floatValue)
         {
@@ -842,7 +844,7 @@ namespace MirrorsEdgeTweaks.Services
             return last;
         }
 
-        // FOVScale = Context(Outer).GetFOVAngle() * K_SENS
+        // Finds the FOVScale = Outer.GetFOVAngle() * FloatConst assignment, whose stock constant is K_SENS.
         static (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf)?
             FindFovScaleLet(IList<Token> tokens, byte[] bc)
         {
@@ -868,7 +870,7 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // Controller.StartZoom(ZoomFOV, ZoomRate, 0.0) in the stock StartMove.
+        // Finds the stock StartMove's Controller.StartZoom(ZoomFOV, ZoomRate, 0.0) call.
         static (int startzoomOff, int zoomfovOff, byte[] controllerCtx)?
             FindVertigoStartZoom(IList<Token> tokens, byte[] bc)
         {
@@ -890,9 +892,8 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // StartZoom(DefaultFOV, ...) followed by the else-branch FOVZoomRate FloatConst.
-        // Returns the DefaultFOV instance-var token and the bytecode offset of the FloatConst
-        // that the UnZoom else-branch replacement overwrites
+        // Finds StartZoom(DefaultFOV, ...) and the else-branch FOVZoomRate FloatConst after it.
+        // Returns the DefaultFOV token and the offset of the FloatConst that the else-branch replacement overwrites.
         static (byte[] instDefaultfov, int elseFloatOff)?
             FindUnzoomPatches(IList<Token> tokens, byte[] bc)
         {
@@ -904,8 +905,7 @@ namespace MirrorsEdgeTweaks.Services
                     || dfov.Object?.Name?.ToString() != "DefaultFOV") continue;
                 byte[] instDefaultfov = UePackageLocator.Harvest(bc, dfov, BytecodeBuilder.VAR_TOKEN_SIZE);
 
-                // First FloatConst after the StartZoom call's closing EndFunctionParms
-                // (the else-branch FOVZoomRate assignment)
+                // The else branch's FOVZoomRate value is the first FloatConst after the call's closing EndFunctionParms.
                 int afterPos = UePackageLocator.Pos(vf) + 19;
                 Token? endfp = null;
                 foreach (var t in tokens)
@@ -922,7 +922,7 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // if (Controller != None) Context(DynamicCast(Controller)).StartZoom(NewFOV, Rate, 0.0)
+        // Finds the Context(DynamicCast(Controller)).StartZoom(NewFOV, Rate, 0.0) call inside if (Controller != None).
         static (int insertOff, byte[] localNewfov, byte[] localRate, byte[] dcast, byte[] controllerVar)?
             FindSetFovInsertion(IList<Token> tokens, byte[] bc)
         {
@@ -947,8 +947,8 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // The 6-byte BoolVar(InstanceVar(ConnectionRequired)) operand from the LetBool that
-        // stores the function's ConnectionRequired parameter into the instance variable
+        // Returns the 6-byte BoolVar(InstanceVar(ConnectionRequired)) operand of the LetBool
+        // that copies the ConnectionRequired parameter into the instance variable.
         static byte[]? FindConnectionRequiredBoolvar(IList<Token> tokens, byte[] bc)
         {
             for (int i = 0; i + 3 < tokens.Count; i++)
@@ -958,13 +958,13 @@ namespace MirrorsEdgeTweaks.Services
                 if (tokens[i + 1] is not BoolVariableToken lhs) continue;
                 if (tokens[i + 2] is not InstanceVariableToken iv
                     || iv.Object?.Name?.ToString() != "ConnectionRequired") continue;
-                if (tokens[i + 3] is not BoolVariableToken) continue;   // RHS is also a bool var
+                if (tokens[i + 3] is not BoolVariableToken) continue;
                 return UePackageLocator.Harvest(bc, lhs, 6);
             }
             return null;
         }
 
-        // The first JumpIfNot in StartConnection (the if(Connection.IsLoggedIn()) branch)
+        // The first JumpIfNot in StartConnection is its if (Connection.IsLoggedIn()) branch.
         static (int jnotOff, int elseTarget)? FindElseBranch(IList<Token> tokens)
         {
             foreach (var t in tokens)
@@ -1020,8 +1020,7 @@ namespace MirrorsEdgeTweaks.Services
         static (byte[] dcast, byte[] powner, byte[] vfunc) ExtractContextCallFromPatchedBlob(
             byte[] data, int blobStart, int blobEnd, int bcStart)
         {
-            // The else-branch of the clip blob contains the original Context call structure.
-            // Find it by looking for Context(DynamicCast...) after the Jump instruction.
+            // The clip blob's else branch, which follows its Jump, holds the stock Context(DynamicCast(...)) call.
             for (int i = blobStart; i < blobEnd; i++)
             {
                 if (data[i] == BytecodeBuilder.OP_JUMP && i + 3 < blobEnd)

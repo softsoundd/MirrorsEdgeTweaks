@@ -266,8 +266,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                             if (!modified)
                             {
-                                // Thrown (not shown) here: this runs on a background thread, and a
-                                // corrupted INI must also abort the language-pack download below.
+                                // This throws instead of showing a dialog, because it runs on a background thread
+                                // and a corrupted ini must also stop the language pack download below.
                                 throw new InvalidDataException("TdEngine.ini file is corrupted (no Language= entry found).");
                             }
 

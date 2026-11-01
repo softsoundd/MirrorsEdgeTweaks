@@ -133,7 +133,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 string packageGuid = package.Summary.Guid.ToString();
                 bool hasTimeAttackClock = CheckForTimeAttackClock(package);
 
-                // Game version 1.0.0.0 - 1.0.1.0
+                // These GUIDs belong to game versions 1.0.0.0 to 1.0.1.0.
                 if (packageGuid.Equals("FF6DA87146E12E95C932FBA8D99244B0", StringComparison.OrdinalIgnoreCase))
                 {
                     return hasTimeAttackClock ? "Time Trials Timer Fix (by Nulaft)" : "Original";
@@ -147,7 +147,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     return "TdGame Fix + Time Trials Timer Fix";
                 }
 
-                // Game version 1.1.0.0
+                // These GUIDs belong to game version 1.1.0.0.
                 if (packageGuid.Equals("2090A0F24C332BA658BC549AB764BCFF", StringComparison.OrdinalIgnoreCase))
                 {
                     return hasTimeAttackClock ? "Time Trials Timer Fix (by Nulaft)" : "Original";
@@ -169,7 +169,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Original and Time Trials Timer Fix TdGame versions have the same GUID but different usage of the TimeAttackClock variable
+        // The Original and Time Trials Timer Fix versions share a GUID, so they are told apart by their use of TimeAttackClock.
         private static bool CheckForTimeAttackClock(UnrealPackage package)
         {
             try
@@ -270,8 +270,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // Deliberately leaves the file read-only afterwards: game config files are kept locked so
-        // the game does not overwrite user tweaks on launch.
+        // Leaves the file read-only, so the game does not overwrite the user's tweaks on launch.
         public static void ModifyIniFile(string filePath, string section, string key, string value)
         {
             var fileInfo = new System.IO.FileInfo(filePath);

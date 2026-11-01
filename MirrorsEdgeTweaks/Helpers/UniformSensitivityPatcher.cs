@@ -5,8 +5,8 @@ using static UELib.Core.UStruct.UByteCodeDecompiler;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Patches and reads the "uniform sensitivity" rotation-speed modifier float inside
-    // TdPlayerController.UpdateRotation in TdGame.u (16384 = default/disabled, 66536 = uniform/enabled).
+    // Reads and patches the rotation-speed modifier's float in TdGame.u's TdPlayerController.UpdateRotation.
+    // The stock value is 16384, and 66536 makes the sensitivity uniform.
     public static class UniformSensitivityPatcher
     {
         public const float EnabledValue = 66536f;
@@ -26,9 +26,8 @@ namespace MirrorsEdgeTweaks.Helpers
             {
                 long floatOffset;
 
-                // The package reader must be disposed before the file is rewritten below: the
-                // safe-write pipeline replaces the file via rename, which Windows refuses while
-                // another handle is open on it.
+                // The package reader must be disposed before the file is rewritten,
+                // because Windows refuses to replace a file while another handle is open on it.
                 using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
                 {
                     package?.InitializePackage();
@@ -120,8 +119,8 @@ namespace MirrorsEdgeTweaks.Helpers
             function.ByteCodeManager.Deserialize();
             var tokens = function.ByteCodeManager.DeserializedTokens;
 
-            // Returns the first float token matching either sentinel value (16384/66536).
-            // For reference: RotSpeedMod = FMax(0.4, 1 - float(Min(1, int(Abs(float(Normalize(Rotation - myPawn.Rotation).Pitch) / 16384) + 0.3))));
+            // The float is the divisor in this stock line, which the patch changes to 66536:
+            //   RotSpeedMod = FMax(0.4, 1 - float(Min(1, int(Abs(float(Normalize(Rotation - myPawn.Rotation).Pitch) / 16384) + 0.3))));
             for (int i = 0; i < tokens.Count; i++)
             {
                 if (tokens[i] is FloatConstToken floatToken)

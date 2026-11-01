@@ -1,7 +1,7 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Baked-in defaults used when the remote manifest cannot be fetched.
-    // Runtime asset hosting is resolved by IAssetUrlProvider (see AssetUrlProvider).
+    // These defaults apply when the remote manifest cannot be fetched.
+    // AssetUrlProvider resolves where the runtime assets are hosted.
     public static class DownloadUrls
     {
         public const string DefaultAssetBase = "https://github.com/softsoundd/MirrorsEdgeTweaks/releases/download/runtime-assets/";

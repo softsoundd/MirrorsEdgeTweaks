@@ -67,9 +67,9 @@ namespace MirrorsEdgeTweaks.Helpers
         public uint Alloc(int size, int align = 4)
         {
             EnsureSection();
-            // a patch reapplying over its own existing block allocates from a private
-            // cursor inside that block without touching the shared watermark so it overwrites
-            // only its own region and never a co-resident patch's
+
+            // A patch that reapplies over its own block allocates from a private cursor inside that block.
+            // The shared watermark stays as it is, so the patch only overwrites its own region and never another patch's.
             if (_reuse)
             {
                 int roff = (_reuseCursor + align - 1) & ~(align - 1);
@@ -110,9 +110,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return va - _sectionVa < (uint)_sectionRawSize;
         }
 
-        // Lay subsequent Alloc calls over an existing block starting at `offset` (section relative)
-        // instead of appending at the watermark. A patch that reapplies its own deterministic cave
-        // calls this with its prior base so it rewrites in place
+        // Makes later Alloc calls overlay an existing block from the section offset `offset`, instead of appending at the watermark.
+        // A patch that reapplies its own deterministic block passes its previous base, so it rewrites the block in place.
         public void ReuseFrom(int offset)
         {
             EnsureSection();
@@ -192,9 +191,8 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Frees cave space down to `offset` (section-relative) zero filling the reclaimed range so a
-        // reapplied patch reuses the same region instead of growing the cave. A patch that owns the
-        // top of the cave calls this with its own base before reallocating
+        // Frees cave space down to the section offset `offset` and zero-fills the freed range,
+        // so a later apply reuses the space instead of growing the cave.
         public void RewindTo(int offset)
         {
             EnsureSection();
@@ -338,9 +336,11 @@ namespace MirrorsEdgeTweaks.Helpers
             {
                 if (off + 12 > d.Length) continue;
                 uint wm = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(off, 4));
-                // wm == HeaderSize is a reclaimed but empty cave - it must still be refound so
-                // the next apply reuses this location instead of walking forward past the leftover header
+
+                // A watermark of HeaderSize marks a reclaimed, empty cave.
+                // It must still be found, so the next apply reuses this location instead of starting past the leftover header.
                 if (wm < HeaderSize || wm > end - off) continue;
+
                 if (KnownTags.Contains(ReadTag(d, off)))
                     return off;
             }

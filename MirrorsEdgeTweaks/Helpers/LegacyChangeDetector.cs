@@ -8,7 +8,7 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public enum LegacyFile { Exe, Engine, TdGame, Localisation }
 
-    // Tweaks that a finding shows were enabled, where the current state detection cannot tell.
+    // Each flag marks a tweak that a finding shows was enabled, where the current state detection cannot tell.
     [Flags]
     public enum LegacyIntent
     {

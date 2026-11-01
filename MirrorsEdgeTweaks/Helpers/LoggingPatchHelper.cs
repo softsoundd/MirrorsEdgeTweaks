@@ -16,8 +16,8 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         private const uint ImageBase = 0x00400000;
 
-        // GCreateMalloc, at the same address in every build. It creates the allocator and stores it in
-        // GMalloc, so it must only be called while GMalloc is still null.
+        // GCreateMalloc sits at the same address in every build.
+        // It creates the allocator and stores it in GMalloc, so it must only be called while GMalloc is still null.
         private const uint GCreateMalloc = 0x00404320;
 
         private static readonly string[] FullSymbols =
@@ -28,8 +28,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private static readonly string[] LazySymbols = { "Logf", "GLog", "GFileManager", "FmtPercentS" };
 
-        // Symbols the three logging restorations need. When any is absent, or the open-check hook cannot
-        // be located, logging still applies without the restorations.
+        // The three logging restorations need these symbols.
+        // When any is absent, or the open-check hook cannot be located, logging still applies without the restorations.
         private static readonly string[] RestoreSymbols =
         {
             "Logf", "GLog", "GFileManager", "FmtPercentS", "GMalloc",
@@ -39,9 +39,9 @@ namespace MirrorsEdgeTweaks.Helpers
         };
 
         private const int CaveDataSize = 0x40;           // BuildCaveDataFull
-        private const int AiDataSize = 4 + CaveDataSize; // archive ptr + string data
+        private const int AiDataSize = 4 + CaveDataSize; // archive pointer, then the string data
 
-        // The script-warning line: the object's full name, the function's full name, then the message.
+        // Formats the script-warning line as the object's full name, the function's full name, then the message.
         private static readonly byte[] WarnFormat = Encoding.Unicode.GetBytes("%s (%s) %s\0");
 
         public static LoggingPatchState GetPatchState(string exePath)
@@ -73,7 +73,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             catch { }
 
-            // Pattern replaced: scan the same window for our hook signature (E9 + NOP pad)
+            // Once the pattern is replaced, the same window holds the detour, a jmp padded with nops.
             int startOff = (int)(execDef.ScanStart - ImageBase);
             int scanEnd = startOff + execDef.ScanSize - execDef.Size;
             if (startOff >= 0 && scanEnd + execDef.Size <= data.Length)
@@ -178,8 +178,8 @@ namespace MirrorsEdgeTweaks.Helpers
             WritePreservingAttributes(exePath, data);
         }
 
-        // Removes logging from an in-memory image, which must already be decrypted. It restores every
-        // hook, then reclaims the cave block when nothing was allocated above it.
+        // Removes logging from an in-memory image, which must already be decrypted.
+        // It restores every hook, then reclaims the cave block when nothing was allocated above it.
         // Sets changed to false when the image held no logging patch, so the caller can skip the rewrite.
         // On EA that rewrite would re-encrypt the image and strip its signature.
         internal static byte[] RemoveFromImage(byte[] data, VersionAddressTable addrs, out bool changed)
@@ -194,12 +194,12 @@ namespace MirrorsEdgeTweaks.Helpers
 
             bool fullMode = addrs.Hooks.ContainsKey("preInit_fileLog");
 
-            // execLog's detour target is the cave base (FullMode) or AiDataSize above it (AppInitMode).
-            // Capture it before restoring the hook, which overwrites the detour.
+            // execLog's detour target locates the cave base.
+            // It is read before the hook is restored, because restoring overwrites the detour.
             uint? execTarget = FindDetourTarget(data, execDef);
 
-            // The restorations share the logging toggle, so remove them here. Detect which were applied
-            // from the live hooks, so the reclaim footprint matches whatever ApplyPatch allocated.
+            // The restorations share the logging toggle, so they are removed here.
+            // The live hooks show which were applied, so the reclaim footprint matches what ApplyPatch allocated.
             addrs.Hooks.TryGetValue("fileSerialize_openCheck", out var openDef);
             bool restorationsPresent = RestorePresent(data, addrs.Symbols);
             changed = execTarget != null || restorationsPresent;
@@ -224,11 +224,10 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             else
             {
-                // AppInitMode: restore the dynamically located app-init hook (its saved original bytes
-                // are recovered from the init cave block). The cave's data block sits AiDataSize below
-                // the lowest detour (the app-init init block or the unified cave if no app-init hook).
-                // If the hook is present but unrecoverable, skip the reclaim,
-                // so a region a live detour still jumps to is never zeroed.
+                // The cave's data block sits AiDataSize below the lowest detour target,
+                // which is the init block when the app-init hook is present and the unified block otherwise.
+                // If the app-init hook is present but unrecoverable, the reclaim is skipped,
+                // so a region that a live detour still jumps to is never zeroed.
                 AppInitRestore st = RestoreAppInit(data, addrs.Symbols, out uint initVa);
                 changed |= st == AppInitRestore.Restored;
                 if (st != AppInitRestore.Unrestored && execTarget != null)
@@ -280,7 +279,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 && data[initOff] == 0x83 && data[initOff + 1] == 0x3D && data[initOff + 7] == 0x75;
         }
 
-        // Inputs the layout builder needs, resolved once from the address table and the live image.
+        // Holds the inputs that the layout builder needs, resolved once from the address table and the live image.
         private sealed class CaveContext
         {
             public bool FullMode;
@@ -322,10 +321,12 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (appInitHookVa.HasValue)
                 {
                     int hookOff = (int)(appInitHookVa.Value - ImageBase);
-                    // The site is only stock (readable) when execLog is not detoured. During Remove it may
-                    // already be a detour, but the init block's length does not depend on these bytes.
+
+                    // The site holds its stock bytes only while it is not detoured.
+                    // During Remove it may already be a detour, but the init block's length does not depend on these bytes.
                     if (hookOff >= 0 && hookOff + 5 <= data.Length && data[hookOff] != 0xE9)
                         Buffer.BlockCopy(data, hookOff, ctx.OverwrittenBytes, 0, 5);
+
                     ctx.InitReturnVa = appInitHookVa.Value + 5;
                 }
             }
@@ -337,8 +338,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return ctx;
         }
 
-        // Resolves the open-check hook site into the resume and skip targets the lazy-open block jumps to,
-        // and reports whether the restorations can apply (all symbols present and the hook located).
+        // Resolves the open-check hook site into the resume and skip targets that the lazy-open block jumps to.
+        // Returns whether the restorations can apply, which needs every symbol and the hook site.
         private static bool ResolveRestoreTargets(byte[] data, VersionAddressTable addrs,
             out uint siteVa, out uint jeTargetVa, out uint continueVa)
         {
@@ -354,8 +355,8 @@ namespace MirrorsEdgeTweaks.Helpers
             try { siteVa = VersionAddressTable.ResolveHook(data, openDef); }
             catch { return false; }
 
-            // The 9 bytes are `cmp [edx+4], ebx` (3) then `je rel32` (6). The resume point is just past
-            // them, and the skip target is the je's destination.
+            // The 9 bytes are the 3-byte `cmp [edx+4], ebx`, then the 6-byte `je rel32`.
+            // The resume point is just past them, and the skip target is the je's destination.
             int off = (int)(siteVa - ImageBase);
             int rel = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(off + 5, 4));
             continueVa = siteVa + 9;
@@ -417,8 +418,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return data;
         }
 
-        // Chooses the cave base. It reuses a leftover block RemovePatch could not reclaim,
-        // or allocates a new block.
+        // Reuses a leftover block that RemovePatch could not reclaim as the cave base.
+        // Otherwise, it allocates a new block.
         // Whether the restorations are included depends only on the build's cave capacity,
         // so every apply builds the same layout and the leftover search can match it byte for byte.
         private static void Place(CaveSection cave, CaveContext ctx, bool appInitPresent,
@@ -446,8 +447,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return CaveSection.HeaderSize + full + Align4(ReversedDepthPatcher.BlockLength) <= capacity;
         }
 
-        // The FullMode strings block sits directly after the execLog forwarder, so its offset is that
-        // block's length. It anchors the leftover search.
+        // The FullMode strings block sits directly after the execLog forwarder, so its offset is that block's length.
+        // It anchors the leftover search.
         private static int FullStringsOffset(CaveContext ctx)
         {
             byte[] p1 = BuildCavePatch1(0, ctx.Sym, ctx.ExecReturnVa);
@@ -460,7 +461,7 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             public List<(int Offset, byte[] Code)> Blocks = new();
             public int Footprint;
-            public uint ExecVa;       // execLog forwarder (FullMode p1 / AppInit unified)
+            public uint ExecVa;       // execLog forwarder, from BuildCavePatch1 or BuildCaveUnified
             public uint PreInitVa;    // FullMode file-open block
             public uint InitVa;       // AppInit app-init block
             public uint WarnVa;
@@ -468,9 +469,9 @@ namespace MirrorsEdgeTweaks.Helpers
             public uint LazyOpenVa;
         }
 
-        // Single source of the cave layout for a mode: the same (offset, code) blocks are used to write,
-        // to verify a leftover byte for byte, and to size the reclaim footprint. Block code depends only
-        // on absolute symbols and return addresses, so rebuilding at the same base is deterministic.
+        // Builds the cave layout for a mode.
+        // The same blocks are written, compared with a leftover byte for byte, and summed into the reclaim footprint.
+        // Block code depends only on absolute symbols and return addresses, so rebuilding at the same base gives the same bytes.
         private static CaveLayout BuildLayout(uint baseVa, CaveContext ctx, bool appInitPresent, bool restorations)
         {
             var layout = new CaveLayout();
@@ -560,9 +561,10 @@ namespace MirrorsEdgeTweaks.Helpers
             => WriteRestorationHooks(data, ctx.Sym, ctx.OpenCheckSiteVa,
                 layout.WarnVa, layout.ScriptTraceVa, layout.LazyOpenVa);
 
-        // Writes the three restoration hooks: the FFrame and FStateFrame Serialize vtable slots point at
-        // the warning forwarder, the execScriptTrace native entry at the trace block, and the
-        // FOutputDeviceFile open-check detours to the lazy-open block.
+        // Writes the three restoration hooks.
+        // The FFrame and FStateFrame Serialize vtable slots point at the warning forwarder,
+        // the execScriptTrace native entry points at the trace block,
+        // and the FOutputDeviceFile open check detours to the lazy-open block.
         internal static void WriteRestorationHooks(byte[] data, Dictionary<string, uint> sym, uint openSiteVa,
             uint warnVa, uint scriptTraceVa, uint lazyOpenVa)
         {
@@ -577,8 +579,8 @@ namespace MirrorsEdgeTweaks.Helpers
             Buffer.BlockCopy(openHook, 0, data, (int)(openSiteVa - ImageBase), openHook.Length);
         }
 
-        // Reports whether the restorations are currently applied, from the FFrame Serialize slot. Used by
-        // RemovePatch to pick the reclaim footprint before it restores the slot to the stub.
+        // Returns whether the restorations are applied, judging by the FFrame Serialize slot.
+        // RemovePatch uses this to pick the reclaim footprint before it restores the slot to the stub.
         internal static bool RestorePresent(byte[] data, Dictionary<string, uint> sym)
         {
             if (!sym.TryGetValue("FFrame.SerializeSlot", out uint slot)
@@ -589,8 +591,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return ReadU32(data, slot) != stub;
         }
 
-        // Puts back every restoration hook that is live: the two Serialize slots, the native entry and
-        // the open-check bytes. Each is guarded on its own, so a partially patched image is still cleaned.
+        // Restores the live restoration hooks, which are the two Serialize slots, the native entry and the open-check bytes.
+        // Each is checked on its own, so a partially patched image is still cleaned.
         internal static void RestoreRestorations(byte[] data, Dictionary<string, uint> sym, HookDefinition? openDef)
         {
             if (sym.TryGetValue("FFrame.Serialize", out uint stub))
@@ -616,10 +618,12 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private enum AppInitRestore { NotPresent, Restored, Unrestored }
 
-        // Restores the AppInitMode app-init hook. Its original 5 bytes were replayed in the init cave
-        // block right before that block's single E9 return jump (back to site+5), so we locate that E9
-        // by its return target and copy the preceding 5 bytes back over the detour.
-        // Returns whether the hook was absent, restored, or present but unrecoverable.
+        // Restores the AppInitMode app-init hook.
+        // The init block replays the site's original 5 bytes just before its jump back to site + 5,
+        // so they are copied back from in front of that jump.
+        // Returns NotPresent when the site is missing or holds no detour.
+        // Returns Restored once the original bytes are back.
+        // Returns Unrestored when the detour's original bytes cannot be found.
         // Sets initVa to the init block when the hook is present, for the caller's cave-base calculation.
         private static AppInitRestore RestoreAppInit(byte[] data, Dictionary<string, uint> sym, out uint initVa)
         {
@@ -657,8 +661,9 @@ namespace MirrorsEdgeTweaks.Helpers
             return ImageBase + (uint)foff + 5u + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(foff + 1, 4));
         }
 
-        // Hook site file offset, whether unpatched (find the original pattern) or patched (find the
-        // E9 + NOP-pad detour in the scan window)
+        // Returns the file offset of the hook's original pattern.
+        // Returns the offset of a jmp padded with nops in the hook's scan window, once the pattern has been replaced.
+        // Returns -1 when neither is found.
         private static int FindHookSiteOff(byte[] data, HookDefinition hdef)
         {
             try { return (int)(VersionAddressTable.ResolveHook(data, hdef) - ImageBase); }
@@ -702,8 +707,9 @@ namespace MirrorsEdgeTweaks.Helpers
             int startOff = (int)(scanStart - ImageBase);
             if (startOff < 0 || startOff + scanSize > data.Length) return null;
 
-            // push esi; call edx; then the site instruction: push imm32 (0x68, unpatched) or the E9
-            // detour (patched) -  matching both lets Remove locate the site after it has been hooked
+            // The site comes after push esi; call edx.
+            // It holds push imm32 (0x68) while unpatched.
+            // It holds the E9 detour once patched, so matching both lets Remove find the site after it has been hooked.
             byte[] pat = { 0x56, 0xFF, 0xD2 };
             int idx = 0;
             while (idx <= scanSize - 8)
@@ -877,10 +883,10 @@ namespace MirrorsEdgeTweaks.Helpers
             uint GCMDLINE = sym.GetValueOrDefault("GCmdLine");
             bool canParse = PARSE != 0 && GCMDLINE != 0 && logKeyVa != 0 && abslogKeyVa != 0 && filenameBufVa != 0;
 
-            // Fast path - already initialised
+            // Skips the init when the archive pointer is already set.
+            // The jne is rel32, because with Parse and FileArchive the init body is too long for a rel8 jump.
             Add(0x83, 0x3D); AddU32(archivePtrVa); Add(0x00);
             int jneDone = code.Count;
-            // rel32 jne: with Parse + FileArchive present the init body exceeds the +127 reach of a rel8.
             Add(0x0F, 0x85, 0x00, 0x00, 0x00, 0x00);
 
             Add(0x50);         // push eax
@@ -932,7 +938,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 Add(0xBA); AddU32(defaultFilenameVa);
             }
 
-            // CreateFileWriter
+            // Opens the file named by edx through GFileManager->CreateFileWriter.
             Add(0x8B, 0x0D); AddU32(GFILEMANAGER);
             Add(0x6A, 0x00);
             Add(0x6A, 0x00);
@@ -983,7 +989,7 @@ namespace MirrorsEdgeTweaks.Helpers
             uint GFILEMANAGER = sym["GFileManager"];
             uint FMT = sym["FmtPercentS"];
 
-            // Replay overwritten instructions
+            // Replays the instructions that the detour overwrote.
             Add(0x8B, 0x44, 0x24, 0x14);   // mov eax, [esp+0x14]
             Add(0x3B, 0xC7);               // cmp eax, edi
 
@@ -993,12 +999,12 @@ namespace MirrorsEdgeTweaks.Helpers
             Add(0x56);             // push esi
             Add(0x8B, 0xF0);       // mov esi, eax
 
-            // Lazy init check
+            // Skips opening the file when the archive pointer is already set.
             Add(0x83, 0x3D); AddU32(archivePtrVa); Add(0x00);
             int jneHaveFile = code.Count;
             Add(0x75, 0x00);
 
-            // Create file writer
+            // Opens the file with GFileManager->CreateFileWriter, unless GFileManager is null.
             Add(0x8B, 0x0D); AddU32(GFILEMANAGER);
             Add(0x85, 0xC9);
             int jzSkipInit = code.Count;
@@ -1052,10 +1058,10 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        // Script-warning forwarder for the FFrame and FStateFrame Serialize vtable slots: a thiscall
-        // `Serialize(const TCHAR* V, EName Event)` (ret 8) on the frame, whose Node is at +4 and Object at +8.
-        // It logs the object's and function's full names and the message through GLog, which reaches the
-        // log file, then frees both GetFullName strings through GMalloc.
+        // Builds the script-warning forwarder for the FFrame and FStateFrame Serialize vtable slots.
+        // It is a thiscall `Serialize(const TCHAR* V, EName Event)` (ret 8) on the frame, whose Node is at +4 and Object at +8.
+        // It logs the object's and function's full names and the message through GLog, which reaches the log file,
+        // then frees both GetFullName strings through GMalloc.
         internal static byte[] BuildWarnForwarder(uint baseVa, Dictionary<string, uint> sym, uint warnFmtVa)
         {
             uint GETFULLNAME = sym["UObject.GetFullName"];
@@ -1123,10 +1129,10 @@ namespace MirrorsEdgeTweaks.Helpers
             return mc.Build();
         }
 
-        // ScriptTrace() logger for the execScriptTrace native entry: a native thiscall
-        // `void(FFrame& Stack, RESULT_DECL)` (ret 8). It first calls the stock native so the frame still
-        // advances past the opcode, then logs FFrame::GetStackTrace through GLog and frees the returned
-        // string through GMalloc.
+        // Builds the ScriptTrace() logger for the execScriptTrace native entry,
+        // which is a native thiscall `void(FFrame& Stack, RESULT_DECL)` (ret 8).
+        // It first calls the stock native, so the frame still advances past the opcode.
+        // It then logs FFrame::GetStackTrace through GLog and frees the returned string through GMalloc.
         internal static byte[] BuildScriptTrace(uint baseVa, Dictionary<string, uint> sym)
         {
             uint ORIG = sym["UObject.execScriptTrace"];
@@ -1177,13 +1183,13 @@ namespace MirrorsEdgeTweaks.Helpers
             return mc.Build();
         }
 
-        // Lazy file-open block, entered from the detoured FOutputDeviceFile::Serialize null-archive check.
-        // At the site edx is the device and ebx is zero.
+        // Builds the lazy file-open block, which the detoured FOutputDeviceFile::Serialize null-archive check enters.
+        // At the site, edx is the device and ebx is zero.
         // When the archive is null, the filename is set, and the dead flag is clear,
         // it opens the file with GFileManager->CreateFileWriter(Filename, 0x60) and resumes the stock body.
         // A failed open sets the dead flag.
         // Every other case keeps stock behaviour.
-        // Layout: LogAr at +4, Filename at +8, Opened at +0x808, Dead at +0x80C.
+        // The device holds LogAr at +4, Filename at +8, Opened at +0x808 and Dead at +0x80C.
         internal static byte[] BuildLazyOpen(uint baseVa, Dictionary<string, uint> sym,
             uint jeTargetVa, uint continueVa)
         {

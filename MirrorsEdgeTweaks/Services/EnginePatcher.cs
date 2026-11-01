@@ -5,10 +5,9 @@ namespace MirrorsEdgeTweaks.Services
 {
     public enum EnginePatchState { Unpatched, Phase1Only, FullyPatched }
 
-    // Bidirectional patcher for Engine.u
     public static class EnginePatcher
     {
-        // bConstrainAspectRatio bool token offset inside UpdateCamera (memory offset, stable).
+        // UpdateCamera assigns bConstrainAspectRatio from the True token at this script offset on every version.
         const int BC_BOOL = 0x066;
 
         const int UNPATCHED_BSS = 739;
@@ -16,7 +15,8 @@ namespace MirrorsEdgeTweaks.Services
         const int P1_OLD_LEN = 11;
         const int BLOB_A_SIZE = 40;
 
-        // Phase 1 jump table: (bc_offset, expected_target) for targets >= 0x0B3.
+        // Phase 1 shifts every jump that targets 0x0B3 or later.
+        // Each entry holds a jump's script offset and its stock target.
         static readonly (int bcOff, ushort oldTarget)[] P1_JUMPS = {
             (0x0B3, 0x02D5), (0x0F8, 0x026F), (0x13C, 0x015B), (0x158, 0x0224),
             (0x15B, 0x0188), (0x185, 0x0224), (0x188, 0x01BB), (0x1B8, 0x0224),
@@ -40,9 +40,15 @@ namespace MirrorsEdgeTweaks.Services
             public byte[] LocalNewPov = Array.Empty<byte>();
 
             public byte[] ArPropertyToken = Array.Empty<byte>();  // InstVar(ConstrainedAspectRatio)
-            public byte[] P1Old = Array.Empty<byte>();            // Let CAR = FloatConst (find prefix)
-            public byte[] P1New = Array.Empty<byte>();            // Let CAR = ViewTarget.AspectRatio
-            public byte[] P2Sig = Array.Empty<byte>();            // GreaterThan + DefaultAR + FloatConst
+
+            // Holds the stock ConstrainedAspectRatio = FloatConst assignment up to its constant.
+            public byte[] P1Old = Array.Empty<byte>();
+
+            // Holds phase 1's ConstrainedAspectRatio = ViewTarget.AspectRatio assignment.
+            public byte[] P1New = Array.Empty<byte>();
+
+            // Holds the start of blob A's DefaultAspectRatio > FloatConst condition.
+            public byte[] P2Sig = Array.Empty<byte>();
         }
 
         static Resolved Resolve(UnrealPackage pkg)
@@ -65,8 +71,8 @@ namespace MirrorsEdgeTweaks.Services
             int tViewTarget = aspectRatioObj != null ? UePackageLocator.ObjRef(aspectRatioObj.Outer) : 0;
             int fovImp = UePackageLocator.FindImportObjRef(pkg, "FOV", "FloatProperty");
             int tpovImp = UePackageLocator.FindImportObjRef(pkg, "TPOV", "ScriptStruct");
-            // UpdateCamera locals (children of the function export), resolved by name so we
-            // never depend on decompiling the (possibly already patched) function body.
+
+            // The UpdateCamera locals are found by name, so the possibly patched function body is never decompiled.
             int blendPct = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "BlendPct", "UpdateCamera"));
             int newPov = UePackageLocator.ObjRef(UePackageLocator.FindExportObject(pkg, "NewPOV", "UpdateCamera"));
 
@@ -132,14 +138,14 @@ namespace MirrorsEdgeTweaks.Services
 
             bool hasP1New = BytecodeBuilder.FindPattern(data, r.P1New) != -1;
             bool hasP2Sig = BytecodeBuilder.FindPattern(data, r.P2Sig) != -1;
-            if (hasP2Sig) return; // already fully patched
+            if (hasP2Sig) return;
 
             int exportStart = r.SerialOffset;
             int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
             uint bss = PackageSplicer.ReadBSS(data, exportStart);
             var hdr = PackageSplicer.ParseHeader(data);
 
-            // Phase 1: Unhardcode AR
+            // Phase 1 clears bConstrainAspectRatio and sets ConstrainedAspectRatio from the view target's aspect ratio.
             if (!hasP1New)
             {
                 if (bss != UNPATCHED_BSS)
@@ -149,12 +155,10 @@ namespace MirrorsEdgeTweaks.Services
                 if (p1Pos == -1)
                     throw new InvalidOperationException("Cannot find ConstrainedAspectRatio assignment in Engine.u");
 
-                // 1a: bConstrainAspectRatio = false
                 if (data[bcStart + BC_BOOL] != BytecodeBuilder.OP_TRUE)
                     throw new InvalidOperationException("bConstrainAspectRatio opcode mismatch");
                 data[bcStart + BC_BOOL] = BytecodeBuilder.OP_FALSE;
 
-                // 1b: fix jump targets
                 foreach (var (bcOff, oldTarget) in P1_JUMPS)
                 {
                     int fp = bcStart + bcOff + 1;
@@ -164,10 +168,7 @@ namespace MirrorsEdgeTweaks.Services
                     BitConverter.GetBytes((ushort)(oldTarget + PHASE1_NET)).CopyTo(data, fp);
                 }
 
-                // 1c: BSS
                 PackageSplicer.WriteBSS(data, exportStart, (uint)(UNPATCHED_BSS + PHASE1_NET));
-
-                // Splice: replace P1_OLD (11 bytes) with P1_NEW (22 bytes)
                 data = PackageSplicer.ReplaceBytes(data, p1Pos, P1_OLD_LEN, r.P1New);
 
                 hdr = PackageSplicer.ParseHeader(data);
@@ -175,7 +176,8 @@ namespace MirrorsEdgeTweaks.Services
                 origLen = data.Length;
             }
 
-            // Phase 2: HOR+/VERT+ FOV scaling (function start is unchanged by Phase 1)
+            // Phase 2 adds HOR+ and VERT+ FOV scaling.
+            // Phase 1 does not move the function's start, so exportStart and bcStart still hold.
             bss = PackageSplicer.ReadBSS(data, exportStart);
 
             if (bss != UNPATCHED_BSS + PHASE1_NET)
@@ -204,7 +206,6 @@ namespace MirrorsEdgeTweaks.Services
                 r.ImpFov, r.ImpTpov);
             int totalP2 = blobA.Length + blobB.Length;
 
-            // Fix jump targets (shift targets >= pointABc)
             int funcEnd = fcPos + fillCache.Length + 20;
             for (int pos = bcStart; pos < funcEnd; pos++)
             {
@@ -234,7 +235,7 @@ namespace MirrorsEdgeTweaks.Services
             hdr = PackageSplicer.ParseHeader(data);
             PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, pointBFile, origLen, totalP2);
 
-            // Phase 3: CameraActor bConstrainAspectRatio = false
+            // Phase 3 clears CameraActor's default bConstrainAspectRatio.
             ApplyPhase3(data, hdr);
 
             Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
@@ -254,10 +255,9 @@ namespace MirrorsEdgeTweaks.Services
 
             var hdr = PackageSplicer.ParseHeader(data);
 
-            // Remove Phase 3
             RemovePhase3(data, hdr);
 
-            // Remove Phase 2
+            // Phase 2 is removed before phase 1, because phase 1's jump table does not account for phase 2's shifts.
             if (BytecodeBuilder.FindPattern(data, r.P2Sig) != -1)
             {
                 int exportStart = r.SerialOffset;
@@ -270,8 +270,8 @@ namespace MirrorsEdgeTweaks.Services
 
                 var (checkVt, fillCache) = FindPhase2Patterns(bc);
                 int p2SigPos = BytecodeBuilder.FindPattern(data, r.P2Sig, bcStart, bcStart + (int)bss);
-                // Blob A starts where the P2 signature's GreaterFF condition is in the if-body.
-                // Walk back to find the JumpIfNot that begins blob A.
+
+                // Blob A opens with the JumpIfNot whose condition starts with the P2 signature.
                 int blobAStart = -1;
                 for (int i = p2SigPos - 1; i >= bcStart && i > p2SigPos - 50; i--)
                 {
@@ -294,22 +294,18 @@ namespace MirrorsEdgeTweaks.Services
 
                 int blobBFile = blobAStart + BLOB_A_SIZE;
 
-                // Remove blob B first (higher offset), then blob A
+                // Blob B is removed first, because removing blob A would move it.
                 data = PackageSplicer.RemoveBytes(data, blobBFile, blobB.Length);
                 data = PackageSplicer.RemoveBytes(data, blobAStart, BLOB_A_SIZE);
 
-                // Function start is unchanged; fix BSS
                 PackageSplicer.UpdateBSS(data, exportStart, -totalP2);
                 bss = PackageSplicer.ReadBSS(data, exportStart);
-
-                // Reverse jump target shifts
                 PackageSplicer.FixJumpTargets(data, bcStart, (int)bss, blobABc, -BLOB_A_SIZE);
 
                 hdr = PackageSplicer.ParseHeader(data);
                 PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, blobAStart, origLen, -totalP2);
             }
 
-            // Remove Phase 1
             if (BytecodeBuilder.FindPattern(data, r.P1New) != -1)
             {
                 int origLen = data.Length;
@@ -322,7 +318,6 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] stockAr = BytecodeBuilder.BuildStockArAssignment(r.ArPropertyToken);
                 data = PackageSplicer.ReplaceBytes(data, p1Pos, r.P1New.Length, stockAr);
 
-                // Reverse jump target shifts
                 uint bss = PackageSplicer.ReadBSS(data, exportStart);
 
                 foreach (var (bcOff, oldTarget) in P1_JUMPS)
@@ -343,7 +338,7 @@ namespace MirrorsEdgeTweaks.Services
             Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
-        // Engine.u patches are always on
+        // The Engine.u patches are always applied, so reconciling only adds what is missing.
         public static void Reconcile(string enginePath)
         {
             var state = DetectState(enginePath);
@@ -367,7 +362,7 @@ namespace MirrorsEdgeTweaks.Services
 
         static (byte[] checkVt, byte[] fillCache) FindPhase2Patterns(byte[] bc)
         {
-            // CheckViewTarget: 1B [name 8] 01 [ViewTarget 4] 16 = 15 bytes
+            // The CheckViewTarget call is 1B [name 8] 01 [ViewTarget 4] 16, which is 15 bytes.
             byte[]? checkVt = null;
             for (int off = 0; off < Math.Min(0x100, bc.Length); off++)
             {
@@ -382,7 +377,7 @@ namespace MirrorsEdgeTweaks.Services
             if (checkVt == null)
                 throw new InvalidOperationException("Cannot find CheckViewTarget VirtualFunction pattern");
 
-            // FillCameraCache: 1C [func 4] 00 [local 4] 16 = 11 bytes
+            // The FillCameraCache call is 1C [func 4] 00 [local 4] 16, which is 11 bytes.
             byte[]? fillCache = null;
             for (int off = bc.Length - 11; off > Math.Max(bc.Length - 100, 0); off--)
             {

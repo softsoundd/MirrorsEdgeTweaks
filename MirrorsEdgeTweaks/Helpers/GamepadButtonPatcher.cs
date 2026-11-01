@@ -4,17 +4,12 @@ using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Swaps the in-game gamepad button prompts between Xbox and PS3 by byte-patching the
-    // localized Ts_LOC_*.upk packages and swapping the PC/PS3 controller image-path name indices
-    // in TdGame.u. The Ts_LOC_*.upk files must already be decompressed before calling
-    // ApplyButtonPatches.
+    // Swaps the in-game gamepad button prompts between Xbox and PS3.
+    // It patches the localised Ts_LOC_*.upk packages and swaps the PC and PS3 controller image-path name indices in TdGame.u.
     public static class GamepadButtonPatcher
     {
-        // Patches the (already-decompressed) Ts_LOC_*.upk localization packages and swaps the
-        // controller image paths in TdGame.u for the given button type ("xbox" / "ps3").
-        // All locale packages are patched in memory first and only written once every candidate
-        // has been processed, so a failure mid-way cannot leave a mix of patched and unpatched
-        // locales on disk.
+        // The Ts_LOC_*.upk packages must already be decompressed.
+        // Every locale package is patched in memory before any is written, so a failure cannot leave a mix of patched and unpatched locales.
         public static void ApplyButtonPatches(string cookedPcPath, string buttonType)
         {
             string[] tsLocFiles = Directory.GetFiles(cookedPcPath, "Ts_LOC_*.upk");
@@ -24,15 +19,14 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new FileNotFoundException("No Ts_LOC_*.upk files found in CookedPC directory.");
             }
 
-            // Verified before patching locales: failing here after locale writes would leave a
-            // partially applied prompt swap.
+            // TdGame.u is checked before any locale is patched, so a missing file cannot leave the prompt swap half applied.
             string tdGamePackagePath = Path.Combine(cookedPcPath, "TdGame.u");
             if (!File.Exists(tdGamePackagePath))
             {
                 throw new FileNotFoundException($"TdGame.u not found at: {tdGamePackagePath}");
             }
 
-            // todo: utilise UELib instead of hardcoded byte patterns - works for now though
+            // TODO: Use UELib instead of hardcoded byte patterns.
             byte[] gamepadPatternHeader = new byte[] { 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0E, 0x00, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00 };
 
             var pendingWrites = new List<(string Path, byte[] Data)>();
@@ -79,9 +73,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
                 }
 
-                // Only patch a site whose current bytes are one of the two known variants; anything
-                // else means the layout is not what this patcher expects, and writing would corrupt
-                // the package.
+                // A site is only patched while it holds one of the two known variants.
+                // Any other bytes mean an unexpected layout, which writing would corrupt.
                 var current = data.AsSpan(replaceIndex, replacement.Length);
                 if (current.SequenceEqual(replacement))
                 {
@@ -184,9 +177,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 byte[] pcNameIndexBytes;
                 byte[] ps3NameIndexBytes;
 
-                // The package reader must be fully disposed before the file is rewritten below:
-                // the safe-write pipeline replaces the file via rename, which Windows refuses
-                // while another handle is open on it.
+                // The package reader must be disposed before the file is rewritten,
+                // because Windows refuses to replace a file while another handle is open on it.
                 using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
                 {
                     package?.InitializePackage();

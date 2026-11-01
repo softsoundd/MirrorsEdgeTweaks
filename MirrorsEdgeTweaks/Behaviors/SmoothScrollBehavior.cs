@@ -145,9 +145,8 @@ namespace MirrorsEdgeTweaks.Behaviors
             }
         }
 
-        // The static dictionaries hold strong references, so state must be dropped when a
-        // ScrollViewer leaves the tree (e.g. tab switch or window close) or it leaks. Entries are
-        // lazily re-created by the wheel handler if the viewer is loaded again.
+        // The static dictionaries hold strong references, so a ScrollViewer's state is dropped when it leaves the tree, or it would leak.
+        // The wheel handler recreates the state if the viewer is loaded again.
         private static void ScrollViewer_Unloaded(object sender, RoutedEventArgs e)
         {
             if (sender is ScrollViewer scrollViewer)

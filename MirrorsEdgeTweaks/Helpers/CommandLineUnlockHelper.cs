@@ -219,8 +219,7 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] markerBytes = EncodeUtf16Le(StockMarker);
             foreach (int markerOffset in FindAllOffsets(buffer, markerBytes))
             {
-                // A marker match outside any mapped section (headers, appended data) cannot be the
-                // referenced string; skip it rather than fault.
+                // A match outside every mapped section, such as in the headers or appended data, cannot be the referenced string.
                 uint? markerVaMaybe = image.TryOffsetToVa(markerOffset);
                 if (markerVaMaybe == null)
                 {

@@ -23,7 +23,7 @@ namespace MirrorsEdgeTweaks.Services
             _dialogService = dialogService;
         }
 
-        // Blurry UI only occurs above 1920 width
+        // The UI only blurs above a width of 1920.
         public bool ShouldOfferUIScaling(int width) => width > 1920;
 
         public async Task<bool> AskUserForUIScalingConfirmationAsync()
@@ -73,8 +73,7 @@ namespace MirrorsEdgeTweaks.Services
                 if (!TryApplySubtitleFix(gameDirectoryPath))
                     failedLayers.Add("subtitle centring");
 
-                // TODO: find a better approach - the cursor size is currently edited in every
-                // Startup_* localisation package rather than in one shared place.
+                // TODO: Edit the cursor size in one shared place instead of in every Startup_* localisation package.
                 if (!TryApplyCursorFix(gameDirectoryPath, height))
                     failedLayers.Add("cursor size");
 

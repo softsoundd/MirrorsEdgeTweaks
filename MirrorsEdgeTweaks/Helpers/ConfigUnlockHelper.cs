@@ -114,9 +114,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
                 }
 
-                // Signed config lookups key off the filename table, so hiding the
-                // first byte is enough to disable the hash entry without reshaping
-                // the resource data.
+                // Signed config lookups key off the filename table,
+                // so changing the name's first byte disables the hash entry without reshaping the resource data.
                 buffer[entry.NameOffset] ^= PatchedNameMask;
                 changedCount++;
             }

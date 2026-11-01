@@ -3,8 +3,7 @@ using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Info-dialog texts for the Graphics Tweaks tab. A single keyed command replaces the 28
-    // one-line ShowXInfo commands; XAML buttons bind ShowInfoCommand with a CommandParameter key.
+    // Each info button binds ShowInfoCommand, with its text's key as the CommandParameter.
     public partial class GraphicsTweaksViewModel
     {
         [RelayCommand]

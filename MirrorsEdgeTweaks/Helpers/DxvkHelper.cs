@@ -98,7 +98,8 @@ namespace MirrorsEdgeTweaks.Helpers
         }
 
         // Sets every global and [MirrorsEdge.exe] setting to True.
-        // Without a global setting, it uncomments the line from DXVK's template, or adds one above the first section.
+        // Without a global setting, it uncomments the line from DXVK's template.
+        // Without that line either, it adds one above the first section.
         internal static List<string> WithFloatDepth(IReadOnlyList<string> lines)
         {
             var result = new List<string>(lines);

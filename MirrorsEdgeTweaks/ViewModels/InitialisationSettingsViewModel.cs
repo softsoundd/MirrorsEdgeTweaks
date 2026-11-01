@@ -6,7 +6,7 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
-    // Skip Online Check passes Graphics' FovAgnosticSens / CompensatedClip into TdGamePatcher.
+    // The Skip Online Check setting passes GraphicsTweaksViewModel's FovAgnosticSens and CompensatedClip into TdGamePatcher.
     public partial class InitialisationSettingsViewModel : BusyViewModel
     {
         private readonly IDialogService _dialogService;

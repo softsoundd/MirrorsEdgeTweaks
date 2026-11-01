@@ -1,7 +1,5 @@
 namespace MirrorsEdgeTweaks.Services
 {
-    // Shared splice/fixup infrastructure for UE3 bytecode patching.
-    // Used by both apply and remove paths.
     public static class PackageSplicer
     {
         public const uint UE3_TAG = 0x9E2A83C1;
@@ -34,7 +32,7 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // Targets at or above thresholdBc are shifted by delta.
-        // Validates targets within [0, bss) to avoid corrupting float payloads.
+        // The scan does not decode instructions, so it skips targets outside the script, which are more likely float payloads than jumps.
         public static int FixJumpTargets(byte[] data, int bcStart, int bss, int thresholdBc, int delta)
         {
             int count = 0;
@@ -134,8 +132,8 @@ namespace MirrorsEdgeTweaks.Services
             };
         }
 
-        // Heuristic export table fixup: scan for (SerialSize, SerialOffset) pairs.
-        // Used by Engine.u where we don't need export index precision.
+        // Fixes up the export table by scanning it for SerialSize and SerialOffset pairs instead of parsing its entries.
+        // It handles a single splice into the export at exportStart.
         public static (int offsetsFixed, int sizesFixed) UpdateExportsHeuristic(
             byte[] buf, PackageHeader hdr, int exportStart, int lastInsPos, int origLen, int totalInsert)
         {
@@ -168,8 +166,7 @@ namespace MirrorsEdgeTweaks.Services
             return (nOff, nSz);
         }
 
-        // Structural export table fixup using export index matching (used by TdGame.u).
-        // Each modification is (serialOffset, insertSize, exportIndex).
+        // Fixes up the export table by parsing each entry and matching modifications by export index.
         public static (int offsetsFixed, int sizesFixed) UpdateExportsStructural(
             byte[] buf, PackageHeader hdr,
             List<(int serialOffset, int insertSize, int exportIndex)> modifications)

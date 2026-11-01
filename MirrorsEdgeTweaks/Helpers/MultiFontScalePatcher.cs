@@ -80,8 +80,7 @@ namespace MirrorsEdgeTweaks.Helpers
             "8D 8E EC 03 00 00 C7 44 24 14 00 00 00 00 C7 06 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8D 8E 0C 04 00 00");
         private const int UiScrollbarVtableImmOffset = 16;
 
-        // These must stay below the byte-array fields the builders read, because static initializers
-        // run top to bottom.
+        // These must stay below the byte-array fields the builders read, because static initializers run top to bottom.
         private static readonly int PageIndexCaveLen = BuildPageIndexCave(0, 0, 0).Length;
         private static readonly int GsfCaveLen = BuildGsfCave(0, 0, 0).Length;
         private static readonly int ExtentCaveLen = BuildExtentCave(0, 0, 0, 0, 0, 0, 0).Length;
@@ -206,8 +205,8 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] data = File.ReadAllBytes(exePath);
             if (OoaService.HasOoaSection(data))
             {
-                // For EA, decrypt, restore the detours, then re-encrypt and trim. Rewrite only when a
-                // detour was present, since re-encrypting an already-clean image strips its signature.
+                // An EA image is decrypted, restored, re-encrypted and trimmed.
+                // It is only rewritten when a detour was present, because re-encrypting a clean image strips its signature.
                 bool eaChanged = false;
                 byte[] result;
                 try
@@ -470,8 +469,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
         // Builds the DrawStringWrapped hook. It runs after the SEH prologue, where esp = entry-0x60,
         // and before the body touches xmm.
-        // TdGameEngine.OnLoadLevel places the loading hint with fullscreen fractions, X=0.35 and
-        // WrapWidth=0.55, but the bink is always 16:9, so the hint overruns it on wider modes.
+        // TdGameEngine.OnLoadLevel places the loading hint with fullscreen fractions, X=0.35 and WrapWidth=0.55,
+        // but the bink is always 16:9, so the hint overruns it on wider modes.
         // The cave remaps CurX ([esp+0x6c]) and the wrap width *XL ([esp+0x74]) into the 16:9 region:
         //   binkWidth = min(ResX, ResY*16/9), binkFrac = binkWidth/ResX, binkLeft = (ResX-binkWidth)/2
         //   CurX = binkLeft + CurX*binkFrac, *XL *= binkFrac
@@ -518,9 +517,10 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // Returns the field address pushed just before the match string's address in a
-        // Parse(..., TEXT(match), GSystemSettings.<field>) call.
-        // Returns null when a copy of the string is pushed more than once, or when copies disagree.
+        // Returns the field address pushed just before the match string's address
+        // in a Parse(..., TEXT(match), GSystemSettings.<field>) call.
+        // Returns null when a copy of the string is pushed more than once.
+        // Returns null when the copies disagree.
         private static uint? FindParseTargetAddr(byte[] data, PeImageLayout pe, string match)
         {
             var text = pe.FindSectionByName(".text");
@@ -528,7 +528,7 @@ namespace MirrorsEdgeTweaks.Helpers
             int tstart = (int)text.PointerToRawData;
             int tend = Math.Min(tstart + (int)text.SizeOfRawData, data.Length);
 
-            byte[] needle = Encoding.Unicode.GetBytes(match + "\0"); // UTF-16LE literal incl. terminator
+            byte[] needle = Encoding.Unicode.GetBytes(match + "\0"); // UTF-16LE literal with its terminator
             uint? result = null;
             int scan = 0;
             while (true)
@@ -545,12 +545,12 @@ namespace MirrorsEdgeTweaks.Helpers
                 BitConverter.GetBytes(strVa).CopyTo(pushStr, 1);
                 int pOff = IndexOf(data, pushStr, tstart, tend);
                 if (pOff < 0) continue;
-                if (IndexOf(data, pushStr, pOff + 1, tend) >= 0) return null; // ambiguous
+                if (IndexOf(data, pushStr, pOff + 1, tend) >= 0) return null;
 
                 int immOff = pOff - 5;                              // preceding `push <&field>`
                 if (immOff < tstart || data[immOff] != 0x68) continue;
                 uint addr = BitConverter.ToUInt32(data, immOff + 1);
-                if (result.HasValue && result.Value != addr) return null; // conflicting
+                if (result.HasValue && result.Value != addr) return null;
                 result = addr;
             }
             return result;
@@ -579,7 +579,7 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] detour = new byte[origLen];
             detour[0] = 0xE9;
             Buffer.BlockCopy(MachineCodeBuilder.Rel32Bytes(hookVa, codeVa), 0, detour, 1, 4);
-            for (int i = 5; i < origLen; i++) detour[i] = 0x90; // pad remaining bytes with nop
+            for (int i = 5; i < origLen; i++) detour[i] = 0x90;
             Buffer.BlockCopy(detour, 0, data, hookOff, origLen);
         }
 

@@ -7,10 +7,6 @@ using System.Windows.Threading;
 
 namespace MirrorsEdgeTweaks
 {
-    // Thin View shell: resolves the MainViewModel DataContext via DI and hosts the few interactions
-    // that genuinely belong to the View - the render-resolution slider Thumb drag events and a class
-    // handler that re-applies a setting when its already-selected combo item is re-clicked. All
-    // orchestration lives in the view model layer.
     public partial class MainWindow : Window
     {
         private readonly MainViewModel _viewModel;
@@ -83,11 +79,10 @@ namespace MirrorsEdgeTweaks
         private void RenderResolutionSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
             => _viewModel.Graphics.EndRenderResolutionDrag();
 
-        // Re-clicking the already-selected combo item should re-apply its setting. The combos are
-        // bound via SelectedIndex/SelectedItem, which only raise their VM OnChanged handler on an
-        // actual value change, so we briefly clear the selection and restore it: the transient -1 is
-        // a guarded no-op in every combo's apply path, and restoring the original index makes the
-        // bound property genuinely change and re-apply.
+        // Clicking the selected combo box item again re-applies its setting.
+        // The bound SelectedIndex and SelectedItem only notify the view model when the value changes,
+        // so the selection is cleared and then restored.
+        // Every combo box's apply path ignores the brief -1.
         private void OnComboBoxItemMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (sender is ComboBoxItem item)

@@ -5,8 +5,6 @@ namespace MirrorsEdgeTweaks.Services
         string? PickFolder(string description, string? initialPath);
     }
 
-    // Wraps the WinForms FolderBrowserDialog so view models can request a folder selection without
-    // referencing the View / WinForms layer directly.
     public class FolderPickerService : IFolderPickerService
     {
         public string? PickFolder(string description, string? initialPath)

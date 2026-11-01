@@ -9,10 +9,8 @@ namespace MirrorsEdgeTweaks.Helpers
         Patched
     }
 
-    // Shared implementation for the simple inline byte patches defined per game version in the
-    // VersionAddressTable "inlinePatches" section (multi-instance bypass, ambiguous-package
-    // bypass). Handles version detection, OOA (EA) transparency, pre-write byte verification and
-    // attribute-preserving writes; the per-feature classes this replaces were ~98% identical.
+    // Applies the simple byte patches that each version's address table lists under "inlinePatches",
+    // such as the multi-instance and ambiguous-package bypasses.
     public static class InlineVaPatchHelper
     {
         public const string MultiInstanceKey = "multiInstance_bypass";

@@ -234,7 +234,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 CommandLineUnlockMode unlockMode = CommandLineUnlockMode.Unsupported;
                 bool patchWasApplied = false;
 
-                // The unlock patch reads and rewrites the (large) executable; run it off the UI thread.
+                // The unlock patch reads and rewrites the whole executable, so it runs off the UI thread.
                 await RunBusyAsync("Applying launch arguments...", () =>
                 {
                     unlockMode = CommandLineUnlockHelper.GetUnlockMode(exePath);

@@ -119,7 +119,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     {
                         if (off + 12 > d.Length) continue;
                         uint wm = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(off, 4));
-                        // wm == 12 is a reclaimed empty cave whose tag is still valid
+
+                        // A watermark of 12 marks a reclaimed, empty cave, whose tag is still valid.
                         if (wm < 12 || wm >= rawSize) continue;
 
                         byte[] tagBytes = new byte[8];
@@ -146,14 +147,14 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (fileVersion.StartsWith("1.1.0.0", StringComparison.OrdinalIgnoreCase))
                     return "dlc";
 
-                // Day-one retail (1.0.0.0 SecuROM)
+                // The day-one retail release is 1.0.0.0, with SecuROM.
                 if (fileVersion.StartsWith("1.0.0.0", StringComparison.OrdinalIgnoreCase))
                     return "retold";
 
                 if (!fileVersion.StartsWith("1.0.", StringComparison.OrdinalIgnoreCase))
                     return null;
 
-                // 1.0.1.0 base game: GOG, Steam, Retail or EA
+                // The 1.0.1.0 base game comes from GOG, Steam, Retail or EA.
                 if (OoaService.HasOoaSection(peData))
                     return "ea";
 

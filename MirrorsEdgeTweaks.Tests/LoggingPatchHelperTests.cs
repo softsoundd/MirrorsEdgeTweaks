@@ -8,8 +8,8 @@ namespace MirrorsEdgeTweaks.Tests
     {
         private const uint ImageBase = 0x00400000;
 
-        // The flat logging image holds the hook sites in .text, the Serialize slots in .rdata and the
-        // execScriptTrace native entry in .data, each at its game-like role.
+        // The flat logging image holds the hook sites in .text, the Serialize slots in .rdata
+        // and the execScriptTrace native entry in .data, each at its game-like role.
         private const uint ExecSite = 0x00401100, PreInitSite = 0x00401200, OpenSite = 0x00401300;
         private const uint StubVa = 0x00401400, TraceFnVa = 0x00401410;
         private const uint FrameSlot = 0x00402000, StateSlot = 0x00402010, NameVa = 0x00402100;
@@ -301,7 +301,7 @@ namespace MirrorsEdgeTweaks.Tests
 
         private static byte[] BuildLoggingImage() => PopulateLoggingSites(SyntheticPe.BuildFlat());
 
-        // Same sites on an image that cannot add a section, as on the SecuROM game executables,
+        // Puts the same sites on an image that cannot add a section, like the SecuROM game executables,
         // where logging takes the zero tail of .rdata.
         private static byte[] BuildFixedCaveLoggingImage(int rdataTailBytes)
             => PopulateLoggingSites(SyntheticPe.BuildFixedCave(256, rdataTailBytes));
@@ -320,7 +320,7 @@ namespace MirrorsEdgeTweaks.Tests
             return image;
         }
 
-        // Every symbol the core logging and its restorations read, at distinct dummy VAs.
+        // Maps every symbol that the core logging and its restorations read to a distinct dummy VA.
         private static VersionAddressTable LoggingTable(bool fullMode, uint glog = 0x00403100)
         {
             var symbols = new Dictionary<string, uint>

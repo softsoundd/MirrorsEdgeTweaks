@@ -16,7 +16,7 @@ namespace MirrorsEdgeTweaks.Services
         }
     }
 
-    // Captured state from OOA section decryption, needed to re-encrypt.
+    // Holds the sections that DecryptSections decrypted, which ReencryptSections needs.
     public sealed class OoaContext
     {
         internal List<SectionRange> Sections { get; } = new();
@@ -29,13 +29,12 @@ namespace MirrorsEdgeTweaks.Services
         }
     }
 
-    // OOA (Origin Online Activation) decrypt/re-encrypt for EA App executables.
-    // The .ooa PE section stores AES-128-CBC encryption metadata: content ID,
-    // encrypted block list and the per section IVs are the 16 bytes immediately
-    // preceding each section's raw data in the file.
+    // Decrypts and re-encrypts the OOA (Origin Online Activation) sections of EA App executables.
+    // The .ooa section holds the content ID and the list of AES-128-CBC encrypted sections.
+    // Each encrypted section's IV is the 16 bytes before its raw data.
     public static class OoaService
     {
-        // .ooa section body offsets (Mirror's Edge PE32 variant)
+        // These are offsets into the .ooa section of Mirror's Edge's executable.
         const int ContentIdOffset = 0x42;
         const int ContentIdMaxBytes = 0x200;
         const int BlockCountOffset = 0x3DE;
@@ -93,10 +92,9 @@ namespace MirrorsEdgeTweaks.Services
                 contentId + ".dlf");
         }
 
-        // Decrypts an EA .dlf license file and extracts the 16 byte AES key.
-        // The DLF is itself AES-128-CBC encrypted with a key common to all
-        // OOA-protected titles - the plaintext is XML containing a base64
-        // CipherKey element.
+        // Decrypts an EA .dlf license file and returns its 16-byte AES key.
+        // Every OOA-protected title encrypts its .dlf with the same AES-128-CBC key.
+        // The plaintext is XML that holds the key in a base64 CipherKey element.
         public static byte[] DecryptDlf(byte[] dlfData)
         {
             // Some DLF files have a 0x41-byte header before the encrypted payload.
@@ -142,10 +140,9 @@ namespace MirrorsEdgeTweaks.Services
                 "The license may be corrupt or from a different game.");
         }
 
-        // Decrypts OOA-encrypted PE sections (.text, .data) in the buffer.
-        // The PE headers and .ooa section are left untouched - only the
-        // encrypted section contents are replaced with plaintext.
-        // Returns an "OoaContext" required for re-encryption.
+        // Decrypts the OOA-encrypted sections, such as .text and .data, in place.
+        // The PE headers and the .ooa section stay as they are.
+        // Returns the context that ReencryptSections needs.
         public static OoaContext DecryptSections(byte[] data, byte[] key)
         {
             var blocks = ParseEncryptedBlocks(data);
@@ -166,9 +163,7 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] plaintext = AesCbc(key, iv, data, rawOff, rawSize, encrypt: false);
                 Buffer.BlockCopy(plaintext, 0, data, rawOff, rawSize);
 
-                // PKCS7 padding artifact: OOA encryption pads sections that end with
-                // zeros, producing 0x10-repeated tails after decryption. Zero them out
-                // to recover the original plaintext.
+                // OOA encryption stores a final block of zeros as a PKCS7 padding block, which decrypts to sixteen 0x10 bytes.
                 int tailOff = rawOff + rawSize - AesBlockSize;
                 if (IsFilledWith(data, tailOff, AesBlockSize, 0x10))
                     Array.Clear(data, tailOff, AesBlockSize);
@@ -188,7 +183,7 @@ namespace MirrorsEdgeTweaks.Services
         {
             foreach (var section in ctx.Sections)
             {
-                // Restore PKCS7 padding artifact before encrypting
+                // A final block of zeros goes back to the PKCS7 padding block that DecryptSections cleared.
                 int tailOff = section.RawOffset + section.RawSize - AesBlockSize;
                 if (IsFilledWith(data, tailOff, AesBlockSize, 0x00))
                 {
@@ -204,8 +199,6 @@ namespace MirrorsEdgeTweaks.Services
                 Buffer.BlockCopy(ciphertext, 0, data, section.RawOffset, section.RawSize);
             }
         }
-
-        // PE parsing
 
         static bool TryGetSectionTable(byte[] data,
             out int secTableOff, out int numSections)
@@ -256,8 +249,6 @@ namespace MirrorsEdgeTweaks.Services
             throw new InvalidOperationException(
                 $"No PE section with VirtualAddress 0x{sectionVA:X8}.");
         }
-
-        // .ooa parsing
 
         struct EncBlock
         {
@@ -354,8 +345,6 @@ namespace MirrorsEdgeTweaks.Services
                 "No .ooa section found in executable.");
         }
 
-        // Authenticode stripping
-
         // Truncates to the end of the highest section's raw data, which drops the certificate.
         // An appended .cave section is the highest, so it is kept.
         public static byte[] TruncateToSections(byte[] data)
@@ -382,12 +371,10 @@ namespace MirrorsEdgeTweaks.Services
             return data;
         }
 
-        // EncBlock CRC update
-
         const uint Crc32Mpeg2Poly = 0x04C11DB7;
         static uint[]? _crc32Table;
 
-        // Must be called after patching but before re-encryption
+        // Must be called after patching but before re-encryption.
         public static void UpdateEncBlockCrcs(byte[] data, OoaContext ctx)
         {
             var ooa = FindOoaSection(data);
@@ -434,8 +421,6 @@ namespace MirrorsEdgeTweaks.Services
             _crc32Table = tbl;
             return tbl;
         }
-
-        // Crypto helpers
 
         static byte[] AesCbc(byte[] key, byte[] iv,
             byte[] data, int offset, int length, bool encrypt)

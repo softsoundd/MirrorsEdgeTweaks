@@ -3,20 +3,21 @@ using System.IO;
 
 namespace MirrorsEdgeTweaks.Services
 {
-    // Fixes subtitles vanishing at aspect ratios wider than 16:9. UGameViewportClient::Draw and
-    // FSubtitleManager::TrimRegionToSafeZone halve the subtitle band's vertical centring offset
-    // (SizeY - SizeX*0.5625) with an UNSIGNED shift, so when that offset is negative (AR > 16:9) it
-    // wraps to ~2^31 and the float->int conversion sends the band's Y to INT_MIN, off-screen. Per
-    // site the fix is shr->sar (E8->F8) plus the guarding jge->jmp (7D->EB) so the unsigned +2^32
-    // fixup is skipped and the signed offset is used. The sites are byte-identical across versions
-    // bar the wildcarded fadd const
+    // Fixes subtitles vanishing at aspect ratios wider than 16:9.
+    // UGameViewportClient::Draw and FSubtitleManager::TrimRegionToSafeZone halve the subtitle band's vertical centring offset,
+    // SizeY - SizeX*0.5625, with an unsigned shift.
+    // At aspect ratios wider than 16:9, the offset is negative, so the shift makes it about 2^31,
+    // and the float to int conversion then moves the band's Y off-screen to INT_MIN.
+    // At each site, the fix changes shr to sar, and changes the jge that guards the unsigned 2^32 correction to jmp,
+    // so the signed offset is used.
+    // The sites have the same bytes on every version, apart from the wildcarded fadd constant.
     public static class SubtitleRegionPatcher
     {
         const byte SHR = 0xE8, SAR = 0xF8, JGE = 0x7D, JMP = 0xEB;
 
-        // Patch bytes are wildcarded so one pattern matches whether patched or not. The fixed `7D 06`
-        // at offset 14 is the FIRST jge (a legitimate fixup, left alone); the patch point is the
-        // SECOND jge.
+        // The patch bytes are wildcarded, so each pattern matches before and after patching.
+        // The fixed 7D 06 at offset 14 is the first jge, whose correction is legitimate, so the fix leaves it alone.
+        // The patch changes the second jge.
         static readonly Site DrawSite = new("Draw",
             "2B C6 D1 ?? 85 F6 89 74 24 4C DB 44 24 4C 7D 06 D8 05 ?? ?? ?? ?? 85 C0 D9 5C 24 3C 89 44 24 4C DB 44 24 4C ?? 06 D8 05 ?? ?? ?? ??",
             shrOffset: 3, jgeOffset: 36);
@@ -75,7 +76,7 @@ namespace MirrorsEdgeTweaks.Services
             return true;
         }
 
-        // Masked byte pattern ("??" = wildcard) flagging the two single-byte patch points.
+        // Holds a byte pattern, in which ?? is a wildcard, and the offsets of its two single-byte patch points.
         sealed class Site
         {
             readonly byte[] _bytes;

@@ -32,8 +32,6 @@ namespace MirrorsEdgeTweaks.Services
             try { if (File.Exists(tdGamePath)) RemoveCrosshair(tdGamePath); } catch { }
         }
 
-        // Engine.u : HUD.PreCalcValues
-
         public static void ApplyEngine(string enginePath)
         {
             byte[] data = File.ReadAllBytes(enginePath);
@@ -46,10 +44,9 @@ namespace MirrorsEdgeTweaks.Services
             using (var pkg = UePackageLocator.Load(enginePath))
             {
                 r = ResolveEngineRefs(pkg);
-                // PreCalcValues (not PostRender): TdHUD.PostRender overrides HUD.PostRender without
-                // calling super, but no HUD subclass overrides PreCalcValues, so every HUD calls the
-                // inherited HUD.PreCalcValues on a size change - a universal hook that fires on boot
-                // (the menu runs a TdSPHUD) and in gameplay.
+
+                // No HUD subclass overrides PreCalcValues, so every HUD runs it on a size change, including the menu's TdSPHUD at boot.
+                // TdHUD.PostRender does not call super, so HUD.PostRender would not run.
                 var fn = UePackageLocator.FindFunction(pkg, "HUD", "PreCalcValues")
                     ?? throw new InvalidOperationException("Cannot find HUD.PreCalcValues in Engine.u");
                 serialOffset = fn.SerialOffset;
@@ -121,11 +118,7 @@ namespace MirrorsEdgeTweaks.Services
             Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
         }
 
-        // TdGame.u : TdSPHUD.DrawLivingHUD (dynamic crosshair scaling)
-
-        // Each crosshair texture member of TdSPHUD and its stock pixel size. SizeX/SizeY are scaled to
-        // base * FMax(1, HUD.SizeY/1080) at the start of DrawLivingHUD (runs each frame -> follows
-        // in-game resolution changes). Matches the old static fix's values (Unarmed/Reaction 16, Weapon 64).
+        // Holds each TdSPHUD crosshair texture member with its stock pixel size.
         static readonly (string name, int baseSize)[] CrosshairMembers =
         {
             ("UnarmedCrossHair", 16), ("ReactionCrossHair", 16), ("WeaponCrossHair", 64),
@@ -180,9 +173,9 @@ namespace MirrorsEdgeTweaks.Services
                 serialOffset = fn.SerialOffset;
                 exportIndex = fn.ExportIndex;
                 jumpPositions = ExtractJumpPositions(fn.Tokens);
-                // Insert before the function's final Return (not the start): the early-return guards
-                // include "UnarmedCrossHair == none", so the textures are only guaranteed non-none once
-                // execution falls through to the end. Costs a 1-frame size lag (imperceptible).
+
+                // The blob runs after DrawLivingHUD's early returns, which guard against UnarmedCrossHair == none.
+                // It also runs after the crosshair is drawn, so new sizes show from the next frame.
                 insertBc = FindLastReturnInsertBc(fn.Tokens);
             }
 
@@ -265,9 +258,8 @@ namespace MirrorsEdgeTweaks.Services
             return r;
         }
 
-        // Insertion point = the function's terminating Return token. Inserting before it appends the
-        // blob to the end of PreCalcValues' body (after SizeX/SizeY have been recalculated), and
-        // PreCalcValues has no jumps so nothing else needs shifting.
+        // Returns the offset of the Return that ends PreCalcValues, so the blob runs after SizeX and SizeY are recalculated.
+        // PreCalcValues has no jumps, so the insertion moves no jump targets.
         static int FindReturnInsertBc(IList<Token> tokens)
         {
             foreach (var t in tokens)
@@ -276,9 +268,7 @@ namespace MirrorsEdgeTweaks.Services
             throw new InvalidOperationException("Cannot locate Return in HUD.PreCalcValues");
         }
 
-        // The function's terminating (last) Return. Used for crosshair insertion: a function with
-        // early-return guards has several Returns, and only the final one is reached after all guards
-        // pass, so inserting there avoids touching guarded-against (possibly none) state.
+        // Returns the offset of the last Return, which only runs once every early-return guard has passed.
         static int FindLastReturnInsertBc(IList<Token> tokens)
         {
             int pos = -1;
@@ -290,9 +280,8 @@ namespace MirrorsEdgeTweaks.Services
             return pos;
         }
 
-        // Bytecode offsets of every real jump opcode (Jump/JumpIfNot/Case). Using token positions
-        // rather than a raw byte scan avoids misreading data bytes (e.g. a 0x06 inside an ObjectConst)
-        // as a jump.
+        // Returns the offsets of the Jump, JumpIfNot and Case tokens.
+        // Token positions avoid a byte scan, which could mistake a data byte, such as a 0x06 in an ObjectConst, for a jump.
         static List<int> ExtractJumpPositions(IList<Token> tokens)
         {
             var positions = new List<int>();
@@ -308,7 +297,10 @@ namespace MirrorsEdgeTweaks.Services
             {
                 int fieldPos = bcStart + bcPos + 1;
                 ushort cur = BitConverter.ToUInt16(data, fieldPos);
-                if (cur == 0xFFFF) continue; // default case / no target
+
+                // A default case holds 0xFFFF in place of a target.
+                if (cur == 0xFFFF) continue;
+
                 if (cur >= thresholdBc)
                 {
                     int nt = cur + delta;

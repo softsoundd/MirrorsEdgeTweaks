@@ -1,9 +1,6 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Single source of truth for the selectable TdGame.u variants and the mapping between a
-    // version's display name and its combo index. The order must match the ComboBox items in
-    // the Game Tweaks tab. Kept as a small static catalog so the index/name mapping is unit
-    // testable without constructing the (WPF-bound) TdGameVersionViewModel.
+    // The order must match the ComboBox items in the Game Tweaks tab.
     public static class TdGameVersionCatalog
     {
         public static readonly IReadOnlyList<string> Names = new[]

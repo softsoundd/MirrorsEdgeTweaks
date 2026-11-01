@@ -1,7 +1,7 @@
 namespace MirrorsEdgeTweaks.Tests.TestSupport
 {
-    // Creates a real temporary ini file for exercising the file-based graphics settings logic, and
-    // cleans it up on dispose (clearing the read-only attribute that the service applies after a write).
+    // Creates a temporary ini file for the file-based graphics settings tests.
+    // Dispose clears the read-only attribute that the service sets after a write, then deletes the file.
     public sealed class TempIniFile : IDisposable
     {
         public string Path { get; }
@@ -28,7 +28,7 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
             }
             catch
             {
-                // Best-effort cleanup; never fail a test on teardown.
+                // A failed cleanup must not fail the test.
             }
         }
     }

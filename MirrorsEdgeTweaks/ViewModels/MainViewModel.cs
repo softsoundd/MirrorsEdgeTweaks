@@ -353,8 +353,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        // Post-reload fan-out: runs the feature-VM refreshes after a package (re)load. Subscribed to
-        // IGameDataService.PackagesReloaded so the service need not depend on the feature view models.
         private void OnPackagesReloaded()
         {
             Dispatch(() =>

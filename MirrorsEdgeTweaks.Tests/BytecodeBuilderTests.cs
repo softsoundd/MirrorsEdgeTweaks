@@ -81,7 +81,7 @@ namespace MirrorsEdgeTweaks.Tests
 
             byte[] token = BytecodeBuilder.ContextHudProperty(pcOwner, myHud, property);
 
-            // Outer: 0x19 + pcOwner + skip(u16) + type(u16); inner starts after that.
+            // The outer context is 0x19, pcOwner, a 2-byte skip size and a 2-byte property type, and the inner context follows.
             Assert.Equal(BytecodeBuilder.OP_CONTEXT, token[0]);
             int innerLength = 1 + myHud.Length + 4 + property.Length;
             ushort outerSkip = BitConverter.ToUInt16(token, 1 + pcOwner.Length);
@@ -99,7 +99,7 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(BytecodeBuilder.OP_BOOL_AND, token[0]);
             Assert.Equal(0x27, token[1]);
             Assert.Equal(BytecodeBuilder.OP_SKIP, token[2]);
-            // Skip = second expression + the trailing EndFP marker.
+            // The skip size covers the second expression and the trailing EndFunctionParms.
             Assert.Equal(expr2.Length + 1, BitConverter.ToUInt16(token, 3));
             Assert.Equal(BytecodeBuilder.OP_END_FP, token[^1]);
         }

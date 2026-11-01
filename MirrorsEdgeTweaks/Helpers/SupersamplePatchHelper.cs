@@ -14,9 +14,8 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         private const uint ImageBase = 0x00400000;
 
-        // Sum of the five cave.Alloc sizes in ApplyPatch (all 4-aligned, so no inter-block padding).
-        // Used to reclaim the cave on Remove only when it is the topmost allocation. Keep in sync with
-        // the Alloc calls in ApplyPatch.
+        // Must match the five cave.Alloc sizes in ApplyPatch, which are 4-aligned, so no padding falls between the blocks.
+        // RemovePatch reclaims this much cave when the blocks are its topmost allocation.
         internal const int CaveFootprint = 44 + 160 + 68 + 52 + 56;
 
         private static readonly string[] RequiredSymbols =
@@ -207,7 +206,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
 
                 // scaleViewport detours to the lowest cave block, so its target is the cave base.
-                // Capture it before restoring the hook (which overwrites the E9 + relative offset).
+                // The base is read before the hook is restored, because restoring overwrites the jump.
                 if (hookName == "scaleViewport_centering")
                     caveBase = ImageBase + (uint)foff + 5u
                         + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(foff + 1, 4));
@@ -340,13 +339,14 @@ namespace MirrorsEdgeTweaks.Helpers
             void Add(params byte[] b) => code.AddRange(b);
             void AddU32(uint v) { var buf = new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(buf, v); code.AddRange(buf); }
 
-            // Check: movss xmm0, [SP]; mulss xmm0, [C001]; comiss xmm0, [C1]; ja +0x64
+            // Jumps to the zero block when ScreenPercentage * 0.01 is above 1:
+            //   movss xmm0, [SP]; mulss xmm0, [C001]; comiss xmm0, [C1]; ja +0x64
             Add(0xF3, 0x0F, 0x10, 0x05); AddU32(SP);
             Add(0xF3, 0x0F, 0x59, 0x05); AddU32(C001);
             Add(0x0F, 0x2F, 0x05); AddU32(C1);
             Add(0x77, 0x64);
 
-            // X block
+            // The X block computes the X origin and writes it through the pointer at [esp+8].
             Add(0xDB, 0x01, 0x8B, 0x01, 0x85, 0xC0, 0x7D, 0x06);
             Add(0xD8, 0x05); AddU32(CU2F);
             Add(0xD8, 0x64, 0x24, 0x20);
@@ -356,7 +356,7 @@ namespace MirrorsEdgeTweaks.Helpers
             Add(0xF3, 0x0F, 0x2C, 0x44, 0x24, 0x20);
             Add(0x8B, 0x4C, 0x24, 0x08, 0x89, 0x01);
 
-            // Y block
+            // The Y block computes the Y origin and writes it through the pointer at [esp+0xC].
             Add(0x8B, 0x12, 0x85, 0xD2, 0x89, 0x54, 0x24, 0x20);
             Add(0xDB, 0x44, 0x24, 0x20, 0x7D, 0x06);
             Add(0xD8, 0x05); AddU32(CU2F);
@@ -365,10 +365,10 @@ namespace MirrorsEdgeTweaks.Helpers
             Add(0xF3, 0x0F, 0x2C, 0x44, 0x24, 0x20);
             Add(0x8B, 0x4C, 0x24, 0x0C, 0x89, 0x01);
 
-            // Exit block
+            // The exit block returns in place of the hooked function.
             Add(0x59, 0xC2, 0x20, 0x00);
 
-            // Zero block (SP > 100: zero both origins)
+            // The zero block zeroes both origins when ScreenPercentage is above 100, then returns the same way.
             Add(0x8B, 0x4C, 0x24, 0x08);
             Add(0xC7, 0x01, 0x00, 0x00, 0x00, 0x00);
             Add(0x8B, 0x4C, 0x24, 0x0C);
@@ -390,13 +390,13 @@ namespace MirrorsEdgeTweaks.Helpers
             void Add(params byte[] b) => code.AddRange(b);
             void AddU32(uint v) { var buf = new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(buf, v); code.AddRange(buf); }
 
-            // Check: SP * 0.01 > 1.0? if not, skip scaling (jbe +0x24)
+            // Skips the scaling with jbe +0x24 when ScreenPercentage * 0.01 is 1 or less.
             Add(0xF3, 0x0F, 0x10, 0x05); AddU32(SP);
             Add(0xF3, 0x0F, 0x59, 0x05); AddU32(C001);
             Add(0x0F, 0x2F, 0x05); AddU32(C1);
             Add(0x76, 0x24);
 
-            // Scale width and height on stack by SP/100
+            // Scales the width and height arguments on the stack by ScreenPercentage / 100.
             Add(0xF3, 0x0F, 0x2A, 0x4C, 0x24, 0x04);
             Add(0xF3, 0x0F, 0x59, 0xC8);
             Add(0xF3, 0x0F, 0x2C, 0xC1);
@@ -430,7 +430,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             // cmp dword ptr [esi+0x24C], 0
             Add(0x83, 0xBE, 0x4C, 0x02, 0x00, 0x00, 0x00);
-            // je +0x1F (skip NeedsUpscale check if not final)
+            // je +0x1F to the not_final_va jump, skipping the NeedsUpscale check
             Add(0x74, 0x1F);
 
             Add(0x51); // push ecx
@@ -501,10 +501,10 @@ namespace MirrorsEdgeTweaks.Helpers
             return code.ToArray();
         }
 
-        // Locates a hook site whether the binary is unpatched (find the original pattern) or already
-        // patched (the pattern is gone; find the E9 + NOP-padded detour in the same scan window). Needed
-        // so Remove restores detoured hooks - ResolveHook alone fails on a patched site. Returns the file
-        // offset, or -1 if not found.
+        // Returns the file offset of the hook's original pattern.
+        // Returns the offset of a jmp padded with nops in the hook's scan window, once the pattern has been replaced.
+        // Returns -1 when neither is found.
+        // RemovePatch needs the second case, because ResolveHook only finds unpatched sites.
         private static int FindHookSite(byte[] data, HookDefinition hdef)
         {
             try { return (int)(VersionAddressTable.ResolveHook(data, hdef) - ImageBase); }

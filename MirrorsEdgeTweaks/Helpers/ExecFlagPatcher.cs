@@ -4,9 +4,8 @@ using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Adds the UE3 Exec function flag (0x200) to a UFunction in TdGame.u so it becomes callable via
-    // keybinds/console commands. Used by the keybind apply flow and the TdGame version-swap snapshot
-    // reapply. Throws on failure so callers can report exactly which patch did not apply.
+    // Adds the UE3 Exec function flag (0x200) to a TdGame.u function, so keybinds and console commands can call it.
+    // Throws on failure, so callers can report which patch did not apply.
     public static class ExecFlagPatcher
     {
         public static async Task AddExecFlag(string? gameDirectoryPath, string className, string functionName)
@@ -70,12 +69,10 @@ namespace MirrorsEdgeTweaks.Helpers
             });
         }
 
-        // Finds the file offset of the function's serialized FunctionFlags DWORD. The current flags
-        // value is scanned for inside the export's serialized range only. A single match is used
-        // directly; with multiple matches, the true flags field is disambiguated structurally: it
-        // is followed (within a few bytes) by the function's own FriendlyName name index. Anything
-        // still ambiguous throws instead of guessing, because patching the wrong DWORD corrupts
-        // the package.
+        // Returns the file offset of the function's serialized FunctionFlags DWORD.
+        // The current flags value is searched for within the export's serialized range.
+        // When it occurs more than once, the real field is the one followed within 16 bytes by the function's FriendlyName name index.
+        // Anything still ambiguous throws, because patching the wrong DWORD corrupts the package.
         private static long LocateFlagsOffset(byte[] data, UnrealPackage package, UELib.UExportTableItem functionExport, string functionName, byte[] currentFlagsBytes)
         {
             long serialStart = functionExport.SerialOffset;
@@ -104,8 +101,6 @@ namespace MirrorsEdgeTweaks.Helpers
             if (matches.Count == 1)
                 return matches[0];
 
-            // Multiple candidates: keep only those followed by this function's FriendlyName
-            // name index within the next 16 bytes.
             int nameIndex = package.Names.FindIndex(n => n.ToString() == functionName);
             if (nameIndex != -1)
             {

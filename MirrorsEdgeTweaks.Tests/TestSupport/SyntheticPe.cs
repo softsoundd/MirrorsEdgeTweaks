@@ -130,7 +130,7 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 32, 4), alignment); // SectionAlignment
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 36, 4), alignment); // FileAlignment
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 56, 4), FlatDataRva + FlatSectionSize); // SizeOfImage
-            // Too small to hold another 40-byte section header, so CaveSection uses padding caves.
+            // SizeOfHeaders leaves no room for another 40-byte section header, so CaveSection uses padding caves.
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 60, 4), 0x200); // SizeOfHeaders
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 92, 4), 16);     // NumberOfRvaAndSizes
 

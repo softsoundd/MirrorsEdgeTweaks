@@ -1,6 +1,6 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // The game files that a re-apply covers.
+    // Each flag marks a group of game files that a re-apply covers.
     [Flags]
     public enum TweakScope
     {
@@ -12,7 +12,7 @@ namespace MirrorsEdgeTweaks.Helpers
         All = Engine | TdGame | Localisation | Exe,
     }
 
-    // Tweaks that must survive a replacement of game files.
+    // Holds the tweaks that must survive a replacement of game files.
     // The exe flow keeps it as JSON until the user has verified the game files.
     public sealed class TweakSnapshot
     {
@@ -29,7 +29,7 @@ namespace MirrorsEdgeTweaks.Helpers
         public bool HighResFix { get; set; }
         public bool ReversedDepth { get; set; }
 
-        // Set only while the FOV patches are applied.
+        // Has a value only while the FOV patches are applied.
         public float? Fov { get; set; }
     }
 

@@ -11,18 +11,15 @@ namespace MirrorsEdgeTweaks.Services
     {
         event Action? PackagesReloaded;
 
-        // Pass notify: false for intermediate reloads where the feature-VM refresh fan-out
-        // (raised via PackagesReloaded) would be premature.
+        // Intermediate reloads pass notify: false, which skips PackagesReloaded until the final reload.
         void LoadPackages(bool notify = true);
 
         Task ReloadPackagesAsync(bool notify = true);
         void UpdateConsoleStatus();
     }
 
-    // Owns the heavy Unreal package (re)load and the per-class offset finding that backs FOV,
-    // aspect-ratio and developer-console editing. Writes its results into the shared GameSession and
-    // the small status view models, then raises PackagesReloaded so the shell can fan out feature-VM
-    // refreshes through DI without this service depending on the feature view models.
+    // Loads the Unreal packages and finds the offsets that FOV, aspect ratio and developer console editing use.
+    // It raises PackagesReloaded instead of refreshing the feature view models, so it does not depend on them.
     public class GameDataService : IGameDataService
     {
         private readonly IPackageService _packageService;

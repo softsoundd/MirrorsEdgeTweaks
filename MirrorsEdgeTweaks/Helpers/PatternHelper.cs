@@ -1,11 +1,11 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Canonical byte-pattern scanner for the whole patching layer. All FindPattern-style helpers
-    // delegate here; the search itself uses span IndexOf, which is vectorised by the runtime.
+    // The other FindPattern helpers delegate here.
+    // The search uses span IndexOf, which the runtime vectorises.
     public static class PatternHelper
     {
-        // endExclusive of -1 means "to the end of data". Bounds are clamped, so callers may pass
-        // generous windows.
+        // An endExclusive of -1 searches to the end of data.
+        // The bounds are clamped, so callers may pass windows that run past the data.
         public static int FindPattern(byte[] data, ReadOnlySpan<byte> pattern, int start = 0, int endExclusive = -1)
         {
             if (pattern.Length == 0)
@@ -22,7 +22,7 @@ namespace MirrorsEdgeTweaks.Helpers
             return idx < 0 ? -1 : start + idx;
         }
 
-        // Matches may overlap (each match advances the scan by one byte, not by pattern length).
+        // Matches may overlap.
         public static IEnumerable<int> FindAll(byte[] data, byte[] pattern, int start = 0, int endExclusive = -1)
         {
             int pos = start;
@@ -36,8 +36,9 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // Throws when the pattern occurs more than once: patching an ambiguous site risks
-        // corrupting the file. Returns -1 when absent.
+        // Returns the offset of the only match.
+        // Returns -1 when there is no match.
+        // Throws when there is more than one match, because patching an ambiguous site could corrupt the file.
         public static int FindUnique(byte[] data, byte[] pattern, int start = 0, int endExclusive = -1)
         {
             int first = FindPattern(data, pattern, start, endExclusive);

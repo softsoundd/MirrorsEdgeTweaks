@@ -19,7 +19,7 @@ namespace MirrorsEdgeTweaks.Helpers
         public uint SizeOfHeaders { get; }
         public IReadOnlyList<SectionEntry> Sections { get; }
 
-        // Resource data-directory entry (RVA + size); both zero when the image has no resources.
+        // Both are zero when the image has no resources.
         public uint ResourceDirectoryRva { get; }
         public uint ResourceDirectorySize { get; }
 
@@ -75,7 +75,7 @@ namespace MirrorsEdgeTweaks.Helpers
             uint fileAlignment = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(optOffset + 36, 4));
             uint sizeOfHeaders = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(optOffset + 60, 4));
 
-            // PE32 data directories start at optional-header offset 96; entry 2 is the resources.
+            // The PE32 data directories start 96 bytes into the optional header, and entry 2 is the resource directory.
             uint resourceDirectoryRva = 0;
             uint resourceDirectorySize = 0;
             int resourceEntryOffset = optOffset + 96 + ResourceDirectoryIndex * 8;

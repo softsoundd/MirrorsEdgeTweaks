@@ -32,7 +32,8 @@ namespace MirrorsEdgeTweaks.Tests
         [InlineData("Unknown")]
         [InlineData("")]
         [InlineData(null)]
-        [InlineData("original")] // wrong case -> not matched (ordinal)
+        // The match is ordinal, so a different case does not match.
+        [InlineData("original")]
         public void IndexOf_ReturnsMinusOneForUnknown(string? name)
         {
             Assert.Equal(-1, TdGameVersionCatalog.IndexOf(name));

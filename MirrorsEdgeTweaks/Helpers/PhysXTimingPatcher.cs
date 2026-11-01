@@ -4,16 +4,14 @@ using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Patches and reads the PhysX cloth-simulation timing in Engine.u. The simulation TimeStep
-    // (PhysicsTimings / CompartmentTimingCloth) and the skeletal-mesh ClothIterations are written
-    // directly as bytes within the WorldInfo / SkeletalMesh default-object export ranges.
+    // Reads and patches the PhysX cloth simulation timing in Engine.u.
+    // The TimeStep of WorldInfo's CompartmentTimingCloth and SkeletalMesh's ClothIterations are written as bytes in their default objects.
     public static class PhysXTimingPatcher
     {
         private static string GetEnginePackagePath(string gameDirectoryPath) =>
             Path.Combine(gameDirectoryPath, "TdGame", "CookedPC", "Engine.u");
 
-        // Both value offsets are located before anything is written, and the file is written
-        // exactly once - a failure can never leave Engine.u with only one of the two values.
+        // Both value offsets are found before the single write, so a failure cannot leave Engine.u with only one of the two values.
         public static void Apply(string gameDirectoryPath, int physxFps)
         {
             string enginePackagePath = GetEnginePackagePath(gameDirectoryPath);
@@ -25,16 +23,15 @@ namespace MirrorsEdgeTweaks.Helpers
 
             float physxTimestep = 1.0f / physxFps;
 
-            // linear equation for skeletal mesh PhysX iterations - keeps cloth sim somewhat consistent
+            // Fewer iterations at higher rates keep the cloth simulation roughly consistent.
             int physxIterations = (int)(-0.016 * physxFps + 5.8);
 
             byte[] data = File.ReadAllBytes(enginePackagePath);
             long timeStepValueOffset;
             long clothIterationsValueOffset;
 
-            // The package reader must be disposed before the file is rewritten below: the
-            // safe-write pipeline replaces the file via rename, which Windows refuses while
-            // another handle is open on it.
+            // The package reader must be disposed before the file is rewritten,
+            // because Windows refuses to replace a file while another handle is open on it.
             using (var package = UnrealLoader.LoadPackage(enginePackagePath, FileAccess.Read))
             {
                 package?.InitializePackage();
@@ -110,8 +107,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // Resolves the loaded default object (CDO) for a class, falling back to the "Default__X"
-        // object lookup used by some package layouts.
+        // Returns the class's default object.
+        // Returns the object named Default__<class> in package layouts where the class has no linked default.
         private static UObject? FindDefaultObject(UnrealPackage package, string className)
         {
             var uClass = package.FindObject<UClass>(className);
@@ -134,8 +131,8 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        // Scans the default object's serialized range for the n-th occurrence of the given
-        // property name index and returns the file offset of its value (name + 24 bytes), or -1.
+        // Returns the file offset of the value of the property's nth tag in the default object, 24 bytes after its name.
+        // Returns -1 when the default object has no nth tag for the property.
         private static long LocateValueOffset(byte[] data, UnrealPackage package, UObject defaultObject, string propertyName, int occurrence)
         {
             int nameIndex = package.Names.FindIndex(n => n.ToString() == propertyName);

@@ -5,12 +5,12 @@ using System.Windows.Media.Animation;
 
 namespace MirrorsEdgeTweaks.Controls
 {
-    // Snap chevron rotation until loaded, otherwise expanded sections spin on first layout.
+    // The chevron snaps to its angle until it has loaded, or expanded sections would spin on first layout.
     public class ExpanderChevronToggle : ToggleButton
     {
         private const string ChevronPartName = "ExpandPath";
 
-        // Keep in sync with SectionExpandDuration / SectionCollapseDuration in Themes/SectionExpander.xaml.
+        // These must match SectionExpandDuration and SectionCollapseDuration in Themes/SectionExpander.xaml.
         private static readonly Duration ExpandDuration = TimeSpan.FromMilliseconds(250);
         private static readonly Duration CollapseDuration = TimeSpan.FromMilliseconds(200);
 

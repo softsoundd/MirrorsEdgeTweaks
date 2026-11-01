@@ -248,8 +248,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             UpdateHighResFixStatus(res.Width, isCurrentlyActive);
         }
 
-        // Called by flows that overwrite game files on disk (language pack and TdGame version
-        // installs) so the high-res UI scaling fix is not lost.
+        // Flows that overwrite game files, such as language pack and TdGame version installs, call this so the high-res UI fix is not lost.
         public async Task ReapplyHighResUIFixIfNeededAsync(bool? wasUIScalingActiveOverride = null, bool showDialogs = true)
         {
             try

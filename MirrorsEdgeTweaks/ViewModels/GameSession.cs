@@ -12,15 +12,15 @@ namespace MirrorsEdgeTweaks.ViewModels
         public UnrealPackage? Package { get; set; }
         public UnrealPackage? TdGamePackage { get; set; }
 
-        // True while the game directory is being processed at startup/selection. Per-feature status
-        // refreshers skip work during this window (a single refresh runs afterwards) to avoid flicker.
+        // Is true while a game directory is processed at startup or after selection.
+        // Status refreshes are skipped meanwhile to avoid flicker, and a single refresh runs afterwards.
         public bool IsProcessingGameDirectory { get; set; }
 
-        // Populated during offset finding; read by GraphicsTweaksViewModel to avoid service→VM coupling.
+        // GameDataService sets this while finding offsets, and GraphicsTweaksViewModel reads it.
         public float? DetectedCameraFov { get; set; }
 
-        // Owned by InitialisationSettingsViewModel but stored here so GraphicsTweaksViewModel can
-        // reconcile TdGame.u without a circular dependency (Init already depends on Graphics).
+        // InitialisationSettingsViewModel sets this, and GraphicsTweaksViewModel reads it to reconcile TdGame.u.
+        // It lives here because InitialisationSettingsViewModel already depends on GraphicsTweaksViewModel.
         public bool OnlineSkipEnabled { get; set; }
 
         public ApplyGate ApplyGate { get; } = new();

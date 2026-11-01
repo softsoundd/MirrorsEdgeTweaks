@@ -5,17 +5,16 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IDownloadService
     {
-        // onProgress receives 0-100, or a single -1 when the server reports no content length
-        // (callers can switch their progress bar to indeterminate).
+        // onProgress receives percentages from 0 to 100.
+        // It receives a single -1 when the server reports no content length, so callers can show indeterminate progress.
         Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default);
     }
 
     public class DownloadService : IDownloadService
     {
-        // One shared client for every download in the app (sockets are pooled; creating a client
-        // per request wastes connections). The generous timeout covers large mod zips on slow
-        // connections; ResponseHeadersRead means it does not include the body transfer for the
-        // streaming paths.
+        // Every download shares this client, because a client per request wastes pooled connections.
+        // The long timeout allows for large mod archives on slow connections.
+        // Downloads use ResponseHeadersRead, so the timeout does not cover their body transfer.
         private static readonly HttpClient Client = new()
         {
             Timeout = TimeSpan.FromMinutes(30)

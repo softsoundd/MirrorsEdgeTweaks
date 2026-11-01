@@ -1,7 +1,9 @@
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // Dialog asking the user which Tweaks Scripts UI variant to install
-    // (Regular vs MEMM-Compatible). Returns true for MEMM, false for Regular, null on cancel.
+    // Asks which Tweaks Scripts UI variant to install.
+    // The dialog result is true for MEMM-Compatible.
+    // It is false for Regular.
+    // It is null when the dialog is cancelled.
     public class TweaksScriptsUIVersionDialog : System.Windows.Controls.UserControl
     {
         public TweaksScriptsUIVersionDialog()

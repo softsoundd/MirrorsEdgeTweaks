@@ -23,7 +23,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _downloadProgress = downloadProgress;
         }
 
-        // Checked at enqueue time so deferred work is not scheduled during load/startup.
+        // While this is true, apply work is dropped instead of queued, so loading and startup do not trigger it.
         protected virtual bool IsApplySuppressed => _session.IsProcessingGameDirectory;
 
         protected void EnqueueApply(Func<Task> work)

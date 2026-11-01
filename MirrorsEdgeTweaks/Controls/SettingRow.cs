@@ -4,9 +4,8 @@ using System.Windows.Input;
 
 namespace MirrorsEdgeTweaks.Controls
 {
-    // A single settings row: bold label in a fixed 190px column, arbitrary content, and an
-    // optional trailing info button. Replaces the dozens of hand-written three-column grids in
-    // MainWindow.xaml. Template lives in Themes/Generic.xaml.
+    // Shows a bold label in a fixed 190px column, then the content and an optional info button.
+    // Its template is in Themes/Generic.xaml.
     public class SettingRow : ContentControl
     {
         static SettingRow()

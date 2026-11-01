@@ -1,6 +1,5 @@
 <Project>
 
-  <!-- Shared build configuration for all projects in the repository. -->
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

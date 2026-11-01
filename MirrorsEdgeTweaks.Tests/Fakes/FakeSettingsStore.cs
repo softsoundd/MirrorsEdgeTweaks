@@ -2,8 +2,8 @@ using MirrorsEdgeTweaks.Services;
 
 namespace MirrorsEdgeTweaks.Tests.Fakes
 {
-    // In-memory ISettingsStore for isolating AppSettingsService from the on-disk ini format. ToLoad
-    // is returned by Load; the last value passed to Save is captured in Saved.
+    // Load returns ToLoad.
+    // Saved holds the last value passed to Save.
     public sealed class FakeSettingsStore : ISettingsStore
     {
         public AppSettings ToLoad { get; set; } = new AppSettings();

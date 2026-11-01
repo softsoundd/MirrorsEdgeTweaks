@@ -8,10 +8,8 @@ namespace MirrorsEdgeTweaks.Services
         void Save();
     }
 
-    // Higher-level settings persistence: marshals the persisted user values between the ISettingsStore
-    // (metweaksconfig.ini) and the shared GameSession.Config. Depends only on the store and the
-    // session, so feature view models can persist settings by writing their value into
-    // GameSession.Config and calling Save without a circular dependency.
+    // Copies the persisted values between metweaksconfig.ini and GameSession.Config.
+    // Feature view models save a setting by writing it into GameSession.Config and calling Save.
     public class AppSettingsService : IAppSettingsService
     {
         private readonly ISettingsStore _store;

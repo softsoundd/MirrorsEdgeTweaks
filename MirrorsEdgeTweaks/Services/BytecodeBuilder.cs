@@ -1,6 +1,6 @@
 namespace MirrorsEdgeTweaks.Services
 {
-    // Low level UE3 bytecode construction for Mirror's Edge (v536)
+    // Builds UE3 bytecode in the format of Mirror's Edge's package version 536.
     public static class BytecodeBuilder
     {
         public const byte OP_LOCAL_VAR = 0x00;
@@ -56,9 +56,9 @@ namespace MirrorsEdgeTweaks.Services
         public static readonly double K_DEG_TO_HALFRAD = Math.PI / 360.0;
         public static readonly double K_HALFRAD_TO_DEG = 360.0 / Math.PI;
         public const float K_SENS = 0.01111f;
-        public static readonly float K_CLIP_HOR = 10.0f * REF_AR;       // 17.7778
-        public static readonly float K_CLIP_VERT = 10.0f / REF_AR;      // 5.625
-        public const float K_BASE_SENS = 90.0f * K_SENS;                // 0.9999
+        public static readonly float K_CLIP_HOR = 10.0f * REF_AR;
+        public static readonly float K_CLIP_VERT = 10.0f / REF_AR;
+        public const float K_BASE_SENS = 90.0f * K_SENS;
         public const float K_VERTIGO_DELTA = 6.0f;
         public const float K_STOCK_ZOOM_DELTA = 20.0f;
 
@@ -67,8 +67,6 @@ namespace MirrorsEdgeTweaks.Services
 
         public const int VAR_TOKEN_SIZE = 5;
         public const int NAME_TOKEN_SIZE = 9;
-
-        // Primitive token builders
 
         public static byte[] F32(float val)
         {
@@ -132,10 +130,7 @@ namespace MirrorsEdgeTweaks.Services
             return new byte[] { OP_END_FP };
         }
 
-        // Context access builders
-
-        // Context(object_expr)[skip_size, property_type] inner_expr
-        // v536: property_type is uint16
+        // In version 536, the property type after the skip size is 2 bytes.
         public static byte[] Context(byte[] objectExpr, ushort skipSize, ushort propertyType, byte[] innerExpr)
         {
             var b = new List<byte> { OP_CONTEXT };
@@ -146,7 +141,6 @@ namespace MirrorsEdgeTweaks.Services
             return b.ToArray();
         }
 
-        // PCOwner.myHUD.property, double nested context access
         public static byte[] ContextHudProperty(byte[] pcOwner, byte[] myHud, byte[] property)
         {
             byte[] inner = Context(myHud, (ushort)property.Length, 4, property);
@@ -176,7 +170,7 @@ namespace MirrorsEdgeTweaks.Services
             return b.ToArray();
         }
 
-        // Point A: save/restore original DefaultFOV via DefaultAspectRatio (40 bytes).
+        // Blob A keeps the unscaled DefaultFOV in DefaultAspectRatio, so blob B always scales from the unscaled value.
         public static byte[] BuildBlobA(int insertBc, byte[] instDefaultFov, byte[] instDefaultAr)
         {
             // if (DefaultAspectRatio > 10.0) DefaultFOV = DefaultAspectRatio;
@@ -201,7 +195,7 @@ namespace MirrorsEdgeTweaks.Services
             return blob;
         }
 
-        // Point B: compute AR from HUD, scale FOV if wider than 16:9 (variable size, typically ~120 bytes)
+        // Blob B widens NewPOV.FOV to keep the 16:9 vertical FOV when the HUD is wider than 16:9, then copies it to DefaultFOV.
         public static byte[] BuildBlobB(int insertBc,
             byte[] localBlendPct, byte[] localNewPov,
             byte[] instPcOwner, byte[] instMyHud,
@@ -219,7 +213,7 @@ namespace MirrorsEdgeTweaks.Services
 
             byte[] fovRead = StructMemberFov(impFov, impTpov, localNewPov);
 
-            // NewPOV.FOV = Atan(Tan(FOV * Pi/360) * AR / (16/9), 1.0) * 360/Pi
+            // NewPOV.FOV = Atan(Tan(NewPOV.FOV * Pi/360) * BlendPct / (16/9), 1.0) * 360/Pi
             byte[] part3 = Concat(
                 new byte[] { OP_LET }, StructMemberFov(impFov, impTpov, localNewPov),
                 new byte[] { OP_MULTIPLY_FF },
@@ -255,10 +249,8 @@ namespace MirrorsEdgeTweaks.Services
             return Concat(part1, part2, part3, part4);
         }
 
-        // TdGame.u Blob Builders
-
-        // ToggleZoomState: dynamic near clipping plane blob.
-        // Replaces SetNearClippingPlane(10) with AR aware formula.
+        // Replaces ToggleZoomState's SetNearClippingPlane(10.0) with a near clip that follows the HUD's aspect ratio.
+        // The call keeps the stock 10.0 while the HUD's SizeX is 0.
         public static byte[] BuildClipBlob(int insertBc,
             byte[] dcast, byte[] powner, byte[] vfunc,
             int sizexImp, int sizeyImp)
@@ -269,7 +261,7 @@ namespace MirrorsEdgeTweaks.Services
             byte[] cond = Concat(
                 new byte[] { OP_GREATER_FF }, sizex, FloatConst(0.0f), EndFP());
 
-            // FMin(K_HOR * SizeY / SizeX, K_VERT * SizeX / SizeY)
+            // FMin(K_CLIP_HOR * SizeY / SizeX, K_CLIP_VERT * SizeX / SizeY)
             byte[] fminArgA = Concat(
                 new byte[] { OP_DIVIDE_FF },
                 new byte[] { OP_MULTIPLY_FF },
@@ -299,8 +291,7 @@ namespace MirrorsEdgeTweaks.Services
                 elseCall);
         }
 
-        // PlayerInput: combined sensitivity + nearclip insertion.
-        // Blocks are conditionally included based on toggles.
+        // Builds the sensitivity and near-clip blocks that PlayerInput runs after its FOVScale assignment.
         public static byte[] BuildSensBlob(int insertBc,
             byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf,
             byte[] sncpVf,
@@ -396,13 +387,13 @@ namespace MirrorsEdgeTweaks.Services
             var result = new List<byte>();
             int currentBc = insertBc;
 
-            // Block 1: FOVScale = K_BASE_SENS (unconditional, FOV-agnostic)
+            // Block 1 sets FOVScale to K_BASE_SENS, which makes the sensitivity independent of the FOV.
             if (enableSens)
             {
                 byte[] sensBody = Concat(
                     new byte[] { OP_LET }, fovscaleLocal, FloatConst(K_BASE_SENS));
 
-                // Block 1b: weapon zoom override
+                // While a weapon is zooming or zoomed, FOVScale follows FOVAngle instead.
                 byte[] zoomBody = Concat(
                     new byte[] { OP_LET }, fovscaleLocal,
                     new byte[] { OP_MULTIPLY_FF },
@@ -417,7 +408,8 @@ namespace MirrorsEdgeTweaks.Services
                 currentBc += sensBody.Length + block1b.Length;
             }
 
-            // Block 2: FOV-aware near clip; stock zoom value once GetFOVAngle() reaches the target.
+            // Block 2 sets a near clip that compensates for the FOV.
+            // Once a weapon zoom reaches its target FOV, it sets the stock zoom value instead.
             if (enableClip)
             {
                 byte[] clipCond = BoolAnd(condHudNotNone, CondSizexPositive());
@@ -465,8 +457,8 @@ namespace MirrorsEdgeTweaks.Services
             return result.ToArray();
         }
 
-        // TdOnlineLoginHandler.StartConnection: skip online login for offline capable modes.
-        // Inserts: if (!ConnectionRequired) { OnPlayOffline(0); return; }
+        // Makes StartConnection skip the online login when no connection is required:
+        //   if (!ConnectionRequired) { OnPlayOffline(0); return; }
         public static byte[] BuildOnlineSkipBlob(int insertBc,
             byte[] connReqBoolvar, byte[] playOfflinePropI32, byte[] playOfflineFnameBytes)
         {
@@ -477,7 +469,7 @@ namespace MirrorsEdgeTweaks.Services
                 new byte[] { OP_DELEGATE_FUNC, 0x00 },
                 playOfflinePropI32,
                 playOfflineFnameBytes,
-                new byte[] { OP_BYTE_CONST, 0x00 },  // ByteConst(0) = STA_None
+                new byte[] { OP_BYTE_CONST, 0x00 },  // STA_None
                 EndFP());                              // 17 bytes
 
             byte[] ret = new byte[] { OP_RETURN, OP_NOTHING };  // 2 bytes
@@ -497,7 +489,7 @@ namespace MirrorsEdgeTweaks.Services
             return blob;
         }
 
-        // StartMove vertigo: replace InstanceVar(ZoomFOV) with Subtract(Context(DefaultFOV), 6.0).
+        // Replaces InstanceVar(ZoomFOV) in StartMove's vertigo zoom with Controller.DefaultFOV - 6.0.
         public static byte[] BuildVertigoReplacement(byte[] controllerCtx, byte[] defaultFovInst)
         {
             byte[] inner = defaultFovInst;
@@ -519,7 +511,8 @@ namespace MirrorsEdgeTweaks.Services
                 EndFP());
         }
 
-        // Used to detect when zoom animation has finished (IsZoomingOrZoomed alone fires too early).
+        // Returns the FOV that a weapon zoom ends at, which shows when the zoom animation has finished.
+        // IsZoomingOrZoomed is already true while the zoom animates.
         public static byte[] BuildStockZoomTargetFovExpr(byte[] defaultFovExpr, byte[] fovAngleExpr)
         {
             byte[] zoomDelta = BuildStockZoomDeltaExpr(defaultFovExpr, fovAngleExpr);
@@ -530,13 +523,14 @@ namespace MirrorsEdgeTweaks.Services
                 EndFP());
         }
 
-        // UnZoom else-branch: replace FloatConst(20) with FMax(20, DefaultFOV - FOVAngle).
+        // Replaces the UnZoom else branch's FloatConst(20.0) with FMax(20.0, DefaultFOV - FOVAngle).
         public static byte[] BuildUnzoomElseReplacement(byte[] instDefaultFov, byte[] instFovangle)
         {
             return BuildStockZoomDeltaExpr(instDefaultFov, instFovangle);
         }
 
-        // SetFOV: Rate = Rate * (DefaultFOV - NewFOV) / 20.0.
+        // Scales SetFOV's zoom rate by how far NewFOV is from DefaultFOV:
+        //   Rate = Rate * (DefaultFOV - NewFOV) / 20.0
         public static byte[] BuildSetFovRateInsert(int insertBc,
             byte[] localRate, byte[] localNewFov,
             byte[] dcast, byte[] controllerVar, byte[] defaultFovInst)
@@ -556,9 +550,6 @@ namespace MirrorsEdgeTweaks.Services
                 FloatConst(K_STOCK_ZOOM_DELTA), EndFP());
         }
 
-        // Stock pattern builders
-
-        // Original 11-byte: Let ConstrainedAspectRatio = FloatConst(16/9).
         public static byte[] BuildStockArAssignment(byte[] arPropertyToken)
         {
             return Concat(
@@ -566,48 +557,42 @@ namespace MirrorsEdgeTweaks.Services
                 FloatConst(REF_AR));
         }
 
-        // Original context call: Context(DynamicCast(X)(PawnOwner)).SetNearClippingPlane(10.0).
+        // Builds the stock Context(DynamicCast(PawnOwner)).SetNearClippingPlane(10.0) call.
         public static byte[] BuildStockClipCall(byte[] dcast, byte[] powner, byte[] vfunc)
         {
             byte[] inner = Concat(vfunc, FloatConst(10.0f), EndFP());
             return Context(Concat(dcast, powner), (ushort)inner.Length, 0, inner);
         }
 
-        // Original 5-byte: FloatConst(20.0) for UnZoom rate.
         public static byte[] BuildStockUnzoomRate()
         {
             return FloatConst(20.0f);
         }
 
-        // Idempotency signatures
-
-        // Engine.u phase 2 signature: GreaterThan + DefaultAspectRatio + FloatConst.
+        // Matches the start of blob A's DefaultAspectRatio > 10.0 condition, which marks Engine.u's phase 2.
         public static byte[] GetP2Signature(byte[] instDefaultAr)
         {
             return Concat(new byte[] { OP_GREATER_FF }, instDefaultAr, new byte[] { OP_FLOAT_CONST });
         }
 
-        // TdGame.u clip signature: FMin + Divide + Multiply + FloatConst(K_CLIP_HOR)
+        // Matches the start of the ToggleZoomState clip blob's FMin(K_CLIP_HOR * SizeY / SizeX, ...).
         public static readonly byte[] ClipSignature = Concat(
             new byte[] { OP_FMIN, OP_DIVIDE_FF, OP_MULTIPLY_FF, OP_FLOAT_CONST },
             F32(K_CLIP_HOR));
 
-        // TdGame.u sensitivity signature: FloatConst(K_BASE_SENS).
+        // Matches the constant that block 1 of the PlayerInput insertion sets FOVScale to.
         public static readonly byte[] SensSignature = Concat(
             new byte[] { OP_FLOAT_CONST }, F32(K_BASE_SENS));
 
-        // TdGame.u vertigo signature: Subtract + Context opcode.
+        // Matches the start of the vertigo replacement's DefaultFOV - 6.0.
         public static readonly byte[] VertigoSignature = new byte[] { OP_SUBTRACT_FF, OP_CONTEXT };
 
-        // TdGame.u zoom rate signature: FMax opcode.
+        // Matches the start of the UnZoom rate replacement's FMax(20.0, ...).
         public static readonly byte[] ZoomRateSignature = new byte[] { OP_FMAX, OP_FLOAT_CONST };
 
-        // TdGame.u online skip signature: Not_PreBool + BoolVar + InstVar (never appears in unpatched StartConnection).
+        // Matches the start of the online skip blob's condition, which stock StartConnection never contains.
         public static readonly byte[] OnlineSkipSignature = new byte[] { OP_NOT_PRE_BOOL, OP_BOOL_VAR, OP_INST_VAR };
 
-        // High-res UI dynamic blob builders
-
-        // EX_StringConst: opcode + ANSI bytes + null terminator.
         public static byte[] StrConst(string s)
         {
             byte[] ascii = System.Text.Encoding.ASCII.GetBytes(s);
@@ -618,33 +603,31 @@ namespace MirrorsEdgeTweaks.Services
             return b;
         }
 
-        // EX_PrimitiveCast: opcode + cast byte + inner expression (no EndFunctionParms).
+        // A primitive cast has no closing EndFunctionParms.
         public static byte[] PrimitiveCast(byte castToken, byte[] inner)
         {
             return Concat(new byte[] { OP_PRIMITIVE_CAST, castToken }, inner);
         }
 
-        // FName token operand: name index + number (8 bytes).
+        // The second int is the name's instance number.
         public static byte[] FName(int nameIndex)
         {
             return Concat(I32(nameIndex), I32(0));
         }
 
-        // String concatenation operator: A $ B  ->  native(0x70) <A> <B> EndFP.
         public static byte[] ConcatStr(byte[] a, byte[] b)
         {
             return Concat(new byte[] { NATIVE_CONCAT_STRSTR }, a, b, EndFP());
         }
 
-        // objExpr.VirtualFunction(singleArg) wrapped in a context access.
-        // propType 0 matches stock compiler output for a function-call context.
+        // The stock compiler gives a function-call context a property type of 0.
         public static byte[] ContextCall(byte[] objExpr, int funcNameIndex, byte[] singleArg)
         {
             byte[] inner = Concat(VirtualFunc(FName(funcNameIndex)), singleArg, EndFP());
             return Context(objExpr, (ushort)inner.Length, 0, inner);
         }
 
-        // EX_EatReturnValue: discards the return value of a value-returning call used as a statement.
+        // Discards the return value of a call that is used as a statement.
         public static byte[] EatReturnValue(int returnValueRef)
         {
             return Concat(new byte[] { OP_EAT_RETURN_VALUE }, I32(returnValueRef));
@@ -719,13 +702,10 @@ namespace MirrorsEdgeTweaks.Services
         // Only the high-res blob emits this StrConst literal, so its presence marks an install.
         public static readonly byte[] HighResSignature = StrConst(SubtitleMinRegionSetPrefix);
 
-        // Crosshair dynamic scaling (TdSPHUD.DrawLivingHUD)
-
-        // Inserted at the start of DrawLivingHUD: for each crosshair texture member,
-        //   Texture.SizeX = Texture.SizeY = int( base * FMax(1.0, HUD.SizeY / 1080) )
-        // The crosshair draws DrawColorizedTile(tex, SizeX, SizeY, 0,0, SizeX, SizeY), so the UV
-        // (UL/SizeX) self-cancels - growing SizeX just scales the centered draw (matches the old
-        // static fix, made dynamic). base = each texture's stock pixel size.
+        // Builds the TdSPHUD.DrawLivingHUD blob, which sizes each crosshair texture from its stock pixel size:
+        //   Texture.SizeX = Texture.SizeY = int(baseSize * FMax(1.0, HUD.SizeY / 1080))
+        // The crosshair is drawn with DrawColorizedTile(tex, SizeX, SizeY, 0, 0, SizeX, SizeY),
+        // so the UV scale UL/SizeX cancels out, and a larger size only scales the centred draw.
         public static byte[] BuildCrosshairBlob(
             (int textureRef, int baseSize)[] crosshairs, int texSizeXRef, int texSizeYRef, int hudSizeYRef)
         {
@@ -751,8 +731,7 @@ namespace MirrorsEdgeTweaks.Services
             return Concat(parts.ToArray());
         }
 
-        // Idempotency marker - Let + Context targeting the first crosshair's SizeX (a unique assignment
-        // the stock DrawLivingHUD never makes).
+        // Matches the blob's assignment to the first crosshair's SizeX, which stock DrawLivingHUD never makes.
         public static byte[] BuildCrosshairSignature(int firstTextureRef, int texSizeXRef)
         {
             byte[] sizeMember = InstVar(texSizeXRef);

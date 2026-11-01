@@ -4,10 +4,10 @@ using UELib.Core;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    // The UI mouse cursor ("Arrow" Texture2D) renders at its native pixel size - UGameUISceneClient
-    // draws it via CalculateExtent() with no scaling so it shrinks at higher resolutions. The cursor cannot be made
-    // bytecode dynamic as its native render is unanchorable + the texture lives in UISkin.CursorMap (a
-    // native TMap with no script getter). So we scale the Arrow texture's SizeX/SizeY directly in the Startup_* packages
+    // Scales the UI mouse cursor, the "Arrow" Texture2D, by writing its SizeX and SizeY into the Startup_* packages.
+    // UGameUISceneClient draws the cursor at its native pixel size through CalculateExtent(), so it shrinks at higher resolutions.
+    // Bytecode cannot scale it at runtime, because its native draw has no script hook,
+    // and the texture lives in UISkin.CursorMap, a native TMap with no script getter.
     public static class CursorScalePatcher
     {
         const int ArrowBaseSize = 32;
@@ -68,9 +68,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 PatchUtility.WritePreservingAttributes(filePath, data);
         }
 
-        // Property tag layout: <NameIndex:8><TypeName:8><Size:4><ArrayIndex:4><Value...> so the int
-        // value sits at name+24. Locating by the property's name index and verifying the value equals the
-        // expected current value pins it to the correct tag
+        // A property tag is <NameIndex:8><TypeName:8><Size:4><ArrayIndex:4><Value>, so an int value sits 24 bytes after the name.
+        // The tag is found by its name index and confirmed by its current value.
         static bool WriteIntPropertyValue(byte[] data, int nameIdx, int curValue, int newValue, long start, long end)
         {
             byte[] nameBytes = BitConverter.GetBytes((long)nameIdx);

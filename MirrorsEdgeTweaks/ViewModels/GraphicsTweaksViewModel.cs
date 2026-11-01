@@ -31,9 +31,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private bool _isRenderResolutionDragging;
 
-        // Cached "dynamic FOV scaling fully patched" state for Engine.u. Determining it requires a
-        // full package read, so it is refreshed only when the state can actually change (package
-        // reload or resolution reconcile) via RefreshEnginePatchState, never on every FOV keystroke.
+        // Caches whether Engine.u has every dynamic FOV scaling patch.
+        // Detecting that reads the whole package, so RefreshEnginePatchState only runs after a package reload or a resolution reconcile.
         private bool _enginePatchesApplied;
 
         public GraphicsOption VSync { get; }
@@ -459,7 +458,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!EnsureIniExists(() => TextureDetailIndex = previousIndex))
                 return;
 
-            if (index == 0) // "Custom" is a detected state, not an applicable preset
+            // Index 0 is "Custom", which shows a detected state and cannot be applied.
+            if (index == 0)
                 return;
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
@@ -500,7 +500,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (!EnsureIniExists(() => GraphicsQualityIndex = previousIndex))
                 return;
 
-            if (index == 0) // "Custom" is a detected state, not an applicable preset
+            // Index 0 is "Custom", which shows a detected state and cannot be applied.
+            if (index == 0)
                 return;
 
             bool proceed = await _dialogService.ShowConfirmationAsync(
@@ -817,8 +818,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 PhysXFpsInput = fps.Value.ToString();
         }
 
-        // Reads the PhysX timing value off the UI thread, then applies it on the UI thread so the
-        // status-bar progress bar keeps animating during startup.
+        // Reads the PhysX timing value off the UI thread, then applies it on the UI thread,
+        // so the status bar's progress bar keeps animating during startup.
         public async Task RefreshPhysXFpsAsync()
         {
             var gameDir = _session.Config.GameDirectoryPath;

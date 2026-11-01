@@ -1,7 +1,7 @@
 namespace MirrorsEdgeTweaks.Services
 {
-    // The persisted application settings stored in metweaksconfig.ini next to the executable.
-    // Null values represent keys that were absent from the file.
+    // These settings are stored in metweaksconfig.ini next to the executable.
+    // A null value means that the key is absent from the file.
     public sealed record AppSettings
     {
         public string? GameDirectoryPath { get; init; }
