@@ -93,14 +93,20 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
-        public void IsExecutable_ReflectsSectionCharacteristics()
+        public void IsCode_ReflectsTheSectionContentFlag()
         {
-            var pe = PeImageLayout.Parse(SyntheticPe.Build());
+            byte[] image = SyntheticPe.Build();
+            var pe = PeImageLayout.Parse(image);
 
-            Assert.True(pe.IsExecutableVa(ImageBase + TextRva));
-            Assert.False(pe.IsExecutableVa(ImageBase + RdataRva));
-            Assert.True(pe.IsExecutableOffset(TextRaw + 0x10));
-            Assert.False(pe.IsExecutableOffset(RdataRaw + 0x10));
+            Assert.True(pe.IsCodeVa(ImageBase + TextRva));
+            Assert.False(pe.IsCodeVa(ImageBase + RdataRva));
+            Assert.True(pe.IsCodeOffset(TextRaw + 0x10));
+            Assert.False(pe.IsCodeOffset(RdataRaw + 0x10));
+
+            // .rdata stays data once a padding cave makes it executable and writable.
+            int rdataHeader = pe.FindSectionByName(".rdata")!.HeaderOffset;
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(rdataHeader + 36, 4), 0xE0000040);
+            Assert.False(PeImageLayout.Parse(image).IsCodeVa(ImageBase + RdataRva));
         }
 
         [Fact]

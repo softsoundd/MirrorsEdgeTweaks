@@ -235,7 +235,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
                 foreach (int referenceOffset in FindAllOffsets(buffer, codeReference))
                 {
-                    if (!image.IsExecutableOffset(referenceOffset))
+                    if (!image.IsCodeOffset(referenceOffset))
                     {
                         continue;
                     }
@@ -348,7 +348,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
                 }
 
-                if (TryResolveCallTarget(image, buffer, callOpcodeOffset, out targetVa) && image.IsExecutableVa(targetVa))
+                if (TryResolveCallTarget(image, buffer, callOpcodeOffset, out targetVa) && image.IsCodeVa(targetVa))
                 {
                     return true;
                 }

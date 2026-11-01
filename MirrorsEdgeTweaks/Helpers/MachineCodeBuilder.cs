@@ -83,7 +83,30 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             int position = _code.Count;
             Emit(new byte[] { 0xE9, 0x00, 0x00, 0x00, 0x00 });
-            _pendingJumps.Add(new PendingJump(position, JumpKind.Jmp5, label));
+            _pendingJumps.Add(new PendingJump(position, JumpKind.Near5, label));
+        }
+
+        public void EmitCall(string label)
+        {
+            int position = _code.Count;
+            Emit(new byte[] { 0xE8, 0x00, 0x00, 0x00, 0x00 });
+            _pendingJumps.Add(new PendingJump(position, JumpKind.Near5, label));
+        }
+
+        // Short forms take two bytes, and Build throws when the label is out of rel8 range.
+        public void EmitJzShort(string label) => EmitShort(0x74, label);
+        public void EmitJnzShort(string label) => EmitShort(0x75, label);
+        public void EmitJaeShort(string label) => EmitShort(0x73, label);
+        public void EmitJaShort(string label) => EmitShort(0x77, label);
+        public void EmitJbShort(string label) => EmitShort(0x72, label);
+        public void EmitJmpShort(string label) => EmitShort(0xEB, label);
+        public void EmitJecxzShort(string label) => EmitShort(0xE3, label);
+
+        private void EmitShort(byte opcode, string label)
+        {
+            int position = _code.Count;
+            Emit(new byte[] { opcode, 0x00 });
+            _pendingJumps.Add(new PendingJump(position, JumpKind.Short2, label));
         }
 
         public void MarkLabel(string name)
@@ -98,9 +121,17 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (!_labels.TryGetValue(jump.Label, out int targetOffset))
                     throw new InvalidOperationException($"Unknown machine-code label '{jump.Label}'.");
 
-                int instrLen = jump.Kind == JumpKind.Jcc6 ? 6 : 5;
+                int instrLen = jump.Kind switch { JumpKind.Jcc6 => 6, JumpKind.Short2 => 2, _ => 5 };
                 int fromEnd = checked(jump.Position + instrLen);
                 int rel = checked(targetOffset - fromEnd);
+
+                if (jump.Kind == JumpKind.Short2)
+                {
+                    if (rel < sbyte.MinValue || rel > sbyte.MaxValue)
+                        throw new InvalidOperationException($"Machine-code label '{jump.Label}' is out of short-jump range ({rel}).");
+                    _code[jump.Position + 1] = unchecked((byte)(sbyte)rel);
+                    continue;
+                }
 
                 byte[] relBytes = new byte[4];
                 BinaryPrimitives.WriteInt32LittleEndian(relBytes, rel);
@@ -126,7 +157,8 @@ namespace MirrorsEdgeTweaks.Helpers
         private enum JumpKind
         {
             Jcc6,
-            Jmp5
+            Near5,
+            Short2
         }
     }
 }

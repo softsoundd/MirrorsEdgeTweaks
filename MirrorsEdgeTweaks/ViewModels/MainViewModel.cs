@@ -326,6 +326,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             Graphics.RefreshHighResFix();
             Graphics.RefreshFpsLimit();
             Graphics.RefreshToneMapper();
+            Graphics.RefreshReversedDepth();
 
             if (Session.Package != null && Session.TdGamePackage != null)
             {
@@ -344,6 +345,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             await Graphics.RefreshHighResFixAsync();
             Graphics.RefreshFpsLimit();
             Graphics.RefreshToneMapper();
+            await Graphics.RefreshReversedDepthAsync();
 
             if (Session.Package != null && Session.TdGamePackage != null)
             {

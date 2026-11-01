@@ -28,6 +28,7 @@ namespace MirrorsEdgeTweaks.Tests
                 PhysXFps = 120,
                 ConsoleInstalled = true,
                 HighResFix = true,
+                ReversedDepth = true,
             };
 
             new PendingReapplyStore(path).Save(GameDir, snapshot);

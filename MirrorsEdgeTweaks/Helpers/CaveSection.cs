@@ -5,10 +5,11 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public sealed class CaveSection
     {
-        private const int HeaderSize = 12;
+        internal const int HeaderSize = 12;
         private const int InitialAlloc = HeaderSize;
         private const int PageSize = 0x1000;
         private const uint SectionChars = 0xE0000020;
+        private const uint ExecuteFlag = 0x20000000, WriteFlag = 0x80000000;
         private static readonly byte[] SectionName = Encoding.ASCII.GetBytes(".cave\0\0\0");
         private static readonly HashSet<string> KnownTags =
             new() { "gog", "steam", "retail", "retold", "dlc", "ea" };
@@ -27,7 +28,9 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private int _watermark = InitialAlloc;
         private string _versionTag = "";
-        private bool _usingTextPadding;
+        private bool _secondary;
+        private bool _usingPadding;
+        private uint _paddingFlags;
 
         private int _peOffset;
         private int _coffOffset;
@@ -42,12 +45,20 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private CaveSection() { }
 
-        public static CaveSection Open(byte[] peData, string versionTag = "")
+        public static CaveSection Open(byte[] peData, string versionTag = "") => OpenCave(peData, versionTag, false);
+
+        // Opens the cave for patches that must leave the .text padding to the core patches.
+        // Returns the same .cave section as Open when the image has or can add one.
+        // Returns a cave in the zero tail of .rdata otherwise, and Finalize makes .rdata executable and writable.
+        public static CaveSection OpenSecondary(byte[] peData, string versionTag = "") => OpenCave(peData, versionTag, true);
+
+        private static CaveSection OpenCave(byte[] peData, string versionTag, bool secondary)
         {
             var cs = new CaveSection
             {
                 _peData = peData,
-                _versionTag = versionTag
+                _versionTag = versionTag,
+                _secondary = secondary
             };
             cs.ParsePe();
             return cs;
@@ -77,11 +88,13 @@ namespace MirrorsEdgeTweaks.Helpers
             return (uint)(_sectionVa + off);
         }
 
-        // Frees a patch's cave block when the block ends exactly at the watermark.
+        // Frees a patch's cave block when the block ends exactly at the watermark of the cave that holds it.
         // Returns the data unchanged otherwise, so a block above it is never zeroed.
         public static byte[] ReclaimIfTopmost(byte[] peData, uint caveBaseVa, int footprintSize)
         {
             var cave = Open(peData);
+            if (!cave.Holds(caveBaseVa))
+                cave = OpenSecondary(peData);
             int baseOff = (int)(caveBaseVa - cave.SectionVa);
             if (baseOff >= InitialAlloc && baseOff + footprintSize == cave.CurrentWatermark)
             {
@@ -89,6 +102,12 @@ namespace MirrorsEdgeTweaks.Helpers
                 return cave.Finalize();
             }
             return peData;
+        }
+
+        private bool Holds(uint va)
+        {
+            EnsureSection();
+            return va - _sectionVa < (uint)_sectionRawSize;
         }
 
         // Lay subsequent Alloc calls over an existing block starting at `offset` (section relative)
@@ -129,6 +148,11 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             EnsureSection();
             CommitSection();
+            if (_usingPadding)
+            {
+                uint chars = BinaryPrimitives.ReadUInt32LittleEndian(_peData.AsSpan(_sectionHdrOffset + 36, 4));
+                BinaryPrimitives.WriteUInt32LittleEndian(_peData.AsSpan(_sectionHdrOffset + 36, 4), chars | _paddingFlags);
+            }
             foreach (var (secOff, data) in _pending)
             {
                 int foff = _sectionRawOffset + secOff;
@@ -157,13 +181,14 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        // The fixed size of a .text padding cave, or int.MaxValue for a growable .cave section.
+        // Returns the fixed size of a padding cave.
+        // Returns int.MaxValue for a growable .cave section.
         public int Capacity
         {
             get
             {
                 EnsureSection();
-                return _usingTextPadding ? _sectionRawSize : int.MaxValue;
+                return _usingPadding ? _sectionRawSize : int.MaxValue;
             }
         }
 
@@ -220,11 +245,14 @@ namespace MirrorsEdgeTweaks.Helpers
             _watermark = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(_sectionRawOffset, 4));
             if (_watermark < InitialAlloc)
                 _watermark = InitialAlloc;
+            _versionTag = ReadTag(d, _sectionRawOffset);
+        }
 
-            byte[] tagBytes = new byte[8];
-            Buffer.BlockCopy(d, _sectionRawOffset + 4, tagBytes, 0, 8);
-            int nul = Array.IndexOf(tagBytes, (byte)0);
-            _versionTag = Encoding.ASCII.GetString(tagBytes, 0, nul >= 0 ? nul : 8);
+        private static string ReadTag(byte[] d, int headerOffset)
+        {
+            ReadOnlySpan<byte> tag = d.AsSpan(headerOffset + 4, 8);
+            int nul = tag.IndexOf((byte)0);
+            return Encoding.ASCII.GetString(nul >= 0 ? tag[..nul] : tag);
         }
 
         private void EnsureSection()
@@ -232,8 +260,10 @@ namespace MirrorsEdgeTweaks.Helpers
             if (_sectionExists) return;
             if (CanAddSection())
                 CreateSection();
+            else if (_secondary)
+                UsePadding(".rdata", ExecuteFlag | WriteFlag);
             else
-                UseTextPadding();
+                UsePadding(".text", WriteFlag);
         }
 
         private bool CanAddSection()
@@ -244,97 +274,74 @@ namespace MirrorsEdgeTweaks.Helpers
             return headersEnd <= sizeOfHeaders;
         }
 
-        private void UseTextPadding()
+        // A padding cave takes the zero bytes past the section's virtual size, from a 16-byte boundary.
+        // Finalize gives the section the flags, so opening a cave leaves the image unchanged.
+        private void UsePadding(string name, uint flags)
         {
             var d = _peData;
-            int textHdr = -1;
-            for (int i = 0; i < _numSections; i++)
+            int hdr = -1;
+            for (int i = 0; i < _numSections && hdr < 0; i++)
             {
-                int hdr = _sectionsOffset + i * 40;
+                int candidate = _sectionsOffset + i * 40;
                 int nameEnd = 8;
-                while (nameEnd > 0 && d[hdr + nameEnd - 1] == 0) nameEnd--;
-                if (nameEnd == 5 && d[hdr] == (byte)'.' && d[hdr + 1] == (byte)'t' &&
-                    d[hdr + 2] == (byte)'e' && d[hdr + 3] == (byte)'x' && d[hdr + 4] == (byte)'t')
-                {
-                    textHdr = hdr;
-                    break;
-                }
+                while (nameEnd > 0 && d[candidate + nameEnd - 1] == 0) nameEnd--;
+                if (Encoding.ASCII.GetString(d, candidate, nameEnd) == name)
+                    hdr = candidate;
             }
 
-            if (textHdr < 0)
-                throw new InvalidOperationException("No .text section found for padding fallback.");
+            if (hdr < 0)
+                throw new InvalidOperationException($"No {name} section found for a padding cave.");
 
-            int textRaw = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(textHdr + 20, 4));
-            int textRawSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(textHdr + 16, 4));
-            uint textRva = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(textHdr + 12, 4));
-            int end = textRaw + textRawSize;
+            uint virtSize = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 8, 4));
+            uint rva = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 12, 4));
+            int rawSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 16, 4));
+            int raw = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 20, 4));
+            int end = raw + rawSize;
+            int floor = AlignUp(raw + (int)Math.Min(virtSize, (uint)rawSize), 16);
 
             int nulEndScan = end;
-            while (nulEndScan > textRaw && d[nulEndScan - 1] == 0)
+            while (nulEndScan > floor && d[nulEndScan - 1] == 0)
                 nulEndScan--;
-            int firstNul = AlignUp(nulEndScan, 16);
+            int start = AlignUp(nulEndScan, 16);
 
-            int? existingStart = FindTextCaveHeader(d, textRaw, end);
-            if (existingStart.HasValue)
+            int? existing = FindPaddingCaveHeader(d, floor, end);
+            if (existing.HasValue)
             {
-                int caveSize = end - existingStart.Value;
-                _sectionExists = true;
-                _sectionHdrOffset = textHdr;
-                _sectionVa = _imageBase + textRva + (uint)(existingStart.Value - textRaw);
-                _sectionRawOffset = existingStart.Value;
-                _sectionRawSize = caveSize;
-                _sectionVirtSize = caveSize;
-                _watermark = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(existingStart.Value, 4));
+                start = existing.Value;
+                _watermark = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(start, 4));
                 if (_watermark < InitialAlloc)
                     _watermark = InitialAlloc;
-                byte[] tagBytes = new byte[8];
-                Buffer.BlockCopy(d, existingStart.Value + 4, tagBytes, 0, 8);
-                int nul = Array.IndexOf(tagBytes, (byte)0);
-                _versionTag = Encoding.ASCII.GetString(tagBytes, 0, nul >= 0 ? nul : 8);
-                _usingTextPadding = true;
-                MakeTextWritable(d, textHdr);
-                return;
+                _versionTag = ReadTag(d, start);
+            }
+            else
+            {
+                if (end - start < 256)
+                    throw new InvalidOperationException(
+                        $"Only {Math.Max(end - start, 0)} bytes of NUL padding in {name} (need at least 256).");
+                _watermark = InitialAlloc;
             }
 
-            int caveSpace = end - firstNul;
-            if (caveSpace < 256)
-                throw new InvalidOperationException(
-                    $"Only {caveSpace} bytes of NUL padding in .text (need at least 256).");
-
             _sectionExists = true;
-            _sectionHdrOffset = textHdr;
-            _sectionVa = _imageBase + textRva + (uint)(firstNul - textRaw);
-            _sectionRawOffset = firstNul;
-            _sectionRawSize = caveSpace;
-            _sectionVirtSize = caveSpace;
-            _watermark = InitialAlloc;
-            _usingTextPadding = true;
-            MakeTextWritable(d, textHdr);
+            _sectionHdrOffset = hdr;
+            _sectionVa = _imageBase + rva + (uint)(start - raw);
+            _sectionRawOffset = start;
+            _sectionRawSize = end - start;
+            _sectionVirtSize = end - start;
+            _usingPadding = true;
+            _paddingFlags = flags;
         }
 
-        private static void MakeTextWritable(byte[] d, int textHdr)
+        private static int? FindPaddingCaveHeader(byte[] d, int floor, int end)
         {
-            uint chars = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(textHdr + 36, 4));
-            chars |= 0x80000000;
-            BinaryPrimitives.WriteUInt32LittleEndian(d.AsSpan(textHdr + 36, 4), chars);
-        }
-
-        private static int? FindTextCaveHeader(byte[] d, int textRaw, int textEnd)
-        {
-            int limit = Math.Max(textRaw, textEnd - 0x2000);
-            for (int off = textEnd - 16; off > limit; off -= 16)
+            int limit = Math.Max(floor, end - 0x2000);
+            for (int off = end - 16; off >= limit; off -= 16)
             {
                 if (off + 12 > d.Length) continue;
                 uint wm = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(off, 4));
                 // wm == HeaderSize is a reclaimed but empty cave - it must still be refound so
                 // the next apply reuses this location instead of walking forward past the leftover header
-                if (wm < HeaderSize || wm >= textEnd - textRaw) continue;
-
-                byte[] tagBytes = new byte[8];
-                Buffer.BlockCopy(d, off + 4, tagBytes, 0, 8);
-                int nul = Array.IndexOf(tagBytes, (byte)0);
-                string tag = Encoding.ASCII.GetString(tagBytes, 0, nul >= 0 ? nul : 8);
-                if (KnownTags.Contains(tag))
+                if (wm < HeaderSize || wm > end - off) continue;
+                if (KnownTags.Contains(ReadTag(d, off)))
                     return off;
             }
             return null;
@@ -386,11 +393,11 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private void GrowIfNeeded(int needed)
         {
-            if (_usingTextPadding)
+            if (_usingPadding)
             {
                 if (needed > _sectionRawSize)
                     throw new InvalidOperationException(
-                        $"Text padding cave exhausted: need {needed} bytes, have {_sectionRawSize}.");
+                        $"Padding cave exhausted: need {needed} bytes, have {_sectionRawSize}.");
                 return;
             }
             while (needed > _sectionRawSize)
@@ -435,7 +442,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private void UpdateSizeOfImage()
         {
-            if (_usingTextPadding) return;
+            if (_usingPadding) return;
             uint rva = BinaryPrimitives.ReadUInt32LittleEndian(_peData.AsSpan(_sectionHdrOffset + 12, 4));
             uint virt = BinaryPrimitives.ReadUInt32LittleEndian(_peData.AsSpan(_sectionHdrOffset + 8, 4));
             uint newSoi = AlignUp(rva + virt, _sectionAlign);

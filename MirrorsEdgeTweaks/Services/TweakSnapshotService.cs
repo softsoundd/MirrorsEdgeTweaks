@@ -66,6 +66,8 @@ namespace MirrorsEdgeTweaks.Services
                 PhysXFps = PhysXTimingPatcher.Read(gameDir),
                 ConsoleInstalled = File.Exists(Path.Combine(cookedPc, "MirrorsEdgeConsole.u")),
                 HighResFix = _uiScaling.IsUIScalingActive(gameDir) || intent.HasFlag(LegacyIntent.HighResFix),
+                ReversedDepth = ReversedDepthPatcher.GetState(Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe"))
+                    == ReversedDepthState.Patched,
             };
             (snapshot.HasLoadLastCheckpointKeybind, snapshot.HasRestartTimeTrialKeybind) = ReadExecKeybinds(config);
 
@@ -147,6 +149,9 @@ namespace MirrorsEdgeTweaks.Services
 
                 if (NeedsSupersampling(config, exePath))
                     await Step(result, "Supersampling", () => SupersamplePatchHelper.ApplyPatch(exePath));
+
+                if (snapshot.ReversedDepth)
+                    await Step(result, "Reversed depth", () => ReversedDepthPatcher.Apply(exePath));
 
                 // The 1.1.0.0 exe disables the console's set commands.
                 if (snapshot.ConsoleInstalled && SetCommandPatchHelper.IsDlcVersion(exePath))

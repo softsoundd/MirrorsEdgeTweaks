@@ -568,7 +568,7 @@ namespace MirrorsEdgeTweaks.Helpers
             try
             {
                 _ = pe.VaToOffset(vt);
-                if (pe.IsExecutableVa(vt)) return null;
+                if (pe.IsCodeVa(vt)) return null;
             }
             catch { return null; }
             return vt;

@@ -150,12 +150,12 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
-        public void ApplyToImage_OmitsRestorations_WhenAFixedCaveLacksHeadroom()
+        public void ApplyToImage_OmitsRestorations_WhenTheRdataTailCannotAlsoHoldReversedDepth()
         {
             var table = LoggingTable(fullMode: true);
-            byte[] patched = LoggingPatchHelper.ApplyToImage(BuildFixedCaveLoggingImage(1200), "steam", table)!;
+            byte[] patched = LoggingPatchHelper.ApplyToImage(BuildFixedCaveLoggingImage(1024), "steam", table)!;
 
-            // Core logging applies, but the restorations are dropped so the other cave patches still fit.
+            // Core logging applies, but the restorations are dropped so reversed depth still fits.
             Assert.Equal(0xE9, ByteAtVa(patched, ExecSite));
             Assert.Equal(StubVa, ReadU32(patched, FrameSlot));
             Assert.Equal(StubVa, ReadU32(patched, StateSlot));
@@ -164,12 +164,13 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
-        public void ApplyToImage_IncludesRestorations_WhenAFixedCaveHasHeadroom()
+        public void ApplyToImage_IncludesRestorations_InTheRdataTail_WhenReversedDepthStillFits()
         {
             var table = LoggingTable(fullMode: true);
-            byte[] patched = LoggingPatchHelper.ApplyToImage(BuildFixedCaveLoggingImage(3000), "steam", table)!;
+            byte[] stock = BuildFixedCaveLoggingImage(3000);
+            byte[] patched = LoggingPatchHelper.ApplyToImage((byte[])stock.Clone(), "steam", table)!;
 
-            var cave = CaveSection.Open(patched);
+            var cave = CaveSection.OpenSecondary(patched);
             uint caveLo = cave.SectionVa, caveHi = caveLo + (uint)cave.Capacity;
             bool InCave(uint va) => va >= caveLo && va < caveHi;
 
@@ -178,16 +179,21 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(ReadU32(patched, FrameSlot), ReadU32(patched, StateSlot));
             Assert.True(InCave(ReadU32(patched, EntryVa + 4)));
             Assert.True(InCave(DetourTarget(patched, OpenSite)));
+
+            // The .text padding stays free for the core cave patches.
+            var text = PeImageLayout.Parse(stock).FindSectionByName(".text")!;
+            int cave0 = SyntheticPe.FixedCaveStart, caveEnd = (int)(text.PointerToRawData + text.SizeOfRawData);
+            Assert.True(patched.AsSpan(cave0, caveEnd - cave0).SequenceEqual(stock.AsSpan(cave0, caveEnd - cave0)));
         }
 
         [Fact]
-        public void Reapply_ReusesTheLeftover_OnAFixedTextPaddingCave()
+        public void Reapply_ReusesTheLeftover_InTheRdataTail()
         {
             var table = LoggingTable(fullMode: true);
             byte[] patched = LoggingPatchHelper.ApplyToImage(BuildFixedCaveLoggingImage(3000), "steam", table)!;
 
             // A later patch above the logging block keeps Remove from reclaiming it.
-            var cave = CaveSection.Open(patched);
+            var cave = CaveSection.OpenSecondary(patched);
             cave.Alloc(64);
             byte[] buried = cave.Finalize();
 
@@ -295,24 +301,10 @@ namespace MirrorsEdgeTweaks.Tests
 
         private static byte[] BuildLoggingImage() => PopulateLoggingSites(SyntheticPe.BuildFlat());
 
-        // Same sites on a fixed .text-padding cave of caveBytes, as on the SecuROM game executables.
-        private static byte[] BuildFixedCaveLoggingImage(int caveBytes)
-            => PopulateLoggingSites(SyntheticPe.BuildFixedCave(caveBytes));
-
-        // Retail's padding is too small for the restorations, so only core logging applies.
-        // Its address table has no preInit hook, so logging takes the AppInit layout.
-        // The app-init site lies beyond the synthetic images,
-        // so the init block's size is added to the footprint measured here.
-        internal static int RetailFootprint(int paddingBytes)
-        {
-            var table = LoggingTable(fullMode: false);
-            byte[] stock = BuildFixedCaveLoggingImage(paddingBytes);
-            byte[] patched = LoggingPatchHelper.ApplyToImage((byte[])stock.Clone(), "retail", table)!;
-            int measured = CaveSection.Open(patched).CurrentWatermark - CaveSection.Open(stock).CurrentWatermark;
-            int initBytes = AppInitLayout(0, table.Symbols, withInit: true).Footprint
-                - AppInitLayout(0, table.Symbols, withInit: false).Footprint;
-            return measured + initBytes;
-        }
+        // Same sites on an image that cannot add a section, as on the SecuROM game executables,
+        // where logging takes the zero tail of .rdata.
+        private static byte[] BuildFixedCaveLoggingImage(int rdataTailBytes)
+            => PopulateLoggingSites(SyntheticPe.BuildFixedCave(256, rdataTailBytes));
 
         private static byte[] PopulateLoggingSites(byte[] image)
         {

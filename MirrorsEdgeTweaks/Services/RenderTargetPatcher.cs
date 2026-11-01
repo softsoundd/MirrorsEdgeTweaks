@@ -130,7 +130,7 @@ namespace MirrorsEdgeTweaks.Services
             int depthOff = FindUnique(data, pe, DepthLoopPattern, "the first-person depth patch site") + DepthHookOffset;
             int rhiOff = FindUnique(data, pe, DynamicRhiPattern, "the GDynamicRHI load") + DynamicRhiOffset;
             uint dynamicRhiVa = BitConverter.ToUInt32(data, rhiOff);
-            if (!IsDataVa(pe, dynamicRhiVa))
+            if (!pe.IsDataVa(dynamicRhiVa))
                 throw new InvalidOperationException($"GDynamicRHI address 0x{dynamicRhiVa:X8} is not in a data section.");
 
             uint hazeVa = pe.OffsetToVa(hazeOff);
@@ -231,7 +231,7 @@ namespace MirrorsEdgeTweaks.Services
             if (MatchesAtVa(data, pe, target, DrawQuadPrologue))
                 return target;
 
-            int blockOff = FileOffsetOf(data, pe, target, HazeCaveLength);
+            int blockOff = pe.FileOffsetOf(target, HazeCaveLength);
             if (blockOff >= 0)
             {
                 int tailOff = blockOff + HazeCaveLength - 5;
@@ -256,7 +256,7 @@ namespace MirrorsEdgeTweaks.Services
             if (data[hookOff] == 0xE9 && data[hookOff + 5] == 0x90)
             {
                 uint target = Rel32Target(data, hookOff, hookVa);
-                int blockOff = FileOffsetOf(data, pe, target, DepthCaveLength);
+                int blockOff = pe.FileOffsetOf(target, DepthCaveLength);
                 if (blockOff >= 0 && data.AsSpan(blockOff, DepthCaveLength)
                         .SequenceEqual(BuildDepthCave(target, dynamicRhiVa, resumeVa)))
                     return false;
@@ -272,38 +272,9 @@ namespace MirrorsEdgeTweaks.Services
             return at;
         }
 
-        // Accepts addresses past a section's file bytes, because GDynamicRHI lies in the zero-initialised tail of .data.
-        private static bool IsDataVa(PeImageLayout pe, uint va)
-        {
-            try
-            {
-                _ = pe.VaToOffset(va);
-                return !pe.IsExecutableVa(va);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
-            {
-                return false;
-            }
-        }
-
-        // Returns the file offset of va when the image holds length bytes from it.
-        // Returns -1 otherwise.
-        private static int FileOffsetOf(byte[] data, PeImageLayout pe, uint va, int length)
-        {
-            try
-            {
-                int off = pe.VaToOffset(va);
-                return off >= 0 && off + length <= data.Length ? off : -1;
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
-            {
-                return -1;
-            }
-        }
-
         private static bool MatchesAtVa(byte[] data, PeImageLayout pe, uint va, byte[] expected)
         {
-            int off = FileOffsetOf(data, pe, va, expected.Length);
+            int off = pe.FileOffsetOf(va, expected.Length);
             return off >= 0 && data.AsSpan(off, expected.Length).SequenceEqual(expected);
         }
 

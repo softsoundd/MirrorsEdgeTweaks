@@ -30,7 +30,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Options:\n\n" +
                 "• Compensated near clipping plane: adjusts the near clipping plane based on FOV and aspect ratio " +
                 "to reduce viewmodel and geometry clipping at higher FOVs or wider aspect ratios. Keep in mind that Z-fighting becomes more prevalent " +
-                "at more extreme FOVs or wider aspect ratios with this option enabled.\n\n" +
+                "at more extreme FOVs or wider aspect ratios with this option enabled. The 'Reversed Depth' setting can counteract this.\n\n" +
                 "• FOV-agnostic sensitivity: keeps mouse sensitivity consistent across all FOV values, using 90° " +
                 "as the baseline. Weapon zoom sensitivity still tracks the zoomed FOV as normal. Also useful for TAS tools."),
 
@@ -138,6 +138,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             ["ToneMapping"] = ("Tone Mapping Information",
                 "Tone mapping adjusts the post-process exposure and colour curves, which are applied on a per-map basis. " +
                 "Disabling tone mapping typically makes the image appear brighter with less contrast."),
+
+            ["ReversedDepth"] = ("Reversed Depth Information",
+                "Reduces Z-fighting (flickering textures), especially on distant buildings. It also addresses the extra Z-fighting from the 'Compensated near clipping plane' FOV option.\n\n" +
+                "Requires DXVK, which Tweaks will install if it is missing.\n\n" +
+                "Note: DXVK needs a graphics driver with Vulkan 1.3 support."),
 
             ["TextureManagement"] = ("Texture Management Information",
                 "The \"Modern\" setting removes the 250 MB VRAM allocation limit for textures and forces textures to remain in the texture pool once loaded. " +

@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.IO;
 using System.Text;
@@ -39,11 +40,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private const int CaveDataSize = 0x40;           // BuildCaveDataFull
         private const int AiDataSize = 4 + CaveDataSize; // archive ptr + string data
-
-        // Reserves room for the other cave patches, so that they still fit when logging is applied first.
-        // It covers the high-res font hooks (~540), supersampling (~380), the DLC set-command fix (~293)
-        // and the render target fix's viewport blocks (~136), with margin.
-        private const int RestorationHeadroom = 1500;
 
         // The script-warning line: the object's full name, the function's full name, then the message.
         private static readonly byte[] WarnFormat = Encoding.Unicode.GetBytes("%s (%s) %s\0");
@@ -147,7 +143,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     throw new InvalidOperationException($"Missing required symbol: {s}");
             }
 
-            var cave = CaveSection.Open(data, versionTag: versionTag);
+            var cave = CaveSection.OpenSecondary(data, versionTag: versionTag);
             var ctx = BuildContext(data, addrs, useFullMode, execHookVa, execReturnVa, preInitVa);
 
             return useFullMode ? ApplyFullMode(data, cave, ctx) : ApplyAppInitMode(data, cave, ctx);
@@ -440,14 +436,14 @@ namespace MirrorsEdgeTweaks.Helpers
         }
 
         // A growable .cave section always takes the restorations.
-        // A fixed .text padding cave takes them only when they leave RestorationHeadroom free for the other cave patches.
+        // A fixed padding cave takes them only when they leave room for reversed depth, which takes priority.
         private static bool IncludeRestorations(CaveSection cave, CaveContext ctx, bool appInitPresent)
         {
             if (!ctx.CanRestore) return false;
             int capacity = cave.Capacity;
             if (capacity == int.MaxValue) return true;
             int full = BuildLayout(cave.SectionVa, ctx, appInitPresent, restorations: true).Footprint;
-            return full + RestorationHeadroom <= capacity;
+            return CaveSection.HeaderSize + full + Align4(ReversedDepthPatcher.BlockLength) <= capacity;
         }
 
         // The FullMode strings block sits directly after the execLog forwarder, so its offset is that

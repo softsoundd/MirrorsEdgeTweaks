@@ -8,11 +8,21 @@ namespace MirrorsEdgeTweaks.Helpers
         private readonly byte[] _bytes;
         // False marks a wildcard position.
         private readonly bool[] _fixed;
+        // IndexOf finds candidates by a vectorised search for the longest run of fixed bytes.
+        private readonly int _anchorOffset, _anchorLength;
 
         private BytePattern(byte[] bytes, bool[] fixedMask)
         {
             _bytes = bytes;
             _fixed = fixedMask;
+            for (int i = 0; i < fixedMask.Length;)
+            {
+                int run = 0;
+                while (i + run < fixedMask.Length && fixedMask[i + run]) run++;
+                if (run > _anchorLength)
+                    (_anchorOffset, _anchorLength) = (i, run);
+                i += Math.Max(run, 1);
+            }
         }
 
         public int Length => _bytes.Length;
@@ -50,8 +60,24 @@ namespace MirrorsEdgeTweaks.Helpers
         public int IndexOf(byte[] data, int start, int end)
         {
             int limit = end - Length;
-            for (int i = start; i <= limit; i++)
-                if (MatchesAt(data, i)) return i;
+            if (_anchorLength == 0)
+            {
+                for (int i = start; i <= limit; i++)
+                    if (MatchesAt(data, i)) return i;
+                return -1;
+            }
+
+            // A match starting at `at` has its anchor at at + _anchorOffset.
+            ReadOnlySpan<byte> anchor = _bytes.AsSpan(_anchorOffset, _anchorLength);
+            int at = start;
+            while (at <= limit)
+            {
+                int skip = data.AsSpan(at + _anchorOffset, limit - at + _anchorLength).IndexOf(anchor);
+                if (skip < 0) return -1;
+                at += skip;
+                if (MatchesAt(data, at)) return at;
+                at++;
+            }
             return -1;
         }
 

@@ -98,16 +98,16 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
             return image;
         }
 
-        // The cave starts here when CaveSection falls back to .text padding, which is the 16-byte boundary
-        // after the logging hook sites, whose last bytes sit just below it.
+        // A fixed-cave image's .text padding cave starts here, where the section's virtual size ends.
         public const int FixedCaveStart = 0x1420;
 
-        // Builds a flat PE32 image like BuildFlat, but with no header room for another section, so
-        // CaveSection falls back to .text padding as it does on the SecuROM game executables.
-        // The .text section is sized so its trailing NUL run forms a cave of about caveBytes, rounded up to
-        // keep the section end 16-aligned, as real section sizes are, so the cave header stays findable.
-        // The caller must keep the hook sites below FixedCaveStart, where the cave then begins.
-        public static byte[] BuildFixedCave(int caveBytes)
+        // Builds a flat PE32 image like BuildFlat, but with no header room for another section,
+        // so CaveSection falls back to padding caves as it does on the SecuROM game executables.
+        // The .text file bytes run about caveBytes past FixedCaveStart,
+        // rounded up to keep the section end 16-aligned as real section sizes are, so the cave header stays findable.
+        // The caller must keep the hook sites below FixedCaveStart.
+        // The last rdataTailBytes of .rdata lie past its virtual size, where CaveSection.OpenSecondary puts its cave.
+        public static byte[] BuildFixedCave(int caveBytes, int rdataTailBytes = 0)
         {
             const int alignment = 0x1000;
             int textRawSize = (FixedCaveStart - (int)FlatTextRva) + caveBytes;
@@ -130,13 +130,15 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 32, 4), alignment); // SectionAlignment
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 36, 4), alignment); // FileAlignment
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 56, 4), FlatDataRva + FlatSectionSize); // SizeOfImage
-            // Too small to hold another 40-byte section header, so CaveSection uses .text padding.
+            // Too small to hold another 40-byte section header, so CaveSection uses padding caves.
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 60, 4), 0x200); // SizeOfHeaders
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 92, 4), 16);     // NumberOfRvaAndSizes
 
             int sectionTable = opt + OptionalHeaderSize;
-            WriteSection(image, sectionTable, ".text", FlatTextRva, (int)FlatTextRva, textRawSize, 0x60000020);
-            WriteSection(image, sectionTable + 40, ".rdata", FlatRdataRva, (int)FlatRdataRva, FlatSectionSize, 0x40000040);
+            WriteSection(image, sectionTable, ".text", FlatTextRva, (int)FlatTextRva, textRawSize, 0x60000020,
+                virtualSize: FixedCaveStart - (int)FlatTextRva);
+            WriteSection(image, sectionTable + 40, ".rdata", FlatRdataRva, (int)FlatRdataRva, FlatSectionSize, 0x40000040,
+                virtualSize: FlatSectionSize - rdataTailBytes);
             WriteSection(image, sectionTable + 80, ".data", FlatDataRva, (int)FlatDataRva, FlatSectionSize, 0xC0000040);
             return image;
         }
@@ -148,11 +150,12 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
         // Returns the value's little-endian bytes as hex, for splicing addresses into Put patterns.
         public static string Le(uint value) => Convert.ToHexString(BitConverter.GetBytes(value));
 
+        // The virtual size defaults to the raw size.
         private static void WriteSection(byte[] image, int header, string name, uint rva, int raw, int size,
-            uint characteristics)
+            uint characteristics, int virtualSize = -1)
         {
             Encoding.ASCII.GetBytes(name).CopyTo(image, header);
-            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(header + 8, 4), size);  // VirtualSize
+            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(header + 8, 4), virtualSize < 0 ? size : virtualSize);
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(header + 12, 4), rva);
             BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(header + 16, 4), size); // SizeOfRawData
             BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(header + 20, 4), raw);

@@ -768,6 +768,13 @@
                                 </Grid>
                             </Border>
 
+                            <controls:SettingRow Margin="0,20,0,0" Label="Reversed Depth:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ReversedDepth">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ReversedDepthIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Enabled"/>
+                                    <ComboBoxItem Content="Disabled"/>
+                                </ComboBox>
+                            </controls:SettingRow>
+
                             <TextBlock Text="Note: All following settings below set TdEngine.ini to read-only so Mirror's Edge does not overwrite your changes on launch. As a result, any video settings changed in-game will not be saved."
                                        FontSize="12"
                                        FontStyle="Italic"

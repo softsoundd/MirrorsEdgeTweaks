@@ -5,7 +5,9 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public sealed class PeImageLayout
     {
-        private const uint ExecuteSectionFlag = 0x20000000;
+        // IsCodeVa and IsCodeOffset tell code from data by this content flag rather than the execute permission,
+        // because the secondary padding cave makes .rdata executable.
+        private const uint CodeContentFlag = 0x00000020;
         private const int ResourceDirectoryIndex = 2;
         private const int CertificateDirectoryIndex = 4;
 
@@ -153,19 +155,48 @@ namespace MirrorsEdgeTweaks.Helpers
             return null;
         }
 
-        public bool IsExecutableVa(uint va)
+        public bool IsCodeVa(uint va)
         {
             uint rva = checked(va - ImageBase);
             foreach (var section in Sections)
             {
                 uint size = Math.Max(section.VirtualSize, section.SizeOfRawData);
                 if (rva >= section.VirtualAddress && rva < section.VirtualAddress + size)
-                    return (section.Characteristics & ExecuteSectionFlag) != 0;
+                    return (section.Characteristics & CodeContentFlag) != 0;
             }
             return false;
         }
 
-        public bool IsExecutableOffset(int offset)
+        // Accepts addresses past a section's file bytes, because uninitialised globals lie in the zero-filled tail of .data.
+        public bool IsDataVa(uint va)
+        {
+            try
+            {
+                _ = VaToOffset(va);
+                return !IsCodeVa(va);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
+            {
+                return false;
+            }
+        }
+
+        // Returns the file offset of va when the image holds length bytes from it.
+        // Returns -1 otherwise.
+        public int FileOffsetOf(uint va, int length)
+        {
+            try
+            {
+                int off = VaToOffset(va);
+                return off >= 0 && off + length <= _buffer.Length ? off : -1;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
+            {
+                return -1;
+            }
+        }
+
+        public bool IsCodeOffset(int offset)
         {
             uint uoff = (uint)offset;
             foreach (var section in Sections)
@@ -174,7 +205,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
                 if (uoff >= section.PointerToRawData &&
                     uoff < section.PointerToRawData + section.SizeOfRawData)
-                    return (section.Characteristics & ExecuteSectionFlag) != 0;
+                    return (section.Characteristics & CodeContentFlag) != 0;
             }
             return false;
         }

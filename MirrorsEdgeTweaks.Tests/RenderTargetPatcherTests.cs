@@ -126,22 +126,20 @@ namespace MirrorsEdgeTweaks.Tests
 
             // The blocks land in .text, where the locators must still match only the game's own code.
             var text = PeImageLayout.Parse(patched).FindSectionByName(".text")!;
-            uint textEndVa = ImageBase + text.VirtualAddress + text.VirtualSize - 1;
+            uint textEndVa = ImageBase + text.VirtualAddress + text.SizeOfRawData - 1;
             Assert.InRange(Target(patched, HazeCall), Va(FixedCaveStart), textEndVa);
             Assert.InRange(Target(patched, DepthHook), Va(FixedCaveStart), textEndVa);
             Assert.Null(RenderTargetPatcher.ApplyViewportFixes((byte[])patched.Clone(), "retail"));
         }
 
         [Fact]
-        public void ApplyViewportFixes_FitsInRetailPadding_AlongsideEveryOtherCavePatch()
+        public void ApplyViewportFixes_FitsInRetailPadding_AlongsideEveryOtherCorePatch()
         {
-            // The console set-command fix only applies to DLC,
-            // so Retail's other cave patches are logging, the high-res UI fix and supersampling.
-            int loggingBytes = LoggingPatchHelperTests.RetailFootprint(RetailTextPadding);
+            // Logging and reversed depth use the .rdata tail, and the console set-command fix only applies to DLC,
+            // so Retail's .text padding also holds the high-res UI fix and supersampling.
             int highResBytes = CaveSection.Open(MultiFontScalePatcher.ApplyToImage(
                 MultiFontScalePatcherTests.BuildPatchableImage(), "retail")).CurrentWatermark - CaveHeaderSize;
             var cave = CaveSection.Open(BuildViewportImage(BuildFixedCave(RetailTextPadding)), "retail");
-            cave.Alloc(loggingBytes);
             cave.Alloc(highResBytes);
             cave.Alloc(SupersamplePatchHelper.CaveFootprint);
             byte[] crowded = cave.Finalize();
@@ -222,7 +220,6 @@ namespace MirrorsEdgeTweaks.Tests
             return image;
         }
 
-        // The last byte below FixedCaveStart is set, so that a fixed .text-padding cave starts there.
         internal static byte[] BuildViewportImage(byte[] image)
         {
             uint quadRel = Va(DrawQuad) - Va(HazeCall + 5);
@@ -231,7 +228,6 @@ namespace MirrorsEdgeTweaks.Tests
             Put(image, DepthSite, "8B 75 44 03 74 24 1C 8D 8E 94 02 00 00 51 8B 4D 00 56 81 C1 80 06 00 00 E8 00 00 00 00");
             Put(image, RhiSite, $"8B 35 80 CC FF 01 8B 00 8B 0D {Le(DynamicRhiVa)} 8B 11 56 50 8B 82 00 01 00 00 FF D0 D9 E8");
             Put(image, FlipSite, "75 3E 8B C7 85 C0 89 44 24 14 DB 44 24 14 7D 06 D8 05 20 93 A9 01 D8 0D D0 4E C5 01");
-            image[FixedCaveStart - 1] = 0xCC;
             return image;
         }
 

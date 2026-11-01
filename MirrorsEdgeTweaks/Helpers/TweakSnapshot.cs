@@ -27,6 +27,7 @@ namespace MirrorsEdgeTweaks.Helpers
         public int? PhysXFps { get; set; }
         public bool ConsoleInstalled { get; set; }
         public bool HighResFix { get; set; }
+        public bool ReversedDepth { get; set; }
 
         // Set only while the FOV patches are applied.
         public float? Fov { get; set; }
