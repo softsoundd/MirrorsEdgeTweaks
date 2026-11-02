@@ -13,8 +13,13 @@ namespace MirrorsEdgeTweaks.Services
 
     public interface IDialogService
     {
-        void ShowMessage(string title, string message, DialogMessageType messageType = DialogMessageType.Information);
-        Task ShowMessageAsync(string title, string message, DialogMessageType messageType = DialogMessageType.Information);
+        void ShowMessage(string title, string message, DialogMessageType messageType = DialogMessageType.Information, string? details = null);
+        Task ShowMessageAsync(string title, string message, DialogMessageType messageType = DialogMessageType.Information, string? details = null);
+
+        // Adds a plain explanation of the exception to the summary, and shows the exception's message as technical details.
+        void ShowError(string summary, Exception exception, string title = "Error", DialogMessageType messageType = DialogMessageType.Error);
+        Task ShowErrorAsync(string summary, Exception exception, string title = "Error", DialogMessageType messageType = DialogMessageType.Error);
+
         Task<bool> ShowConfirmationAsync(string title, string message);
         Task<object?> ShowDialogAsync(object content);
     }
@@ -26,26 +31,34 @@ namespace MirrorsEdgeTweaks.Services
 
         // Lets callers without an async context show a message.
         // Exceptions are caught, so a failed dialog cannot crash the process.
-        public void ShowMessage(string title, string message, DialogMessageType messageType = DialogMessageType.Information)
+        public void ShowMessage(string title, string message, DialogMessageType messageType = DialogMessageType.Information, string? details = null)
         {
-            _ = ShowMessageSafeAsync(title, message, messageType);
+            _ = ShowMessageSafeAsync(title, message, messageType, details);
         }
 
-        private async Task ShowMessageSafeAsync(string title, string message, DialogMessageType messageType)
+        private async Task ShowMessageSafeAsync(string title, string message, DialogMessageType messageType, string? details)
         {
             try
             {
-                await ShowMessageAsync(title, message, messageType);
+                await ShowMessageAsync(title, message, messageType, details);
             }
             catch
             {
             }
         }
 
-        public async Task ShowMessageAsync(string title, string message, DialogMessageType messageType = DialogMessageType.Information)
+        public async Task ShowMessageAsync(string title, string message, DialogMessageType messageType = DialogMessageType.Information, string? details = null)
         {
-            await ShowCoreAsync(() => new MessageDialog(title, message, messageType));
+            await ShowCoreAsync(() => new MessageDialog(title, message, messageType, details));
         }
+
+        public void ShowError(string summary, Exception exception, string title = "Error", DialogMessageType messageType = DialogMessageType.Error) =>
+            ShowMessage(title, ErrorText(summary, exception), messageType, ErrorMessageHelper.Details(exception));
+
+        public Task ShowErrorAsync(string summary, Exception exception, string title = "Error", DialogMessageType messageType = DialogMessageType.Error) =>
+            ShowMessageAsync(title, ErrorText(summary, exception), messageType, ErrorMessageHelper.Details(exception));
+
+        private static string ErrorText(string summary, Exception exception) => $"{summary}\n\n{ErrorMessageHelper.Explain(exception)}";
 
         public async Task<bool> ShowConfirmationAsync(string title, string message)
         {

@@ -146,8 +146,8 @@ namespace MirrorsEdgeTweaks.Tests
             cave.Alloc(cave.Capacity - cave.CurrentWatermark - ReversedDepthPatcher.BlockLength + 4);
             byte[] crowded = cave.Finalize();
 
-            var ex = Assert.Throws<InvalidOperationException>(() => ReversedDepthPatcher.ApplyToImage(crowded, "retail"));
-            Assert.Contains("no patch space left", ex.Message);
+            var ex = Assert.Throws<UserFacingException>(() => ReversedDepthPatcher.ApplyToImage(crowded, "retail"));
+            Assert.Contains("not enough room", ex.Message);
         }
 
         [Fact]

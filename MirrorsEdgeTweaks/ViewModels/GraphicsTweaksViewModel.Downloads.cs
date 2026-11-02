@@ -45,7 +45,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "Installation failed.";
-                await _dialogService.ShowMessageAsync("Error", $"Installation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync($"Could not install the {variantName} tone mapper.", ex);
                 SetSilently(RefreshToneMapper);
             }
             finally

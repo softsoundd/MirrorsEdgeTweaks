@@ -164,7 +164,7 @@ namespace MirrorsEdgeTweaks.Services
             else if (apply)
             {
                 string version = ExeVersionDetector.DetectVersion(data, exePath)
-                    ?? throw new InvalidOperationException("Unknown or unsupported MirrorsEdge.exe version.");
+                    ?? throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
                 result = ApplyToImage(data, version);
             }
             else
@@ -200,8 +200,9 @@ namespace MirrorsEdgeTweaks.Services
             }
             catch (InvalidOperationException ex) when (cave.Capacity != int.MaxValue)
             {
-                throw new InvalidOperationException(
-                    "This executable has no patch space left for reversed depth, which shares its limited space with logging.", ex);
+                throw new UserFacingException(
+                    "There is not enough room in MirrorsEdge.exe for reversed depth. " +
+                    "It shares this room with the logging patch, so remove the logging patch and try again.", ex);
             }
             cave.Write(blockVa, BuildBlock(blockVa, sites, out Entries entries));
             data = cave.Finalize();

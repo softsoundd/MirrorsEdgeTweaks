@@ -15,6 +15,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private static readonly string[] AnisoLevels = { "Off", "2x", "4x", "8x", "16x" };
         private static readonly string[] AaLevels = { "Off", "2x", "4x", "8x", "8xQ", "16xQ" };
 
+        private const string MissingIniMessage = "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.";
+
         private readonly IDialogService _dialogService;
         private readonly IGraphicsSettingsService _graphics;
         private readonly IUIScalingService _uiScaling;
@@ -141,7 +143,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath) || !File.Exists(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 SetSilently(revert);
                 return false;
             }
@@ -351,7 +353,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to apply {failureLabel}: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError($"Could not apply {failureLabel}.", ex);
                     SetSilently(() => option.Index = -1);
                 }
             });
@@ -373,8 +375,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 bool proceed = await _dialogService.ShowConfirmationAsync(
                     "Warning for NVIDIA GPU users",
-                    "16xQ anti-aliasing (CSAA) is not supported on NVIDIA GPUs newer than the first-generation Maxwell architecture (GTX 960 and later). " +
-                    "Mirror's Edge will fail to launch with this setting on affected GPUs.\n\nContinue?");
+                    "16xQ anti-aliasing (CSAA) is not supported on NVIDIA GTX 960 and newer graphics cards. " +
+                    "Mirror's Edge will fail to launch with this setting on these cards.\n\nContinue?");
 
                 if (!proceed)
                 {
@@ -393,7 +395,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to apply anti-aliasing: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not apply anti-aliasing.", ex);
                     SetSilently(() => AntiAliasingIndex = previousIndex);
                 }
 
@@ -443,7 +445,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply streak effect: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the streak effect.", ex);
                 SetSilently(() => StreakEffectIndex = oldValue);
             }
         }
@@ -484,7 +486,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to apply texture detail preset: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not apply the texture detail preset.", ex);
                     SetSilently(() => TextureDetailIndex = previousIndex);
                 }
             });
@@ -526,7 +528,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to apply graphics quality preset: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not apply the graphics quality preset.", ex);
                     SetSilently(() => GraphicsQualityIndex = previousIndex);
                 }
             });
@@ -570,7 +572,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (!File.Exists(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 RevertRenderResolution();
                 return;
             }
@@ -593,7 +595,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         else if (state != SupersamplePatchState.Patched)
                         {
                             _dialogService.ShowMessage("Error",
-                                "Could not verify the supersampling patch state. The executable may be an unsupported version.",
+                                "Render resolutions above 100% could not be enabled. This version of MirrorsEdge.exe may not be supported.",
                                 DialogMessageType.Error);
                             SetSilently(() => RenderResolutionPercent = 100);
                             return;
@@ -601,9 +603,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        _dialogService.ShowMessage("Error",
-                            $"Failed to apply supersampling patch: {ex.Message}\n\nRender resolution above 100% requires the executable to be patched.",
-                            DialogMessageType.Error);
+                        _dialogService.ShowError("Could not enable render resolutions above 100%.", ex);
                         SetSilently(() => RenderResolutionPercent = 100);
                         return;
                     }
@@ -616,7 +616,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply render resolution: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the render resolution.", ex);
                 RevertRenderResolution();
                 return;
             }
@@ -647,7 +647,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini path is not set.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 return;
             }
 
@@ -686,7 +686,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply FPS limit: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the FPS limit.", ex);
             }
         }
 
@@ -697,7 +697,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini path is not set.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 return;
             }
 
@@ -710,7 +710,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove FPS limit: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not remove the FPS limit.", ex);
             }
         }
 
@@ -801,7 +801,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "Failed to apply PhysX FPS.";
-                await _dialogService.ShowMessageAsync("Error", $"Failed to apply PhysX FPS:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not apply PhysX FPS.", ex);
             }
             finally
             {
@@ -835,7 +835,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini path is not set.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 return;
             }
 
@@ -852,7 +852,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply minimum LOD: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the minimum LOD.", ex);
             }
         }
 
@@ -863,7 +863,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini path is not set.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 return;
             }
 
@@ -880,7 +880,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply maximum LOD: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the maximum LOD.", ex);
             }
         }
 
@@ -891,7 +891,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             if (string.IsNullOrEmpty(IniPath))
             {
-                _dialogService.ShowMessage("Error", "TdEngine.ini path is not set.", DialogMessageType.Error);
+                _dialogService.ShowMessage("Error", MissingIniMessage, DialogMessageType.Error);
                 return;
             }
 
@@ -908,7 +908,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply LOD bias: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the LOD bias.", ex);
             }
         }
 

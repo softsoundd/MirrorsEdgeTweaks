@@ -72,7 +72,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply mouse smoothing: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply mouse smoothing.", ex);
             }
         }
 
@@ -208,7 +208,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 catch (Exception ex)
                 {
                     HideProgress();
-                    _dialogService.ShowMessage("Error", $"Failed to apply uniform sensitivity: {ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not apply uniform sensitivity.", ex);
                 }
             });
         }
@@ -296,7 +296,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply sensitivity settings: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the sensitivity settings.", ex);
             }
         }
 
@@ -333,7 +333,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to reset sensitivity settings: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not reset the sensitivity settings.", ex);
             }
         }
 
@@ -455,7 +455,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                     if (tsLocFiles.Length == 0)
                     {
-                        throw new FileNotFoundException("No Ts_LOC_*.upk files found in CookedPC directory.");
+                        throw new FileNotFoundException("The game's language packages were not found.");
                     }
 
                     foreach (string tsLocFilePath in tsLocFiles)
@@ -478,7 +478,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 HideProgress();
-                _dialogService.ShowMessage("Error", $"Failed to apply gamepad buttons:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the gamepad buttons.", ex);
             }
         }
 

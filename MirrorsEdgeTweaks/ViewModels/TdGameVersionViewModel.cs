@@ -128,7 +128,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 _dialogService.ShowMessage("URL Error",
-                    "Could not determine the download URL for the selected game version and TdGame variant.",
+                    "Mirror's Edge Tweaks could not find a download of this TdGame version for your version of the game.",
                     DialogMessageType.Error);
                 DetectVersion();
                 return;
@@ -137,7 +137,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _gameStatus.IsUiEnabled = false;
             _gameStatus.IsGameTweaksEnabled = false;
 
-            _gameStatus.Status = "Reading TdGame-linked settings...";
+            _gameStatus.Status = "Reading your tweaks...";
             TweakSnapshot snapshot = await Task.Run(() => _snapshots.Capture());
 
             bool installSucceeded = false;
@@ -169,7 +169,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "An error occurred during the download/extraction.";
-                await _dialogService.ShowMessageAsync("Error", $"Download failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not install the TdGame version.", ex);
             }
             finally
             {
@@ -184,7 +184,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             await Task.Run(() => _gameData.LoadPackages());
                             packagesLoadedAtEnd = true;
 
-                            _gameStatus.Status = "Reapplying TdGame-linked settings...";
+                            _gameStatus.Status = "Re-applying your tweaks...";
                             reapplyResult = await _snapshots.ReapplyAsync(snapshot, TweakScope.TdGame);
 
                             await Task.Delay(250);
@@ -192,15 +192,17 @@ namespace MirrorsEdgeTweaks.ViewModels
                             packagesLoadedAtEnd = true;
 
                             _gameStatus.Status = "Successfully installed.";
-                            await _dialogService.ShowMessageAsync("Success", BuildTdGameInstallSuccessMessage(selectedVersionName, reapplyResult), DialogMessageType.Success);
+                            await _dialogService.ShowMessageAsync("Success",
+                                BuildTdGameInstallSuccessMessage(selectedVersionName, reapplyResult),
+                                DialogMessageType.Success,
+                                string.Join("\n", reapplyResult.FailureDetails));
                         }
                         catch (Exception ex)
                         {
                             _gameStatus.Status = "TdGame installed, but settings reapply hit an error.";
-                            await _dialogService.ShowMessageAsync(
-                                "Warning",
-                                $"The TdGame version was installed, but some TdGame-linked settings could not be reapplied:\n\n{ex.Message}",
-                                DialogMessageType.Warning);
+                            await _dialogService.ShowErrorAsync(
+                                "The TdGame version was installed, but some of your tweaks could not be re-applied.",
+                                ex, "Warning", DialogMessageType.Warning);
                         }
                     }
 
@@ -233,8 +235,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             if (reapplyResult.FailedSettings.Count > 0)
             {
-                message += "\n\nSome TdGame-linked settings could not be restored automatically. " +
-                           "Please review your settings in the UI and reapply if needed.";
+                message += "\n\nSome of your tweaks could not be re-applied automatically. " +
+                           "Please check your settings and apply them again if needed.";
             }
 
             return message;

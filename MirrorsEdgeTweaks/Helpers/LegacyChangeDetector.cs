@@ -169,11 +169,11 @@ namespace MirrorsEdgeTweaks.Helpers
         }
 
         // Patchers throw these instead of editing a file whose older changes they would mishandle.
-        internal static InvalidOperationException PackageRestoreRequired(string fileName) => new(
+        internal static UserFacingException PackageRestoreRequired(string fileName) => new(
             $"{fileName} has changes from an older version of Mirror's Edge Tweaks that this patch cannot handle. " +
             "Restart Mirror's Edge Tweaks and accept the prompt to restore the file.");
 
-        internal static InvalidOperationException ExeVerificationRequired() => new(
+        internal static UserFacingException ExeVerificationRequired() => new(
             "MirrorsEdge.exe has changes from an older version of Mirror's Edge Tweaks that this patch cannot handle. " +
             "Verify your game files to restore it.");
 

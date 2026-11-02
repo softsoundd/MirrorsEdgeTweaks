@@ -89,7 +89,7 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     Dispatch(() =>
                     {
-                        _dialogService.ShowMessage("Error", "Failed to load one or more packages (Engine.u, TdGame.u).", DialogMessageType.Error);
+                        _dialogService.ShowMessage("Error", "Engine.u or TdGame.u could not be loaded. Verify your game files and try again.", DialogMessageType.Error);
                         _gameStatus.Status = "Failed to load packages.";
                     });
                     return;
@@ -103,7 +103,7 @@ namespace MirrorsEdgeTweaks.Services
             {
                 Dispatch(() =>
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to load game data:\n\n{ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not load the game data.", ex);
                     _gameStatus.Status = "Error loading packages.";
                 });
                 _session.Package = null;

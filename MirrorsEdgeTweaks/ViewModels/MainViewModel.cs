@@ -221,9 +221,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    await _dialogService.ShowMessageAsync("Older Tweaks Changes",
-                        $"Could not check the game files for changes from older versions of Tweaks:\n\n{ex.Message}",
-                        DialogMessageType.Warning);
+                    await _dialogService.ShowErrorAsync(
+                        "Could not check the game files for outdated patches from older versions of Tweaks.",
+                        ex, "Older Tweaks Changes", DialogMessageType.Warning);
                 }
 
                 // A restore hides the progress bar when its downloads finish.
@@ -242,10 +242,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                         string failedPaths = string.Join(Environment.NewLine, steamFixResult.FailedFiles.Select(f => f.Path));
                         _dialogService.ShowMessage(
                             "Steam Language Fix",
-                            "Mirror's Edge Tweaks could not update one or more Steam install scripts. " +
-                            "Language changes may revert when launching via Steam.\n\n" +
-                            failedPaths,
-                            DialogMessageType.Warning);
+                            "Mirror's Edge Tweaks could not update some of Steam's files for Mirror's Edge, " +
+                            "so language changes may revert when you launch the game through Steam.",
+                            DialogMessageType.Warning,
+                            failedPaths);
                     }
                 }
 
@@ -378,7 +378,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                     else
                     {
-                        _dialogService.ShowMessage("Warning", "Could not locate editable properties in the loaded game packages.", DialogMessageType.Warning);
+                        _dialogService.ShowMessage("Warning",
+                            "Mirror's Edge Tweaks could not find the settings it edits in Engine.u and TdGame.u, so the Game Tweaks tab is disabled. " +
+                            "Verifying your game files usually fixes this.",
+                            DialogMessageType.Warning);
                     }
                     GameStatus.Status = "Ready.";
                 }
@@ -556,7 +559,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to launch game: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not launch the game.", ex);
             }
         }
 
@@ -590,7 +593,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (unlockMode == CommandLineUnlockMode.Unsupported)
                 {
                     _dialogService.ShowMessage("Error",
-                        "This executable version does not support command-line unlocking.",
+                        "Launch arguments are not supported by this version of MirrorsEdge.exe.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -598,7 +601,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!CommandLineUnlockHelper.IsUnlocked(exePath))
                 {
                     _dialogService.ShowMessage("Error",
-                        "The executable has not been patched to unlock command-line arguments.\n\nClick 'Patch' first.",
+                        "Launch arguments are not unlocked yet.\n\nClick 'Patch' in the Launch Arguments section first.",
                         DialogMessageType.Error);
                     return;
                 }
@@ -607,7 +610,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to launch game with arguments: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not launch the game with launch arguments.", ex);
             }
         }
 

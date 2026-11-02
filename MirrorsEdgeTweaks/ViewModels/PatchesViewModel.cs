@@ -223,7 +223,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply logging patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the logging patch.", ex);
             }
         }
 
@@ -259,7 +259,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove logging patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not remove the logging patch.", ex);
             }
         }
 
@@ -267,8 +267,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowLoggingInfo()
         {
             _dialogService.ShowMessage("Enable Logging Information",
-                "Restores Mirror's Edge's disabled UE3 logging system.\n\n" +
-                "When patched, UnrealScript log() calls and native logging are written to a log file " +
+                "Restores Mirror's Edge's disabled logging system.\n\n" +
+                "When patched, the game's log messages, including UnrealScript log() calls, are written to a log file " +
                 "(and displayed in the log console window if the \"-LOG\" launch argument is used).\n\n" +
                 "By default, the log file is created at \"Logs\\Launch.log\" next to the executable. " +
                 "You can customise the log location using launch arguments:\n\n" +
@@ -310,7 +310,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply multi-instance patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the multi-instance patch.", ex);
             }
         }
 
@@ -346,7 +346,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove multi-instance patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not remove the multi-instance patch.", ex);
             }
         }
 
@@ -392,7 +392,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply ambiguous bypass patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the ambiguous bypass patch.", ex);
             }
         }
 
@@ -428,7 +428,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove ambiguous bypass patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not remove the ambiguous bypass patch.", ex);
             }
         }
 
@@ -576,13 +576,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to read the executable state: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not check whether the configs are unlocked.", ex);
                 return;
             }
 
             if (currentState == ConfigUnlockState.NotApplicable)
             {
-                _dialogService.ShowMessage("Not Applicable", "Config patching is not applicable for this executable.", DialogMessageType.Warning);
+                _dialogService.ShowMessage("Not Applicable", "Unlocked Configs is not available for this version of MirrorsEdge.exe.", DialogMessageType.Warning);
                 return;
             }
 
@@ -626,13 +626,16 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 else
                 {
-                    await _dialogService.ShowMessageAsync("No Action Needed", "The executable is already in the desired config-unlock state.", DialogMessageType.Information);
+                    await _dialogService.ShowMessageAsync("No Action Needed",
+                        unlock ? "Configs are already patched." : "Configs are already unpatched.",
+                        DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
             {
                 HideProgress();
-                await _dialogService.ShowMessageAsync("Error", $"Failed to patch the executable:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync(
+                    unlock ? "Could not apply the Unlocked Configs patch." : "Could not remove the Unlocked Configs patch.", ex);
             }
             finally
             {

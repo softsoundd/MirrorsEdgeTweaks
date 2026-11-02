@@ -209,7 +209,8 @@ namespace MirrorsEdgeTweaks.Services
             }
             catch (Exception ex)
             {
-                result.FailedSettings.Add($"{setting} ({ex.Message})");
+                result.FailedSettings.Add(setting);
+                result.FailureDetails.Add($"{setting}: {ex.Message}");
             }
         }
 

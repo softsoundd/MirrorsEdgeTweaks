@@ -149,7 +149,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (string.IsNullOrEmpty(engineIniPath) || !File.Exists(engineIniPath))
                 {
-                    await _dialogService.ShowMessageAsync("Error", "TdEngine.ini not found. Launch Mirror's Edge at least once to create the configuration file.", DialogMessageType.Error);
+                    await _dialogService.ShowMessageAsync("Error", MissingIniMessage, DialogMessageType.Error);
                     return false;
                 }
 
@@ -167,7 +167,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (IOException ex)
                 {
-                    await _dialogService.ShowMessageAsync("Error", $"Unable to access TdEngine.ini: {ex.Message}", DialogMessageType.Error);
+                    await _dialogService.ShowErrorAsync("Could not access TdEngine.ini.", ex);
                     return false;
                 }
 
@@ -192,7 +192,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Error", $"Failed to update resolution: {ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not update the resolution.", ex);
                 return false;
             }
         }

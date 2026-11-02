@@ -147,7 +147,7 @@ namespace MirrorsEdgeTweaks.Tests
             byte[] image = BuildPatchableImage();
             Put(image, TextRaw + 0x200, "8B 06 8B 90 18 01 00 00 51 8B CE D9 1C 24 FF D2 E9");
 
-            Assert.Throws<InvalidOperationException>(() => MultiFontScalePatcher.ApplyToImage(image, "steam"));
+            Assert.Throws<UserFacingException>(() => MultiFontScalePatcher.ApplyToImage(image, "steam"));
         }
 
         [Fact]

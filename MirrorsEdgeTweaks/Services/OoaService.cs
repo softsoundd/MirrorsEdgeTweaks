@@ -1,10 +1,11 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace MirrorsEdgeTweaks.Services
 {
-    public sealed class OoaLicenseNotFoundException : InvalidOperationException
+    public sealed class OoaLicenseNotFoundException : UserFacingException
     {
         public string ExpectedPath { get; }
 
@@ -135,9 +136,9 @@ namespace MirrorsEdgeTweaks.Services
                 return key;
             }
 
-            throw new InvalidOperationException(
-                "Failed to extract encryption key from EA license file. " +
-                "The license may be corrupt or from a different game.");
+            throw new UserFacingException(
+                "The EA license file for Mirror's Edge could not be read. " +
+                "It may be damaged or belong to a different game.");
         }
 
         // Decrypts the OOA-encrypted sections, such as .text and .data, in place.

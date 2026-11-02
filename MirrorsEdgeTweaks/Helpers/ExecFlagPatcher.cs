@@ -16,7 +16,7 @@ namespace MirrorsEdgeTweaks.Helpers
             string tdGamePath = Path.Combine(gameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
 
             if (!File.Exists(tdGamePath))
-                throw new FileNotFoundException("TdGame.u not found; cannot apply the exec-flag patch.", tdGamePath);
+                throw new FileNotFoundException("TdGame.u was not found.", tdGamePath);
 
             await Task.Run(() =>
             {

@@ -141,6 +141,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             var restored = new List<string>();
             var failures = new List<string>();
+            var failureDetails = new List<string>();
             TweakScope restoredScope = TweakScope.None;
             foreach (RestoreAsset asset in assets)
             {
@@ -156,7 +157,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    failures.Add($"Could not restore {asset.Description}: {ex.Message}");
+                    failures.Add($"Could not restore {asset.Description}. {ErrorMessageHelper.Explain(ex)}");
+                    if (ErrorMessageHelper.Details(ex) is { } details)
+                        failureDetails.Add($"{asset.Description}: {details}");
                     unrestored |= asset.Scope;
                 }
             }
@@ -166,7 +169,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             TweakScope scope = pending != null ? TweakScope.All & ~unrestored : restoredScope;
             if (restoredScope == TweakScope.None)
             {
-                await ShowSummaryAsync(restored, failures, new TweakReapplyResult());
+                await ShowSummaryAsync(restored, failures, new TweakReapplyResult(), failureDetails);
                 return;
             }
 
@@ -174,7 +177,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             TweakReapplyResult result = await _snapshots.ReapplyAsync(snapshot, scope);
             if (pending != null && unrestored == TweakScope.None)
                 _pending.Clear(gameDir);
-            await ShowSummaryAsync(restored, failures, result);
+            await ShowSummaryAsync(restored, failures, result, failureDetails);
         }
 
         // The runtime assets hold compressed packages, but the patchers need Engine.u and TdGame.u decompressed.
@@ -220,7 +223,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch { return string.Empty; }
         }
 
-        private async Task ShowSummaryAsync(List<string> restored, List<string> failures, TweakReapplyResult result)
+        private async Task ShowSummaryAsync(List<string> restored, List<string> failures, TweakReapplyResult result,
+            List<string>? restoreDetails = null)
         {
             var parts = new List<string>();
             if (restored.Count > 0)
@@ -239,7 +243,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             await _dialogService.ShowMessageAsync(
                 succeeded ? "Tweaks Restored" : "Tweaks Partly Restored",
                 string.Join("\n\n", parts),
-                succeeded ? DialogMessageType.Success : DialogMessageType.Warning);
+                succeeded ? DialogMessageType.Success : DialogMessageType.Warning,
+                string.Join("\n", (restoreDetails ?? Enumerable.Empty<string>()).Concat(result.FailureDetails)));
         }
 
         private sealed record RestoreAsset(string Url, string Description, TweakScope Scope, string[] Paths, bool Decompress);

@@ -218,7 +218,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                         if (!modifiedMaxChannels || !modifiedDeviceName)
                         {
-                            throw new Exception("Failed to find MaxChannels or DeviceName in [ALAudio.ALAudioDevice] section of TdEngine.ini");
+                            throw new UserFacingException("TdEngine.ini is corrupted or missing its audio settings.");
                         }
 
                         _fileService.WriteAllLinesAndLock(tdEnginePath, lines);
@@ -239,7 +239,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to change audio backend:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not change the audio backend.", ex);
             }
             finally
             {
@@ -277,10 +277,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "hand placements, and similar effects are lost due to audio fading in. OpenAL Soft fixes these issues and improves overall audio clarity.\n\n" +
                 "Both OpenAL Soft options raise the simultaneous audio source limit from 32 to 256. " +
                 "The default limit of 32 causes sounds to be cut abruptly during busy scenes with heavy gunfire, foley, and ambient sources.\n\n" +
-                "The HRTF option provides realistic 3D spatial audio through stereo headphones via a proxy that intercepts the engine's audio stream " +
-                "and applies HRTF only to 3D world sounds. Without the proxy, standard OpenAL Soft HRTF colours everything — including music, " +
-                "dialogue, and UI effects — which can sound unnatural. With the proxy, non-spatial audio bypasses HRTF entirely " +
-                "and plays back cleanly, while world-space sounds retain full HRTF spatialisation.",
+                "The HRTF option provides realistic 3D spatial audio through stereo headphones. It applies HRTF only to sounds in the game world, " +
+                "because applying it to music, dialogue and UI effects can make them sound unnatural.",
                 DialogMessageType.Information);
         }
     }

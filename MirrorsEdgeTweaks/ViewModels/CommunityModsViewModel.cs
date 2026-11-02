@@ -84,7 +84,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply Cinematic Faith Model setting: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the Cinematic Faith Model setting.", ex);
 
                 SetSilently(() => CinematicFaithIndex = previousIndex);
                 RefreshCinematicFaith();

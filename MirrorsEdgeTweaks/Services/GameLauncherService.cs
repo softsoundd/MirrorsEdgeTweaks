@@ -37,7 +37,7 @@ namespace MirrorsEdgeTweaks.Services
                 arguments,
                 workingDirectory,
                 includeCmdFallback: true,
-                "All launch strategies failed.");
+                "Windows could not start Mirror's Edge.");
         }
 
         internal static string BuildSteamApplaunchArguments(string gameArguments)
@@ -54,8 +54,7 @@ namespace MirrorsEdgeTweaks.Services
             string? steamExe = _steamService.GetSteamExecutablePath();
             if (string.IsNullOrWhiteSpace(steamExe))
             {
-                throw new InvalidOperationException(
-                    "Could not locate Steam. Ensure Steam is installed and its install path is registered in the Windows Registry.");
+                throw new UserFacingException("Could not find Steam. Make sure Steam is installed.");
             }
 
             string? steamDirectory = Path.GetDirectoryName(steamExe);
@@ -69,7 +68,7 @@ namespace MirrorsEdgeTweaks.Services
                 BuildSteamApplaunchArguments(gameArguments),
                 steamDirectory,
                 includeCmdFallback: false,
-                "Failed to launch Mirror's Edge via Steam.");
+                "Steam could not start Mirror's Edge.");
         }
 
         private static void StartProcessWithFallbacks(
@@ -90,7 +89,7 @@ namespace MirrorsEdgeTweaks.Services
             if (includeCmdFallback && TryStartViaCmd(exePath, arguments, workingDirectory, launchErrors))
                 return;
 
-            throw new InvalidOperationException($"{failureMessage} {string.Join(" | ", launchErrors)}");
+            throw new UserFacingException(failureMessage, new InvalidOperationException(string.Join(" | ", launchErrors)));
         }
 
         private static bool TryStartProcess(

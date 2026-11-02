@@ -116,11 +116,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Toggles the bounding boxes of triggers (checkpoints, level loads, other scripted gameplay events) and volumes " +
                 "(areas that put Faith in a specific movement state, kill barriers, etc.).\n\n" +
                 "This command also shows invisible blocking volumes the player can collide with, " +
-                "making it a more performant alternative to \"nxvis collision\" (Show Collision keybind).");
+                "making it a more performant alternative to the Show Collision keybind.");
 
             ShowCollision = Make("ShowCollisionKeyTextBox", "Show Collision:", "Show Collision Keybind Information",
                 "Note: This command is very performance intensive and can crash the game in some cases.\n\n" +
-                "Toggles the display of PhysX collision data for the level — wireframes and volumes for all collision objects with which rigid bodies interact.");
+                "Toggles the display of the level's PhysX collision as wireframes and volumes.");
 
             Noclip = Make("NoclipKeyTextBox", "Noclip:", "Noclip Keybind Information",
                 "Note: This cheat only works if the Tweaks Scripts package is installed and Cheats + Trainer mode is active.\n\n" +
@@ -194,7 +194,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (!File.Exists(settingsFilePath))
                 {
                     _dialogService.ShowMessage("Tweaks Scripts Not Installed",
-                        "TweaksScriptsSettings was not found.\n\n" +
                         "Install the Tweaks Scripts package from Game Tweaks before configuring macro keybinds.",
                         DialogMessageType.Warning);
                     return;
@@ -363,7 +362,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to update keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not update the keybind.", ex);
             }
 
             return true;
@@ -488,7 +487,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to update keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not update the keybind.", ex);
                 return false;
             }
         }
@@ -514,7 +513,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to remove keybind:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not remove the keybind.", ex);
                 return false;
             }
         }
@@ -671,7 +670,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to update macro keybind: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not update the macro keybind.", ex);
                 return false;
             }
 

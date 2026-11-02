@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Tests.TestSupport;
 
@@ -196,7 +197,7 @@ namespace MirrorsEdgeTweaks.Tests
         {
             using var ini = new TempIniFile("[Engine.GameEngine]", "SomethingElse=1");
 
-            Assert.Throws<Exception>(() => _service.ApplyFPSLimit(ini.Path, 100));
+            Assert.Throws<UserFacingException>(() => _service.ApplyFPSLimit(ini.Path, 100));
         }
 
         [Fact]

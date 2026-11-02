@@ -8,6 +8,14 @@ namespace MirrorsEdgeTweaks.ViewModels
 {
     public partial class ModsViewModel : BusyViewModel
     {
+        private const string ConsoleKeyboardNote =
+            "Unreal Engine 3 supports only the US keyboard layout. If you do not wish to use the US layout, the following layouts will interpret these keys as Tilde (~):\n\n" +
+            "• UK: @ (at sign)\n\n" +
+            "• German: ö\n\n" +
+            "• French: ù (% key)\n\n" +
+            "• Spanish: ñ\n\n" +
+            "• Italian: \\ (backslash)";
+
         private readonly IDialogService _dialogService;
         private readonly IPackageService _packageService;
         private readonly IFileService _fileService;
@@ -205,7 +213,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "Installation failed.";
-                await _dialogService.ShowMessageAsync("Error", $"Installation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not install Tweaks Scripts.", ex);
             }
             finally
             {
@@ -296,7 +304,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Error", $"Uninstallation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not uninstall Tweaks Scripts.", ex);
                 _gameStatus.Status = "Error during uninstallation.";
             }
             finally
@@ -313,7 +321,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowMessage(
                     "Dependency Missing",
-                    "Install Tweaks Scripts (MirrorsEdgeTweaksScripts.u) before installing Tweaks Scripts UI.",
+                    "Install Tweaks Scripts before installing Tweaks Scripts UI.",
                     DialogMessageType.Warning);
                 UpdateTweaksScriptsDependencyUI(isTweaksScriptsInstalled: false);
                 return;
@@ -357,9 +365,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error",
-                    $"Failed to install Tweaks Scripts UI: {ex.Message}",
-                    DialogMessageType.Error);
+                _dialogService.ShowError("Could not install Tweaks Scripts UI.", ex);
             }
         }
 
@@ -431,9 +437,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error",
-                    $"Failed to uninstall Tweaks Scripts UI: {ex.Message}",
-                    DialogMessageType.Error);
+                _dialogService.ShowError("Could not uninstall Tweaks Scripts UI.", ex);
             }
         }
 
@@ -453,7 +457,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (offsets.ConsoleHeightOffset == -1)
             {
                 _dialogService.ShowMessage("Patch Error",
-                    "Could not locate the required patch offset in Engine.u. Cannot proceed.",
+                    "Mirror's Edge Tweaks could not find the console settings in Engine.u. Verify your game files and try again.",
                     DialogMessageType.Error);
                 return;
             }
@@ -508,18 +512,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 _gameStatus.Status = "Ready.";
                 await _dialogService.ShowMessageAsync("Success",
-                    "Developer console installed. Press Tilde (~) to open the console.\n\n" +
-                    "Unreal Engine 3 supports only the US keyboard layout. If you do not wish to use the US layout, the following layouts will interpret these keys as Tilde (~):\n\n" +
-                    "• UK: @ (at sign)\n\n" +
-                    "• German: ö\n\n" +
-                    "• French: ù (% key)\n\n" +
-                    "• Spanish: ñ\n\n" +
-                    "• Italian: \\ (backslash)",
+                    "Developer console installed. Press Tilde (~) to open the console.\n\n" + ConsoleKeyboardNote,
                     DialogMessageType.Success);
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Installation Failed", $"Installation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not install the developer console.", ex, "Installation Failed");
                 _gameStatus.Status = "Console installation failed.";
             }
             finally
@@ -542,7 +540,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (offsets.ConsoleHeightOffset == -1)
             {
                 _dialogService.ShowMessage("Patch Error",
-                    "Could not locate the required patch offset in Engine.u. Cannot proceed.",
+                    "Mirror's Edge Tweaks could not find the console settings in Engine.u. Verify your game files and try again.",
                     DialogMessageType.Error);
                 return;
             }
@@ -603,7 +601,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Uninstallation Failed", $"Uninstallation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not uninstall the developer console.", ex, "Uninstallation Failed");
                 _gameStatus.Status = "Console uninstallation failed.";
             }
             finally
@@ -617,8 +615,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService.ShowMessage("TdGame Version Information",
                 "Allows the selection of various TdGame versions.\n\n" +
-                "• Original — Unmodified TdGame and persistent map files.\n\n" +
-                "• TdGame Fix (by Keku) — Modified TdGame and persistent map files that support loading custom skins, animations, sounds, and other mods. " +
+                "• Original — The unmodified game files.\n\n" +
+                "• TdGame Fix (by Keku) — Modified game files that support loading custom skins, animations, sounds, and other mods. " +
                 "Mirror's Edge Tweaks does not require this except for the Cinematic Faith Model mod.\n\n" +
                 "• Time Trials Timer Fix (by Nulaft) — Fixes precision errors in the time trial timer and uses a real-time timer (prepended with \"R\" to indicate this). " +
                 "Recommended for speedrunners submitting times to leaderboards.\n\n" +
@@ -630,15 +628,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowConsoleInfo()
         {
             _dialogService.ShowMessage("Developer Console Information",
-                "Installs the native Unreal Engine 3 developer console for debug commands and features.\n\n" +
-                "The function responsible for handling user input to open the console was intentionally stripped by DICE. Mirror's Edge Tweaks installs a custom UnrealScript package " +
-                "that extends the existing Console class, overriding the empty input function to restore full console functionality.\n\n" +
-                "Unreal Engine 3 supports only the US keyboard layout. If you do not wish to use the US layout, the following layouts will interpret these keys as Tilde (~):\n\n" +
-                "• UK: @ (at sign)\n\n" +
-                "• German: ö\n\n" +
-                "• French: ù (% key)\n\n" +
-                "• Spanish: ñ\n\n" +
-                "• Italian: \\ (backslash)",
+                "Installs the game's built-in developer console for debug commands and features.\n\n" +
+                "DICE removed the ability to open the console from the released game, which Mirror's Edge Tweaks can restore.\n\n" +
+                ConsoleKeyboardNote,
                 DialogMessageType.Information);
         }
 
@@ -646,7 +638,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowTweaksScriptsInfo()
         {
             _dialogService.ShowMessage("Tweaks Scripts Information",
-                "A custom UnrealScript package that adds gameplay features including Softimer (native in-game timer for speedrunners), cheats and trainer functionality, save file editing, and more.\n\n" +
+                "A custom UnrealScript package that adds additional gameplay features including Softimer (native in-game timer for speedrunners), cheats and trainer functionality, save file editing, and more.\n\n" +
                 "Install the developer console to access the full range of Tweaks Scripts features.\n\n" +
                 "• Softimer — Activate with \"exec speedrun\" (deactivate with \"exec speedrunoff\"), or toggle via the Tweaks Scripts UI mod.\n\n" +
                 "• Cheats & Trainer — Activate with \"exec cheats\" (deactivate with \"exec cheatsoff\"), or toggle via the Tweaks Scripts UI mod. While active, run \"listcheats\" to view all cheats.\n\n" +

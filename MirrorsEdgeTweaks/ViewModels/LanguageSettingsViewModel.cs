@@ -268,7 +268,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             {
                                 // This throws instead of showing a dialog, because it runs on a background thread
                                 // and a corrupted ini must also stop the language pack download below.
-                                throw new InvalidDataException("TdEngine.ini file is corrupted (no Language= entry found).");
+                                throw new UserFacingException("TdEngine.ini is corrupted or missing its language setting.");
                             }
 
                             FileAttributes attributes = File.GetAttributes(tdEnginePath);
@@ -304,8 +304,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                     {
                         _dialogService.ShowMessage(
                             "Warning",
-                            "Game language was updated, but one or more Steam install scripts could not be updated. " +
-                            "Language changes may revert when launching via Steam.",
+                            "Game language was updated, but Mirror's Edge Tweaks could not update some of Steam's files for Mirror's Edge, " +
+                            "so the language may revert when you launch the game through Steam.",
                             DialogMessageType.Warning);
                     }
 
@@ -325,7 +325,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _dialogService.ShowMessage("Error", $"Failed to switch language:\n\n{ex.Message}", DialogMessageType.Error);
+                    _dialogService.ShowError("Could not switch the game language.", ex);
                 }
                 finally
                 {

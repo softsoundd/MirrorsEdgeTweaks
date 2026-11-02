@@ -36,7 +36,7 @@ namespace MirrorsEdgeTweaks.Helpers
             var assembly = Assembly.GetExecutingAssembly();
             using Stream? stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null)
-                throw new FileNotFoundException($"No address table for variant '{version}' (resource: {resourceName}).");
+                throw new InvalidOperationException($"No address table for variant '{version}' (resource: {resourceName}).");
 
             using var doc = JsonDocument.Parse(stream);
             var root = doc.RootElement;

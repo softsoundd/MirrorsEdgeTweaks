@@ -130,7 +130,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 if (TweaksScriptsSettingsPath is not string settingsFilePath || !File.Exists(settingsFilePath))
                 {
                     await _dialogService.ShowMessageAsync("Tweaks Scripts Not Installed",
-                        "TweaksScriptsSettings was not found.\n\n" +
                         "Install the Tweaks Scripts package from Game Tweaks before configuring Softimer settings.",
                         DialogMessageType.Warning);
                     LoadSoftimerSettings();
@@ -143,7 +142,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    await _dialogService.ShowMessageAsync("Error", $"Failed to update Softimer setting:\n\n{ex.Message}", DialogMessageType.Error);
+                    await _dialogService.ShowErrorAsync("Could not update the Softimer setting.", ex);
                     LoadSoftimerSettings();
                 }
             });

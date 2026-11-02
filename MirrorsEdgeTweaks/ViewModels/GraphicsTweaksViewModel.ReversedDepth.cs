@@ -47,8 +47,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Error",
-                    $"Failed to {(enable ? "apply" : "remove")} reversed depth:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync($"Could not {(enable ? "apply" : "remove")} reversed depth.", ex);
                 await RefreshReversedDepthAsync();
                 return;
             }
@@ -63,9 +62,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                await _dialogService.ShowMessageAsync("Error",
-                    $"Reversed depth {(enable ? "applied" : "removed")}, but Tweaks could not update DXVK:\n\n{ex.Message}",
-                    DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync(
+                    $"Reversed depth {(enable ? "applied" : "removed")}, but Tweaks could not update DXVK.", ex);
             }
         }
 
@@ -80,8 +78,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 case DxvkState.OtherWrapper:
                     await _dialogService.ShowMessageAsync("Reversed Depth",
                         "Reversed depth applied, but it requires DXVK. " +
-                        "There is another Direct3D9 wrapper in the game's Binaries folder, so Tweaks cannot install DXVK there.\n\n" +
-                        "Please remove the other wrapper and try again.",
+                        "Another mod's d3d9.dll (for example ReShade) is in the game's Binaries folder, so Tweaks cannot install DXVK there.\n\n" +
+                        "Please remove that d3d9.dll and try again.",
                         DialogMessageType.Warning);
                     return;
                 case DxvkState.Outdated:
@@ -101,18 +99,17 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             bool turnOn = await _dialogService.ShowConfirmationAsync("Reversed Depth",
-                "Reversed depth applied. DXVK is installed, but its d3d9.useD32forD24 option is off, " +
-                "so the depth buffer is still 24-bit and Z-fighting will not improve.\n\n" +
-                "Turn d3d9.useD32forD24 on in Binaries\\dxvk.conf?");
+                "Reversed depth applied, but a DXVK setting it needs is turned off, so Z-fighting will not improve yet.\n\n" +
+                "Turn this setting on?");
             if (turnOn)
-                await EnableFloatDepthAsync(binariesDirectory, "d3d9.useD32forD24 is now on in dxvk.conf.");
+                await EnableFloatDepthAsync(binariesDirectory, "DXVK is now set up for reversed depth.");
         }
 
         private async Task OfferDxvkInstallAsync(string binariesDirectory)
         {
             bool install = await _dialogService.ShowConfirmationAsync("Reversed Depth",
                 "Reversed depth applied, but it requires DXVK to reduce Z-fighting.\n\n" +
-                "Download and install DXVK into Binaries?\n\n" +
+                "Download and install DXVK into the game's Binaries folder?\n\n" +
                 "Note: DXVK runs the game through Vulkan, so it needs a graphics driver with Vulkan 1.3 support.");
             if (!install)
                 return;
@@ -128,7 +125,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _gameStatus.Status = "Installation failed.";
-                await _dialogService.ShowMessageAsync("Error", $"DXVK installation failed:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not install DXVK.", ex);
                 return;
             }
             finally
@@ -136,7 +133,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _gameStatus.IsUiEnabled = true;
             }
 
-            await EnableFloatDepthAsync(binariesDirectory, "DXVK installed, with d3d9.useD32forD24 on in Binaries\\dxvk.conf.");
+            await EnableFloatDepthAsync(binariesDirectory, "DXVK installed and set up for reversed depth.");
         }
 
         private async Task EnableFloatDepthAsync(string binariesDirectory, string successMessage)

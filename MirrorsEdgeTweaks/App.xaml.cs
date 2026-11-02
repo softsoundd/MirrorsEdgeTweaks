@@ -59,8 +59,8 @@ namespace MirrorsEdgeTweaks
             {
                 LogCrash("DispatcherUnhandledException", args.Exception);
                 System.Windows.MessageBox.Show(
-                    $"An unexpected error occurred:\n\n{args.Exception.Message}\n\n" +
-                    $"A crash log was written to:\n{CrashLogDirectory}",
+                    "Mirror's Edge Tweaks ran into an unexpected error. " +
+                    $"A crash log with the details was written to:\n{CrashLogDirectory}",
                     "Mirror's Edge Tweaks - Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

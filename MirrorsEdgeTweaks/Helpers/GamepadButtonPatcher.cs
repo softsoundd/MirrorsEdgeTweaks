@@ -16,7 +16,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             if (tsLocFiles.Length == 0)
             {
-                throw new FileNotFoundException("No Ts_LOC_*.upk files found in CookedPC directory.");
+                throw new FileNotFoundException("The game's language packages were not found.");
             }
 
             // TdGame.u is checked before any locale is patched, so a missing file cannot leave the prompt swap half applied.

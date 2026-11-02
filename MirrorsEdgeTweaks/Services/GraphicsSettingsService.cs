@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -870,7 +871,7 @@ namespace MirrorsEdgeTweaks.Services
 
             if (!foundSmoothFrameRate || !foundMaxSmoothedFrameRate)
             {
-                throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
+                throw new UserFacingException("TdEngine.ini is corrupted or missing required settings.");
             }
 
             _fileService.WriteAllLinesAndLock(tdEngineIniPath, lines);
@@ -898,7 +899,7 @@ namespace MirrorsEdgeTweaks.Services
 
             if (!foundSmoothFrameRate)
             {
-                throw new Exception("'TdEngine.ini' file is corrupted or missing required keys.");
+                throw new UserFacingException("TdEngine.ini is corrupted or missing required settings.");
             }
 
             _fileService.WriteAllLinesAndLock(tdEngineIniPath, lines);

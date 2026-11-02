@@ -24,8 +24,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "and camera transitions, and does not break the skybox (unlike the keybind FOV method). " +
                 "It also fixes the FOV being reset to 85° when reloading from deaths, compensates the vertigo " +
                 "zoom effect, and maintains affected ADS FOV with the sniper rifle.\n\n" +
-                "A render target fix is also applied to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution). " +
-                "The fix also keeps the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
+                "The FOV patches also prevent the white screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution), " +
+                "and keep the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
                 "Options:\n\n" +
                 "• Compensated near clipping plane: adjusts the near clipping plane based on FOV and aspect ratio " +
                 "to reduce viewmodel and geometry clipping at higher FOVs or wider aspect ratios. Keep in mind that Z-fighting becomes more prevalent " +
@@ -38,8 +38,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "(e.g. Custom Resolution Utility, NVIDIA Control Panel). Once configured, they appear here.\n\n" +
                 "Selecting a resolution also applies the following fixes:\n\n" +
                 "• Removes the hardcoded 16:9 aspect ratio constraint, allowing the game to render correctly at any aspect ratio without letterboxing or pillarboxing.\n\n" +
-                "• Applies a render target fix to prevent the white-screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution). " +
-                "The fix also keeps the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
+                "• Prevents the white screen issue at narrower aspect ratios above 720p (e.g. Steam Deck's native resolution), " +
+                "and keeps the sun haze and first-person self-shadowing aligned at unusual resolutions and at render resolutions below 100%.\n\n" +
                 "• Enables dynamic FOV scaling so the game automatically applies HOR+ correction at aspect ratios wider than 16:9, and VERT+ at narrower ratios.\n\n" +
                 "• Compensates cutscene zoom rates, vertigo effects, and unzoom timing to work correctly and consistently at any FOV and aspect ratio.\n\n" +
                 "Selecting a resolution with a horizontal pixel count greater than 1920 will also prompt you with the option to fix blurry in-game text and apply other UI fixes. " +
@@ -67,7 +67,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             ["PhysXFps"] = ("PhysX FPS Information",
                 "Applies a PhysX FPS value to cloth simulations (flags, construction tarps, strip curtain doors, etc.). Accepts a minimum of 50 FPS and a maximum of 300 FPS. No effect if PhysX is disabled.\n\n" +
-                "Cloth simulations in Mirror's Edge run at a rate independent of the game's frame rate (timesteps). By default, Mirror's Edge uses 50 FPS " +
+                "Cloth simulations in Mirror's Edge run at a rate independent of the game's frame rate. By default, Mirror's Edge uses 50 FPS " +
                 "for PhysX cloth, which can appear choppy when using reaction time or when running above the 62 FPS limit.\n\n" +
                 "Suggestions:\n\n" +
                 "• At the default 62 FPS limit, set PhysX FPS to 62 to match the simulation rate with the game's frame rate. " +
@@ -149,10 +149,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "On a low-end system, it may be preferable to keep this setting at \"Default\"."),
 
             ["MinLod"] = ("Minimum LOD Information",
-                "Minimum LOD size controls the lowest-quality texture mipmap that will be loaded. Range: 1–4096 (Unreal Engine 3 maximum: 4096)."),
+                "Minimum LOD size controls the lowest-quality texture mipmap that will be loaded. Range: 1–4096."),
 
             ["MaxLod"] = ("Maximum LOD Information",
-                "Maximum LOD size controls the highest-quality texture mipmap that will be loaded. Range: 1–4096 (Unreal Engine 3 maximum: 4096)."),
+                "Maximum LOD size controls the highest-quality texture mipmap that will be loaded. Range: 1–4096."),
 
             ["LodBias"] = ("LOD Bias Information",
                 "Adjusts the distance at which different texture mipmaps are loaded. A higher bias value results in lower-resolution mipmaps being shown sooner " +

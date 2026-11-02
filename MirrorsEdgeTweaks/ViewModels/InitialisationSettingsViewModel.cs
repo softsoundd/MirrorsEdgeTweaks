@@ -135,7 +135,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to modify intro video setting:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not change the intro video setting.", ex);
             }
         }
 
@@ -262,7 +262,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to modify main menu delay setting:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not change the main menu delay setting.", ex);
             }
         }
 
@@ -397,7 +397,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to modify time trial countdown setting:\n\n{ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not change the time trial countdown setting.", ex);
             }
         }
 
@@ -490,7 +490,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply skip online check patch: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply the skip online check patch.", ex);
             }
         }
 

@@ -186,9 +186,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                 string message = unlockMode switch
                 {
                     CommandLineUnlockMode.PersistentFilePatch when patchWasRemoved =>
-                        "The command line unlock patch has been removed and the saved launch arguments were cleared.",
+                        "The launch arguments patch was removed and your saved launch arguments were cleared.",
                     CommandLineUnlockMode.PersistentFilePatch =>
-                        "The executable is already using stock command-line handling. Saved launch arguments were cleared.",
+                        "There was no launch arguments patch to remove. Your saved launch arguments were cleared.",
                     _ =>
                         "Saved launch arguments were cleared."
                 };
@@ -204,7 +204,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to reset launch arguments: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not reset launch arguments.", ex);
             }
         }
 
@@ -246,12 +246,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (unlockMode != CommandLineUnlockMode.PersistentFilePatch)
                 {
-                    throw new InvalidOperationException("This executable version does not support command line unlocking.");
+                    throw new UserFacingException("Launch arguments are not supported by this version of MirrorsEdge.exe.");
                 }
 
                 string unlockMessage = patchWasApplied
-                    ? "Command line arguments are now unlocked in the executable."
-                    : "Command line arguments are already unlocked in the executable.";
+                    ? "Launch arguments are now unlocked."
+                    : "Launch arguments are already unlocked.";
 
                 LaunchArguments = launchArguments;
                 _settings.Save();
@@ -275,7 +275,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowMessage("Error", $"Failed to apply launch arguments: {ex.Message}", DialogMessageType.Error);
+                _dialogService.ShowError("Could not apply launch arguments.", ex);
             }
         }
     }

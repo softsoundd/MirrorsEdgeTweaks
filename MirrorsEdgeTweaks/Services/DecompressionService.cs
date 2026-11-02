@@ -43,7 +43,7 @@ namespace MirrorsEdgeTweaks.Services
 
             if (!_fileService.FileExists(packagePath))
             {
-                throw new FileNotFoundException("Package file was not found.", packagePath);
+                throw new FileNotFoundException($"{Path.GetFileName(packagePath)} was not found.", packagePath);
             }
 
             DecompressPackageInPlace(packagePath);

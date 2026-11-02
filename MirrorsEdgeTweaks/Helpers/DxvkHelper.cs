@@ -47,7 +47,7 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             using ZipArchive archive = ZipFile.OpenRead(zipPath);
             ZipArchiveEntry entry = archive.Entries.FirstOrDefault(e => e.Name.Equals("d3d9.dll", StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidDataException("The DXVK download does not contain d3d9.dll.");
+                ?? throw new UserFacingException("The DXVK download is missing d3d9.dll. Please try again later.");
             entry.ExtractToFile(Path.Combine(binariesDirectory, "d3d9.dll"), overwrite: false);
         }
 

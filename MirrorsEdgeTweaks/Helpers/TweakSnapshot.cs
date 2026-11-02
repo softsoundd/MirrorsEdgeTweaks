@@ -37,5 +37,6 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         public List<string> ReappliedSettings { get; } = new List<string>();
         public List<string> FailedSettings { get; } = new List<string>();
+        public List<string> FailureDetails { get; } = new List<string>();
     }
 }

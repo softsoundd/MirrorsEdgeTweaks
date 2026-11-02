@@ -111,7 +111,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
             if (version == null)
-                throw new InvalidOperationException("Unrecognized executable -- cannot detect game version.");
+                throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
 
             bool isOoa = version == "ea";
             PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;

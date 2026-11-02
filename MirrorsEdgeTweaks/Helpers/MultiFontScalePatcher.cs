@@ -121,7 +121,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 // An unrecognised exe must not be patched with a guessed tag,
                 // because later detection and reapply logic relies on the cave version tag.
                 string version = ExeVersionDetector.DetectVersion(data, exePath)
-                    ?? throw new InvalidOperationException("Unknown or unsupported MirrorsEdge.exe version. Cannot apply the high-res UI fix.");
+                    ?? throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
                 data = ApplyToImage(data, version);
             }
             PatchUtility.WritePreservingAttributes(exePath, data);

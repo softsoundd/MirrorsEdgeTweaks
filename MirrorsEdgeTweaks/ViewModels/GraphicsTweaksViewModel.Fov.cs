@@ -97,7 +97,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowMessageAsync("Error", $"Failed to apply FOV patches:\n\n{ex.Message}", DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("Could not apply the FOV patches.", ex);
                 _gameStatus.Status = "Error applying changes.";
             }
             finally

@@ -8,7 +8,7 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public class MessageDialog : System.Windows.Controls.UserControl
     {
-        public MessageDialog(string title, string message, DialogMessageType messageType)
+        public MessageDialog(string title, string message, DialogMessageType messageType, string? details = null)
         {
             var border = new System.Windows.Controls.Border
             {
@@ -50,10 +50,41 @@ namespace MirrorsEdgeTweaks.Helpers
 
             stackPanel.Children.Add(titleText);
             stackPanel.Children.Add(messageText);
+            if (!string.IsNullOrEmpty(details))
+                stackPanel.Children.Add(CreateDetailsExpander(details));
             stackPanel.Children.Add(okButton);
 
             border.Child = stackPanel;
             Content = border;
+        }
+
+        // A read-only text box lets players select and copy the details into a bug report.
+        private static System.Windows.Controls.Expander CreateDetailsExpander(string details)
+        {
+            var detailsText = new System.Windows.Controls.TextBox
+            {
+                Text = details,
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                BorderThickness = new System.Windows.Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                FontSize = 11,
+                MaxHeight = 150,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+            };
+            TextFieldAssist.SetDecorationVisibility(detailsText, Visibility.Collapsed);
+
+            var expander = new System.Windows.Controls.Expander
+            {
+                Header = new System.Windows.Controls.TextBlock { Text = "Technical details", FontSize = 12 },
+                Content = detailsText,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new System.Windows.Thickness(0),
+                MaxWidth = 450,
+                Margin = new System.Windows.Thickness(0, 0, 0, 16)
+            };
+            ExpanderAssist.SetHorizontalHeaderPadding(expander, new System.Windows.Thickness(0, 4, 0, 4));
+            return expander;
         }
 
         private static void ParseAndAddInlines(System.Windows.Controls.TextBlock textBlock, string message)

@@ -44,9 +44,9 @@ namespace MirrorsEdgeTweaks.Services
                 string tdGamePath = TdGamePath(gameDirectoryPath);
                 string exePath = ExePath(gameDirectoryPath);
                 if (!File.Exists(enginePath))
-                    throw new FileNotFoundException("Engine.u not found", enginePath);
+                    throw new FileNotFoundException("Engine.u was not found.", enginePath);
                 if (!File.Exists(exePath))
-                    throw new FileNotFoundException("MirrorsEdge.exe not found", exePath);
+                    throw new FileNotFoundException("MirrorsEdge.exe was not found.", exePath);
 
                 // The betas' blobs override this fix, and only a restore removes them.
                 foreach (string package in new[] { enginePath, tdGamePath })
@@ -84,7 +84,7 @@ namespace MirrorsEdgeTweaks.Services
                     beforeShowingDialog?.Invoke();
                     string message = $"Resolution set to {width} × {height}.\nDynamic UI fix applied.";
                     if (failedLayers.Count > 0)
-                        message += $"\n\nNote: the following optional layers could not be applied: {string.Join(", ", failedLayers)}.";
+                        message += $"\n\nNote: these parts of the fix could not be applied: {string.Join(", ", failedLayers)}.";
                     await _dialogService.ShowMessageAsync(
                         "Resolution Updated",
                         message,
@@ -94,10 +94,7 @@ namespace MirrorsEdgeTweaks.Services
             catch (Exception ex)
             {
                 beforeShowingDialog?.Invoke();
-                await _dialogService.ShowMessageAsync(
-                    "UI Fix Failed",
-                    $"The dynamic UI fix could not be applied:\n\n{ex.Message}",
-                    DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("The dynamic UI fix could not be applied.", ex, "UI Fix Failed");
             }
         }
 
@@ -129,10 +126,7 @@ namespace MirrorsEdgeTweaks.Services
             catch (Exception ex)
             {
                 beforeShowingDialog?.Invoke();
-                await _dialogService.ShowMessageAsync(
-                    "UI Fix Removal Failed",
-                    $"The dynamic UI fix could not be fully removed:\n\n{ex.Message}",
-                    DialogMessageType.Error);
+                await _dialogService.ShowErrorAsync("The dynamic UI fix could not be fully removed.", ex, "UI Fix Removal Failed");
             }
         }
 
