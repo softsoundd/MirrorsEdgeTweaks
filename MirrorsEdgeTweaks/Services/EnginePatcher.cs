@@ -142,9 +142,9 @@ namespace MirrorsEdgeTweaks.Services
 
         public static EnginePatchState DetectState(string enginePath)
         {
-            byte[] data = File.ReadAllBytes(enginePath);
-            using var pkg = UePackageLocator.Load(enginePath);
-            return DetectState(data, pkg);
+            byte[] data = GameFileReadScope.ReadAllBytes(enginePath);
+            using var lease = GameFileReadScope.OpenPackage(enginePath);
+            return DetectState(data, lease.Package);
         }
 
         internal static EnginePatchState DetectState(byte[] data, UnrealPackage pkg) =>

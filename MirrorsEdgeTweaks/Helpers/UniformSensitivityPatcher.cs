@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -80,11 +81,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                using var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read);
-                package?.InitializePackage();
-
-                if (package == null)
-                    return null;
+                using var lease = GameFileReadScope.OpenPackage(tdGamePackagePath);
+                var package = lease.Package;
 
                 var tdPlayerController = package.FindObject<UClass>("TdPlayerController");
                 if (tdPlayerController == null)
@@ -100,7 +98,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (floatOffset == -1)
                     return null;
 
-                byte[] data = File.ReadAllBytes(tdGamePackagePath);
+                byte[] data = GameFileReadScope.ReadAllBytes(tdGamePackagePath);
                 float currentValue = BitConverter.ToSingle(data, (int)floatOffset);
 
                 return Math.Abs(currentValue - EnabledValue) < 0.1f;

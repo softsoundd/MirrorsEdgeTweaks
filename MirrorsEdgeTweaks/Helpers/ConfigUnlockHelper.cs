@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
@@ -20,7 +21,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static ConfigUnlockState GetState(string exePath)
         {
-            byte[] buffer = File.ReadAllBytes(exePath);
+            byte[] buffer = GameFileReadScope.ReadAllBytes(exePath);
             if (!TryReadHashResource(buffer, out HashResourceLayout layout))
             {
                 return ConfigUnlockState.NotApplicable;

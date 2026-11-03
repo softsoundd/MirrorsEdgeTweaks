@@ -100,7 +100,6 @@ namespace MirrorsEdgeTweaks
         {
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IFileService, FileService>();
-            services.AddSingleton<IPackageService, PackageService>();
             services.AddSingleton<IDownloadService, DownloadService>();
             services.AddSingleton<IAssetUrlProvider, AssetUrlProvider>();
             services.AddSingleton<IDecompressionService, DecompressionService>();

@@ -131,10 +131,8 @@ namespace MirrorsEdgeTweaks.Services
         {
             try
             {
-                byte[] data = File.ReadAllBytes(exePath);
-                if (OoaService.HasOoaSection(data))
-                    PatchUtility.DecryptOoaInPlace(data);
-                return DetectState(data);
+                ExeImage exe = GameFileReadScope.ReadExe(exePath);
+                return DetectState(OoaService.HasOoaSection(exe.Raw) ? exe.GetDecrypted() : exe.Raw);
             }
             catch
             {

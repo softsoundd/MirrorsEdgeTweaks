@@ -1,3 +1,5 @@
+using MirrorsEdgeTweaks.Services;
+
 namespace MirrorsEdgeTweaks.ViewModels
 {
     public sealed class ApplyGate
@@ -22,6 +24,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             finally
             {
                 _gate.Release();
+                MemoryTrimmer.RequestTrim();
             }
         }
     }

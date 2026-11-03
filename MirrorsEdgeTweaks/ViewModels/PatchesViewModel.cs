@@ -604,17 +604,9 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                bool patchChanged = await Task.Run(() =>
-                {
-                    _session.Package?.Dispose();
-                    _session.TdGamePackage?.Dispose();
-                    _session.Package = null;
-                    _session.TdGamePackage = null;
-
-                    return unlock
-                        ? ConfigUnlockHelper.Unlock(exePath)
-                        : ConfigUnlockHelper.RestoreStock(exePath);
-                });
+                bool patchChanged = await Task.Run(() => unlock
+                    ? ConfigUnlockHelper.Unlock(exePath)
+                    : ConfigUnlockHelper.RestoreStock(exePath));
 
                 HideProgress();
 

@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.IO;
 
@@ -52,13 +53,14 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static SupersamplePatchState GetPatchState(string exePath)
         {
-            byte[] data = File.ReadAllBytes(exePath);
-            string? version = ExeVersionDetector.DetectVersion(data, exePath);
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            string? version = exe.Version;
             if (version == null) return SupersamplePatchState.Unknown;
 
+            byte[] data = exe.Raw;
             if (version == "ea")
             {
-                try { DecryptOoaInPlace(data); }
+                try { data = exe.GetDecrypted(); }
                 catch { return SupersamplePatchState.Unknown; }
             }
 
@@ -522,8 +524,6 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             return -1;
         }
-
-        private static void DecryptOoaInPlace(byte[] data) => PatchUtility.DecryptOoaInPlace(data);
 
         private static void WritePreservingAttributes(string path, byte[] content) => PatchUtility.WritePreservingAttributes(path, content);
     }

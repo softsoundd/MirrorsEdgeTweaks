@@ -32,9 +32,9 @@ namespace MirrorsEdgeTweaks.Services
 
         public static TdGamePatchState DetectState(string tdGamePath)
         {
-            byte[] data = File.ReadAllBytes(tdGamePath);
-            using var pkg = UePackageLocator.LoadHeader(tdGamePath);
-            return DetectStateCore(data, pkg);
+            byte[] data = GameFileReadScope.ReadAllBytes(tdGamePath);
+            using var lease = GameFileReadScope.OpenPackage(tdGamePath, headerOnly: true);
+            return DetectStateCore(data, lease.Package);
         }
 
         internal static TdGamePatchState DetectState(byte[] data, UnrealPackage pkg) => DetectStateCore(data, pkg);

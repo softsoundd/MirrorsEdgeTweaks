@@ -25,7 +25,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static CommandLineUnlockMode GetUnlockMode(string exePath)
         {
-            byte[] buffer = File.ReadAllBytes(exePath);
+            byte[] buffer = GameFileReadScope.ReadAllBytes(exePath);
             PeImageLayout image = PeImageLayout.Parse(buffer);
 
             if (TryDerivePersistentLayout(image, buffer, out _))
@@ -43,7 +43,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static bool IsUnlocked(string exePath)
         {
-            byte[] buffer = File.ReadAllBytes(exePath);
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            byte[] buffer = exe.Raw;
             PeImageLayout image = PeImageLayout.Parse(buffer);
 
             if (TryDerivePersistentLayout(image, buffer, out CommandLineUnlockLayout layout))
@@ -59,19 +60,15 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                string? dlfPath = OoaService.FindLicensePath(buffer);
-                if (dlfPath == null) return false;
+                byte[] decrypted = exe.GetDecrypted();
+                image = PeImageLayout.Parse(decrypted);
 
-                byte[] key = OoaService.DecryptDlf(File.ReadAllBytes(dlfPath));
-                OoaService.DecryptSections(buffer, key);
-                image = PeImageLayout.Parse(buffer);
-
-                if (!TryDerivePersistentLayout(image, buffer, out layout))
+                if (!TryDerivePersistentLayout(image, decrypted, out layout))
                 {
                     return false;
                 }
 
-                return buffer.AsSpan(layout.BranchOffset, BranchLength)
+                return decrypted.AsSpan(layout.BranchOffset, BranchLength)
                     .SequenceEqual(BuildUnlockedBranch(layout));
             }
             catch

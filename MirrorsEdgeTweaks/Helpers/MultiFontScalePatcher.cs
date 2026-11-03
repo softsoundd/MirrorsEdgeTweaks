@@ -93,9 +93,8 @@ namespace MirrorsEdgeTweaks.Helpers
         {
             try
             {
-                byte[] data = File.ReadAllBytes(exePath);
-                if (OoaService.HasOoaSection(data))
-                    PatchUtility.DecryptOoaInPlace(data);
+                ExeImage exe = GameFileReadScope.ReadExe(exePath);
+                byte[] data = OoaService.HasOoaSection(exe.Raw) ? exe.GetDecrypted() : exe.Raw;
                 var pe = PeImageLayout.Parse(data);
                 if (!TryFindHook(data, pe, PageIndexPrefix, PageIndexHookOffset, out int off, out _))
                     return MultiFontScaleState.Unknown;

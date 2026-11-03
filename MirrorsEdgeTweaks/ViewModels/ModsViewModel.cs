@@ -17,7 +17,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             "• Italian: \\ (backslash)";
 
         private readonly IDialogService _dialogService;
-        private readonly IPackageService _packageService;
         private readonly IFileService _fileService;
         private readonly IGameDataService _gameData;
         private readonly IDownloadService _download;
@@ -26,7 +25,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public ModsViewModel(
             IDialogService dialogService,
-            IPackageService packageService,
             IFileService fileService,
             IGameDataService gameData,
             IDownloadService download,
@@ -38,7 +36,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
-            _packageService = packageService;
             _fileService = fileService;
             _gameData = gameData;
             _download = download;
@@ -492,8 +489,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     Post(() => _gameStatus.Status = "Patching Engine.u...");
 
-                    _packageService.DisposePackage(_session.Package);
-                    _session.Package = null;
                     using (var stream = new FileStream(enginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
                     {
                         stream.Position = consoleHeightOffset;
@@ -586,8 +581,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
 
                     dispatcher.Invoke(() => _gameStatus.Status = "Patching Engine.u...");
-                    _packageService.DisposePackage(_session.Package);
-                    _session.Package = null;
                     using (var stream = new FileStream(enginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
                     {
                         stream.Position = consoleHeightOffset;

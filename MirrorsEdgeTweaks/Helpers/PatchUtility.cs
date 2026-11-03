@@ -43,6 +43,8 @@ namespace MirrorsEdgeTweaks.Helpers
         // The content goes to a temporary file that is renamed over the target, so a crash cannot leave a half-written file.
         public static void WritePreservingAttributes(string path, byte[] content)
         {
+            GameFileReadScope.Invalidate(path);
+
             FileAttributes attributes = File.GetAttributes(path);
             bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
             if (wasReadOnly)

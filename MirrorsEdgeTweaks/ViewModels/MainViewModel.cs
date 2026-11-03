@@ -13,7 +13,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IAppSettingsService _settings;
         private readonly IGameLauncher _gameLauncher;
         private readonly IDialogService _dialogService;
-        private readonly IPackageService _packageService;
         private readonly IDecompressionService _decompressionService;
         private readonly IFileService _fileService;
         private readonly IFolderPickerService _folderPicker;
@@ -65,7 +64,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             IAppSettingsService settings,
             IGameLauncher gameLauncher,
             IDialogService dialogService,
-            IPackageService packageService,
             IDecompressionService decompressionService,
             IFileService fileService,
             IFolderPickerService folderPicker,
@@ -95,7 +93,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _settings = settings;
             _gameLauncher = gameLauncher;
             _dialogService = dialogService;
-            _packageService = packageService;
             _decompressionService = decompressionService;
             _fileService = fileService;
             _folderPicker = folderPicker;
@@ -124,6 +121,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (running)
             {
                 GameStatus.Status = "Tweaks locked. Close Mirror's Edge to continue.";
+                MemoryTrimmer.RequestTrim();
             }
             else if (!string.IsNullOrEmpty(Session.Config.GameDirectoryPath))
             {
@@ -147,7 +145,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatus.IsGameRunning = _processMonitor.IsGameRunning;
             _processMonitor.Start();
 
-            if (!string.IsNullOrEmpty(Session.Config.GameDirectoryPath) && _packageService.IsValidGameDirectory(Session.Config.GameDirectoryPath))
+            if (!string.IsNullOrEmpty(Session.Config.GameDirectoryPath) && IsValidGameDirectory(Session.Config.GameDirectoryPath))
             {
                 await ProcessGameDirectoryAsync(Session.Config.GameDirectoryPath);
                 return;
@@ -196,6 +194,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             DownloadProgress.IsDownloadProgressIndeterminate = true;
             DownloadProgress.IsDownloadProgressVisible = true;
             bool loadSucceeded = false;
+            IDisposable? readScope = null;
 
             try
             {
@@ -225,6 +224,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                         "Could not check the game files for outdated patches from older versions of Tweaks.",
                         ex, "Older Tweaks Changes", DialogMessageType.Warning);
                 }
+
+                // The restore above rewrites game files, so the shared reads start after it.
+                readScope = GameFileReadScope.Begin();
 
                 // A restore hides the progress bar when its downloads finish.
                 DownloadProgress.IsDownloadProgressIndeterminate = true;
@@ -280,6 +282,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 try { await RefreshStartupStatusIndicatorsAsync(); }
                 catch { }
 
+                readScope?.Dispose();
+
                 DownloadProgress.IsDownloadProgressVisible = false;
                 DownloadProgress.IsDownloadProgressIndeterminate = false;
 
@@ -323,25 +327,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             Graphics.FpsLimitStatusForeground = Brushes.Gray;
         }
 
-        private void RefreshStartupStatusIndicators()
-        {
-            DisplayGameVersion();
-            CheckForConfigFiles();
-            _gameData.UpdateConsoleStatus();
-            Mods.RefreshTweaksScriptsStatus();
-            Mods.RefreshTweaksScriptsUIStatus();
-            Patches.RefreshUnlockedConfigs();
-            Graphics.RefreshHighResFix();
-            Graphics.RefreshFpsLimit();
-            Graphics.RefreshToneMapper();
-            Graphics.RefreshReversedDepth();
-
-            if (Session.Package != null && Session.TdGamePackage != null)
-            {
-                RefreshStatusDisplays();
-            }
-        }
-
         private async Task RefreshStartupStatusIndicatorsAsync()
         {
             await DisplayGameVersionAsync();
@@ -355,7 +340,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             Graphics.RefreshToneMapper();
             await Graphics.RefreshReversedDepthAsync();
 
-            if (Session.Package != null && Session.TdGamePackage != null)
+            if (Session.PackagesLoaded)
             {
                 await RefreshStatusDisplaysAsync();
             }
@@ -467,6 +452,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 config.TdInputIniPath = null;
             }
         }
+
+        private bool IsValidGameDirectory(string path) =>
+            _fileService.FileExists(Path.Combine(path, "TdGame", "CookedPC", "Engine.u")) &&
+            _fileService.FileExists(Path.Combine(path, "TdGame", "CookedPC", "TdGame.u"));
 
         private void RefreshUserFolderDependentFeatures()
         {
@@ -663,7 +652,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            if (_packageService.IsValidGameDirectory(selectedPath))
+            if (IsValidGameDirectory(selectedPath))
             {
                 await ProcessGameDirectoryAsync(selectedPath);
             }

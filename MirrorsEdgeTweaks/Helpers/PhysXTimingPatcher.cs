@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -81,17 +82,14 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (!File.Exists(enginePackagePath))
                     return null;
 
-                using var package = UnrealLoader.LoadPackage(enginePackagePath, FileAccess.Read);
-                package?.InitializePackage();
-
-                if (package == null)
-                    return null;
+                using var lease = GameFileReadScope.OpenPackage(enginePackagePath);
+                var package = lease.Package;
 
                 UObject? worldInfoDefault = FindDefaultObject(package, "WorldInfo");
                 if (worldInfoDefault == null)
                     return null;
 
-                byte[] data = File.ReadAllBytes(enginePackagePath);
+                byte[] data = GameFileReadScope.ReadAllBytes(enginePackagePath);
                 long timeStepValueOffset = LocateValueOffset(data, package, worldInfoDefault, "TimeStep", occurrence: 4);
                 if (timeStepValueOffset < 0)
                     return null;

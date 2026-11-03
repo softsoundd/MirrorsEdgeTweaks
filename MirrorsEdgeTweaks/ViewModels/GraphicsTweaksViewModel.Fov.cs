@@ -58,10 +58,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 await Task.Run(() =>
                 {
-                    _session.Package?.Dispose();
-                    _session.TdGamePackage?.Dispose();
-                    _session.Package = null;
-                    _session.TdGamePackage = null;
+                    _session.PackagesLoaded = false;
 
                     EnginePatcher.Reconcile(config.EnginePackagePath);
 

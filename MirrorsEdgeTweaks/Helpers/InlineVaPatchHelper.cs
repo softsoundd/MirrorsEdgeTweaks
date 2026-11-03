@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 
 namespace MirrorsEdgeTweaks.Helpers
@@ -20,13 +21,14 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static InlinePatchState GetPatchState(string exePath, string patchKey)
         {
-            byte[] data = File.ReadAllBytes(exePath);
-            string? version = ExeVersionDetector.DetectVersion(data, exePath);
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            string? version = exe.Version;
             if (version == null) return InlinePatchState.Unknown;
 
+            byte[] data = exe.Raw;
             if (version == "ea")
             {
-                try { PatchUtility.DecryptOoaInPlace(data); }
+                try { data = exe.GetDecrypted(); }
                 catch { return InlinePatchState.Unknown; }
             }
 

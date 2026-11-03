@@ -15,7 +15,7 @@ namespace MirrorsEdgeTweaks.Services
         long FindFovScaleMultiplierOffset(UFunction function);
         long FindPropertyFlagsOffset(UProperty property, UnrealPackage package, string? packagePath);
         int FindPattern(byte[] source, byte[] pattern);
-        float ReadFloatFromPackage(UnrealPackage package, long offset);
+        float ReadFloatFromFile(string path, long offset);
     }
 
     public class OffsetFinderService : IOffsetFinderService
@@ -258,21 +258,23 @@ namespace MirrorsEdgeTweaks.Services
         public int FindPattern(byte[] source, byte[] pattern)
             => Helpers.PatternHelper.FindPattern(source, pattern);
 
-        public float ReadFloatFromPackage(UnrealPackage package, long offset)
+        // Returns 0 when the file cannot be read at the offset.
+        public float ReadFloatFromFile(string path, long offset)
         {
-            if (package?.Stream == null || offset < 0) return 0f;
+            if (offset < 0) return 0f;
 
-            package.Stream.Position = offset;
-            byte[] buffer = new byte[4];
-            int totalRead = 0;
-            while (totalRead < buffer.Length)
+            try
             {
-                int bytesRead = package.Stream.Read(buffer, totalRead, buffer.Length - totalRead);
-                if (bytesRead == 0) return 0f;
-                totalRead += bytesRead;
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                stream.Position = offset;
+                Span<byte> buffer = stackalloc byte[sizeof(float)];
+                stream.ReadExactly(buffer);
+                return BitConverter.ToSingle(buffer);
             }
-
-            return BitConverter.ToSingle(buffer, 0);
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return 0f;
+            }
         }
     }
 }

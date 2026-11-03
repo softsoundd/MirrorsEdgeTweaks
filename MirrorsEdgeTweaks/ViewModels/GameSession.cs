@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using MirrorsEdgeTweaks.Models;
-using UELib;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -9,8 +8,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         public GameConfiguration Config { get; } = new GameConfiguration();
         public PackageOffsets Offsets { get; } = new PackageOffsets();
 
-        public UnrealPackage? Package { get; set; }
-        public UnrealPackage? TdGamePackage { get; set; }
+        // Is true once Offsets were found in a load of Engine.u and TdGame.u.
+        // Flows that splice or replace either file clear this, because they move what Offsets point at.
+        public bool PackagesLoaded { get; set; }
 
         // Is true while a game directory is processed at startup or after selection.
         // Status refreshes are skipped meanwhile to avoid flicker, and a single refresh runs afterwards.

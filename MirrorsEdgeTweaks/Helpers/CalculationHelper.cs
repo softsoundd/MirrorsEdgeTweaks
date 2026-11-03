@@ -122,13 +122,8 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                using var package = UELib.UnrealLoader.LoadPackage(packagePath, System.IO.FileAccess.Read);
-                package?.InitializePackage();
-
-                if (package == null)
-                {
-                    return "Unknown";
-                }
+                using var lease = GameFileReadScope.OpenPackage(packagePath);
+                var package = lease.Package;
 
                 string packageGuid = package.Summary.Guid.ToString();
                 bool hasTimeAttackClock = CheckForTimeAttackClock(package);

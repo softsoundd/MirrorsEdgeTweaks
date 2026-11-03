@@ -197,33 +197,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        public void RefreshHighResFix()
-        {
-            var res = SelectedResolution;
-            if (res != null)
-            {
-                bool isCurrentlyActive = false;
-                var gameDir = _session.Config.GameDirectoryPath;
-                if (!string.IsNullOrEmpty(gameDir))
-                {
-                    try
-                    {
-                        isCurrentlyActive = _uiScaling.IsUIScalingActive(gameDir);
-                    }
-                    catch
-                    {
-                        isCurrentlyActive = false;
-                    }
-                }
-
-                UpdateHighResFixStatus(res.Width, isCurrentlyActive);
-                return;
-            }
-
-            HighResFixStatus = "High-Res Fix N/A";
-            HighResFixStatusForeground = Brushes.Gray;
-        }
-
         public async Task RefreshHighResFixAsync()
         {
             var res = SelectedResolution;

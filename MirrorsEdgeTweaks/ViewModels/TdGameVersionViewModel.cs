@@ -14,7 +14,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IFileService _fileService;
         private readonly IAssetUrlProvider _assetUrls;
         private readonly IGameDataService _gameData;
-        private readonly IPackageService _packageService;
         private readonly ITweakSnapshotService _snapshots;
 
         private bool _isUpdatingComboBoxProgrammatically;
@@ -30,7 +29,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             IFileService fileService,
             IAssetUrlProvider assetUrls,
             IGameDataService gameData,
-            IPackageService packageService,
             ITweakSnapshotService snapshots,
             GameSession session,
             GameStatusViewModel gameStatus,
@@ -43,7 +41,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _fileService = fileService;
             _assetUrls = assetUrls;
             _gameData = gameData;
-            _packageService = packageService;
             _snapshots = snapshots;
         }
 
@@ -101,10 +98,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            _packageService.DisposePackage(_session.Package);
-            _packageService.DisposePackage(_session.TdGamePackage);
-            _session.Package = null;
-            _session.TdGamePackage = null;
+            _session.PackagesLoaded = false;
 
             _gameStatus.IsGameTweaksEnabled = false;
 
@@ -217,7 +211,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         DetectVersion();
                     }
 
-                    if (installSucceeded && _session.Package != null && _session.TdGamePackage != null)
+                    if (installSucceeded && _session.PackagesLoaded)
                     {
                         _gameStatus.Status = "Ready.";
                     }

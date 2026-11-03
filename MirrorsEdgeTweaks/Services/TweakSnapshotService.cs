@@ -19,7 +19,6 @@ namespace MirrorsEdgeTweaks.Services
 
         private readonly GameSession _session;
         private readonly IGameDataService _gameData;
-        private readonly IPackageService _packageService;
         private readonly IDecompressionService _decompressionService;
         private readonly IUIScalingService _uiScaling;
         private readonly GraphicsTweaksViewModel _graphics;
@@ -27,14 +26,12 @@ namespace MirrorsEdgeTweaks.Services
         public TweakSnapshotService(
             GameSession session,
             IGameDataService gameData,
-            IPackageService packageService,
             IDecompressionService decompressionService,
             IUIScalingService uiScaling,
             GraphicsTweaksViewModel graphics)
         {
             _session = session;
             _gameData = gameData;
-            _packageService = packageService;
             _decompressionService = decompressionService;
             _uiScaling = uiScaling;
             _graphics = graphics;
@@ -48,6 +45,8 @@ namespace MirrorsEdgeTweaks.Services
             string? gameDir = config.GameDirectoryPath;
             if (string.IsNullOrEmpty(gameDir))
                 return new TweakSnapshot();
+
+            using var readScope = GameFileReadScope.Begin();
 
             string cookedPc = Path.Combine(gameDir, "TdGame", "CookedPC");
             string enginePath = Path.Combine(cookedPc, "Engine.u");
@@ -92,7 +91,7 @@ namespace MirrorsEdgeTweaks.Services
             return snapshot;
         }
 
-        // Disposes the loaded packages, so the caller must reload them afterwards.
+        // Leaves the packages marked as unloaded, so the caller must reload them afterwards.
         public async Task<TweakReapplyResult> ReapplyAsync(TweakSnapshot snapshot, TweakScope scope)
         {
             var result = new TweakReapplyResult();
@@ -105,7 +104,7 @@ namespace MirrorsEdgeTweaks.Services
             string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
 
             using var backupOperation = PatchUtility.BeginBackupOperation();
-            DisposePackages();
+            _session.PackagesLoaded = false;
 
             // The full prompt patch also swaps the controller image paths in TdGame.u.
             bool fullPrompts = scope.HasFlag(TweakScope.Localisation) && snapshot.GamepadButtonType == "ps3";
@@ -170,7 +169,7 @@ namespace MirrorsEdgeTweaks.Services
             {
                 await Task.Run(() => _gameData.LoadPackages(notify: false));
                 PackageOffsets offsets = _session.Offsets;
-                DisposePackages();
+                _session.PackagesLoaded = false;
 
                 if (snapshot.Fov is { } fov)
                     await Step(result, "FOV patches", () => EngineFovWriter.Write(enginePath, offsets, fov));
@@ -187,14 +186,6 @@ namespace MirrorsEdgeTweaks.Services
                 backupOperation.Complete();
 
             return result;
-        }
-
-        private void DisposePackages()
-        {
-            _packageService.DisposePackage(_session.Package);
-            _packageService.DisposePackage(_session.TdGamePackage);
-            _session.Package = null;
-            _session.TdGamePackage = null;
         }
 
         private static async Task Step(TweakReapplyResult result, string setting, Action apply) =>
@@ -260,8 +251,8 @@ namespace MirrorsEdgeTweaks.Services
 
         private static float? ReadCameraFov(string enginePath)
         {
-            using var pkg = UePackageLocator.Load(enginePath);
-            return UePackageLocator.ReadFloatDefault(pkg, "Camera", "DefaultFOV");
+            using var lease = GameFileReadScope.OpenPackage(enginePath);
+            return UePackageLocator.ReadFloatDefault(lease.Package, "Camera", "DefaultFOV");
         }
 
         private static bool NeedsSupersampling(GameConfiguration config, string exePath) =>

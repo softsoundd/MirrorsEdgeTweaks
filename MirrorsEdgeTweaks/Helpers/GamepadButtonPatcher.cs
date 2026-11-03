@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -115,11 +116,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (!File.Exists(tdGamePackagePath))
                     return null;
 
-                using var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read);
-                package?.InitializePackage();
-
-                if (package == null)
-                    return null;
+                using var lease = GameFileReadScope.OpenPackage(tdGamePackagePath);
+                var package = lease.Package;
 
                 var controlsSettingsClass = package.FindObject<UClass>("TdUIScene_ControlsSettings");
                 if (controlsSettingsClass == null)

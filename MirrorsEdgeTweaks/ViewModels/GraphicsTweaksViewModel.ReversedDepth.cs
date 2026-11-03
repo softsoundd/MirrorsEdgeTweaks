@@ -156,13 +156,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             await _dialogService.ShowMessageAsync("Reversed Depth", "DXVK removed.", DialogMessageType.Success);
         }
 
-        public void RefreshReversedDepth()
-        {
-            string? exePath = GetGameExePath();
-            ReversedDepthState state = exePath == null ? ReversedDepthState.Unknown : ReversedDepthPatcher.GetState(exePath);
-            SetSilently(() => ReversedDepthIndex = ToIndex(state));
-        }
-
         public async Task RefreshReversedDepthAsync()
         {
             string? exePath = GetGameExePath();

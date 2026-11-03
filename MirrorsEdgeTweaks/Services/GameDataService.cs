@@ -22,7 +22,6 @@ namespace MirrorsEdgeTweaks.Services
     // It raises PackagesReloaded instead of refreshing the feature view models, so it does not depend on them.
     public class GameDataService : IGameDataService
     {
-        private readonly IPackageService _packageService;
         private readonly IOffsetFinderService _offsetFinder;
         private readonly IFileService _fileService;
         private readonly IDialogService _dialogService;
@@ -33,7 +32,6 @@ namespace MirrorsEdgeTweaks.Services
         public event Action? PackagesReloaded;
 
         public GameDataService(
-            IPackageService packageService,
             IOffsetFinderService offsetFinder,
             IFileService fileService,
             IDialogService dialogService,
@@ -41,7 +39,6 @@ namespace MirrorsEdgeTweaks.Services
             GameStatusViewModel gameStatus,
             ConsoleViewModel console)
         {
-            _packageService = packageService;
             _offsetFinder = offsetFinder;
             _fileService = fileService;
             _dialogService = dialogService;
@@ -63,16 +60,18 @@ namespace MirrorsEdgeTweaks.Services
             await Task.Run(() => LoadPackages(notify));
         }
 
+        // The PackagesReloaded handlers run inside this method's read scope, so their status checks reuse these loads.
         public void LoadPackages(bool notify = true)
         {
             var config = _session.Config;
             if (string.IsNullOrEmpty(config.GameDirectoryPath)) return;
 
+            using var readScope = GameFileReadScope.Begin();
+            _session.PackagesLoaded = false;
+            PackageLease? engineLease = null;
+            PackageLease? tdGameLease = null;
             try
             {
-                _packageService.DisposePackage(_session.Package);
-                _packageService.DisposePackage(_session.TdGamePackage);
-
                 Dispatch(() =>
                 {
                     _gameStatus.IsGameTweaksEnabled = false;
@@ -82,10 +81,10 @@ namespace MirrorsEdgeTweaks.Services
                 config.EnginePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "Engine.u");
                 config.TdGamePackagePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "TdGame.u");
 
-                _session.Package = _packageService.LoadPackage(config.EnginePackagePath);
-                _session.TdGamePackage = _packageService.LoadPackage(config.TdGamePackagePath);
+                engineLease = TryOpenPackage(config.EnginePackagePath);
+                tdGameLease = TryOpenPackage(config.TdGamePackagePath);
 
-                if (_session.Package == null || _session.TdGamePackage == null)
+                if (engineLease == null || tdGameLease == null)
                 {
                     Dispatch(() =>
                     {
@@ -95,7 +94,8 @@ namespace MirrorsEdgeTweaks.Services
                     return;
                 }
 
-                SetupEditors();
+                _session.PackagesLoaded = true;
+                SetupEditors(engineLease.Package, tdGameLease.Package);
                 if (notify)
                     PackagesReloaded?.Invoke();
             }
@@ -106,29 +106,40 @@ namespace MirrorsEdgeTweaks.Services
                     _dialogService.ShowError("Could not load the game data.", ex);
                     _gameStatus.Status = "Error loading packages.";
                 });
-                _session.Package = null;
-                _session.TdGamePackage = null;
+                _session.PackagesLoaded = false;
+            }
+            finally
+            {
+                engineLease?.Dispose();
+                tdGameLease?.Dispose();
             }
         }
 
-        private void SetupEditors()
+        private static PackageLease? TryOpenPackage(string path)
         {
-            if (_session.Package == null || _session.TdGamePackage == null) return;
+            try
+            {
+                return GameFileReadScope.OpenPackage(path);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
-            bool fovSuccess = SetupFovEditor();
-            bool arSuccess = SetupAspectRatioEditor();
-            bool consoleSuccess = SetupConsoleEditor();
+        private void SetupEditors(UnrealPackage enginePackage, UnrealPackage tdGamePackage)
+        {
+            bool fovSuccess = SetupFovEditor(enginePackage, tdGamePackage);
+            bool arSuccess = SetupAspectRatioEditor(enginePackage);
+            bool consoleSuccess = SetupConsoleEditor(enginePackage);
 
             Dispatch(() => _gameStatus.IsGameTweaksEnabled = fovSuccess || arSuccess || consoleSuccess);
         }
 
-        private bool SetupFovEditor()
+        private bool SetupFovEditor(UnrealPackage package, UnrealPackage tdGamePackage)
         {
-            var package = _session.Package;
-            var tdGamePackage = _session.TdGamePackage;
             var offsets = _session.Offsets;
             var config = _session.Config;
-            if (package == null || tdGamePackage == null) return false;
 
             offsets.PlayerControllerDefaultFovOffset = -1;
             offsets.PlayerControllerDesiredFovOffset = -1;
@@ -254,11 +265,9 @@ namespace MirrorsEdgeTweaks.Services
                 offsets.FovScaleMultiplierOffset != -1;
         }
 
-        private bool SetupAspectRatioEditor()
+        private bool SetupAspectRatioEditor(UnrealPackage package)
         {
-            var package = _session.Package;
             var offsets = _session.Offsets;
-            if (package == null) return false;
 
             offsets.AspectRatioOffset = -1;
 
@@ -278,11 +287,9 @@ namespace MirrorsEdgeTweaks.Services
             return false;
         }
 
-        private bool SetupConsoleEditor()
+        private bool SetupConsoleEditor(UnrealPackage package)
         {
-            var package = _session.Package;
             var offsets = _session.Offsets;
-            if (package == null) return false;
 
             offsets.ConsoleHeightOffset = -1;
             Dispatch(() =>
@@ -324,18 +331,17 @@ namespace MirrorsEdgeTweaks.Services
                 return;
             }
 
-            var package = _session.Package;
             var offsets = _session.Offsets;
             var config = _session.Config;
-            if (package == null || string.IsNullOrEmpty(config.GameDirectoryPath)) return;
+            if (!_session.PackagesLoaded || string.IsNullOrEmpty(config.GameDirectoryPath)) return;
 
             string consoleFilePath = Path.Combine(config.GameDirectoryPath, "TdGame", "CookedPC", "MirrorsEdgeConsole.u");
             bool fileExists = _fileService.FileExists(consoleFilePath);
 
             bool heightModified = false;
-            if (offsets.ConsoleHeightOffset != -1)
+            if (offsets.ConsoleHeightOffset != -1 && config.EnginePackagePath != null)
             {
-                float currentHeightMultiplier = _offsetFinder.ReadFloatFromPackage(package, offsets.ConsoleHeightOffset);
+                float currentHeightMultiplier = _offsetFinder.ReadFloatFromFile(config.EnginePackagePath, offsets.ConsoleHeightOffset);
 
                 if (Math.Abs(currentHeightMultiplier - 0.4f) < 0.001f)
                 {

@@ -46,13 +46,14 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static LoggingPatchState GetPatchState(string exePath)
         {
-            byte[] data = File.ReadAllBytes(exePath);
-            string? version = ExeVersionDetector.DetectVersion(data, exePath);
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            string? version = exe.Version;
             if (version == null) return LoggingPatchState.Unknown;
 
+            byte[] data = exe.Raw;
             if (version == "ea")
             {
-                try { DecryptOoaInPlace(data); }
+                try { data = exe.GetDecrypted(); }
                 catch { return LoggingPatchState.Unknown; }
             }
 
@@ -1257,8 +1258,6 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private static void WriteU32(byte[] data, uint va, uint value)
             => BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan((int)(va - ImageBase), 4), value);
-
-        private static void DecryptOoaInPlace(byte[] data) => PatchUtility.DecryptOoaInPlace(data);
 
         private static void WritePreservingAttributes(string path, byte[] content) => PatchUtility.WritePreservingAttributes(path, content);
     }

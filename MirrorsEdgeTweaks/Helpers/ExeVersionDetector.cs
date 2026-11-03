@@ -59,8 +59,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
             try
             {
-                byte[] data = File.ReadAllBytes(exePath);
-                return DetectVersion(data, exePath) == "steam";
+                return GameFileReadScope.ReadExe(exePath).Version == "steam";
             }
             catch
             {
