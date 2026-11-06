@@ -62,9 +62,15 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                     UpdateHighResFixStatus(selectedResolution.Width, userWantsUIScaling);
 
-                    await Task.Run(ApplyDynamicPatchesForResolution);
-
-                    RefreshEnginePatchState();
+                    if (await Task.Run(ApplyDynamicPatchesForResolution))
+                    {
+                        _enginePatchesApplied = true;
+                        RefreshScalingStatus();
+                    }
+                    else
+                    {
+                        await RefreshEnginePatchStateAsync();
+                    }
                 }
                 finally
                 {
@@ -74,7 +80,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             });
         }
 
-        private void ApplyDynamicPatchesForResolution()
+        // Returns whether Engine.u was reconciled, which leaves it fully patched.
+        private bool ApplyDynamicPatchesForResolution()
         {
             try
             {
@@ -88,11 +95,15 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch { }
 
+            bool engineReconciled = false;
             try
             {
                 var enginePath = _session.Config.EnginePackagePath;
                 if (enginePath != null && File.Exists(enginePath))
+                {
                     EnginePatcher.Reconcile(enginePath);
+                    engineReconciled = true;
+                }
             }
             catch { }
 
@@ -114,6 +125,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 }
             }
             catch { }
+
+            return engineReconciled;
         }
 
         public void UpdateHighResFixStatus(int width, bool isActive)

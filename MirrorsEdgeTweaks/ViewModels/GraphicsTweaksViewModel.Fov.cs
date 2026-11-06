@@ -76,14 +76,11 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 });
 
-                // This reload only finds the FOV offsets again for EngineFovWriter.
-                // The reload in the finally block refreshes the view models.
-                await _gameData.ReloadPackagesAsync(notify: false);
-
+                string enginePath = config.EnginePackagePath;
                 await Task.Run(() =>
                 {
-                    if (config.EnginePackagePath != null)
-                        EngineFovWriter.Write(config.EnginePackagePath, _session.Offsets, newFov);
+                    _gameData.FindEngineOffsets(enginePath);
+                    EngineFovWriter.Write(enginePath, _session.Offsets, newFov);
                 });
 
                 _session.Config.Fov = NewFovValue;

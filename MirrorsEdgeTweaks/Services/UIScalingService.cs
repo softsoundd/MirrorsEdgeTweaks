@@ -51,7 +51,7 @@ namespace MirrorsEdgeTweaks.Services
                 // The betas' blobs override this fix, and only a restore removes them.
                 foreach (string package in new[] { enginePath, tdGamePath })
                 {
-                    if (File.Exists(package) && LegacyChangeDetector.ContainsBetaHighResCommand(File.ReadAllBytes(package)))
+                    if (File.Exists(package) && LegacyChangeDetector.ContainsBetaHighResCommand(package))
                         throw LegacyChangeDetector.PackageRestoreRequired(Path.GetFileName(package));
                 }
 

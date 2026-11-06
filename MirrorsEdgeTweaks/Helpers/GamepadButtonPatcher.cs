@@ -10,7 +10,7 @@ namespace MirrorsEdgeTweaks.Helpers
     public static class GamepadButtonPatcher
     {
         // The Ts_LOC_*.upk packages must already be decompressed.
-        // Every locale package is patched in memory before any is written, so a failure cannot leave a mix of patched and unpatched locales.
+        // Every locale package is read and checked before any is written, so a failure cannot leave a mix of patched and unpatched locales.
         public static void ApplyButtonPatches(string cookedPcPath, string buttonType)
         {
             string[] tsLocFiles = Directory.GetFiles(cookedPcPath, "Ts_LOC_*.upk");
@@ -30,7 +30,7 @@ namespace MirrorsEdgeTweaks.Helpers
             // TODO: Use UELib instead of hardcoded byte patterns.
             byte[] gamepadPatternHeader = new byte[] { 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0E, 0x00, 0x00, 0x00, 0x02, 0x04, 0x00, 0x00, 0x00 };
 
-            var pendingWrites = new List<(string Path, byte[] Data)>();
+            var pendingWrites = new List<(string Path, int Offset, byte[] Bytes)>();
 
             using var backupOperation = PatchUtility.BeginBackupOperation();
 
@@ -86,15 +86,12 @@ namespace MirrorsEdgeTweaks.Helpers
                     continue;
                 }
 
-                byte[] modifiedData = (byte[])data.Clone();
-                Array.Copy(replacement, 0, modifiedData, replaceIndex, replacement.Length);
-
-                pendingWrites.Add((tsLocFilePath, modifiedData));
+                pendingWrites.Add((tsLocFilePath, replaceIndex, replacement));
             }
 
-            foreach (var (path, modified) in pendingWrites)
+            foreach (var (path, offset, bytes) in pendingWrites)
             {
-                PatchUtility.WritePreservingAttributes(path, modified);
+                PatchUtility.PatchPreservingAttributes(path, [(offset, bytes)]);
             }
 
             ApplyControllerImagePathSwap(tdGamePackagePath, buttonType);
@@ -160,158 +157,121 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static void ApplyControllerImagePathSwap(string tdGamePackagePath, string buttonType)
         {
-            FileAttributes attributes = File.GetAttributes(tdGamePackagePath);
-            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
+            long searchStart;
+            long searchEnd;
+            byte[] pcNameIndexBytes;
+            byte[] ps3NameIndexBytes;
 
-            if (wasReadOnly)
+            // The package reader must be disposed before the file is rewritten,
+            // because Windows refuses to replace a file while another handle is open on it.
+            using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
             {
-                File.SetAttributes(tdGamePackagePath, attributes & ~FileAttributes.ReadOnly);
+                package?.InitializePackage();
+
+                if (package == null)
+                    throw new Exception("Failed to load TdGame.u package.");
+
+                var controlsSettingsClass = package.FindObject<UClass>("TdUIScene_ControlsSettings");
+
+                if (controlsSettingsClass == null)
+                {
+                    throw new Exception("TdUIScene_ControlsSettings class not found in TdGame.u");
+                }
+
+                string defaultObjectName = $"Default__{controlsSettingsClass.Name}";
+
+                var defaultObject = package.Objects
+                    .FirstOrDefault(o => o.Name == defaultObjectName);
+
+                if (defaultObject == null || !(defaultObject is UObject uObject))
+                {
+                    throw new Exception($"Default object not found for class {controlsSettingsClass.Name}");
+                }
+
+                uObject.Load<UObjectRecordStream>();
+
+                if (uObject.Properties == null)
+                {
+                    throw new Exception("Failed to load properties for Default__TdUIScene_ControlsSettings");
+                }
+
+                var pcControllerImagePathProp = uObject.Properties
+                    .OfType<UDefaultProperty>()
+                    .FirstOrDefault(p => p.Name?.ToString() == "PCControllerImagePath");
+
+                var ps3ControllerImagePathProp = uObject.Properties
+                    .OfType<UDefaultProperty>()
+                    .FirstOrDefault(p => p.Name?.ToString() == "PS3ControllerImagePath");
+
+                if (pcControllerImagePathProp == null || ps3ControllerImagePathProp == null)
+                {
+                    throw new Exception("Required controller image path properties not found");
+                }
+
+                string currentPcPath = pcControllerImagePathProp.Value.Trim('"');
+
+                bool shouldSwap = (buttonType == "ps3" && currentPcPath.Contains("Xbox", StringComparison.OrdinalIgnoreCase)) ||
+                                  (buttonType == "xbox" && currentPcPath.Contains("PS3", StringComparison.OrdinalIgnoreCase));
+
+                if (!shouldSwap)
+                {
+                    return;
+                }
+
+                int pcNameIndex = package.Names.FindIndex(n => n.ToString() == "PCControllerImagePath");
+                int ps3NameIndex = package.Names.FindIndex(n => n.ToString() == "PS3ControllerImagePath");
+
+                if (pcNameIndex == -1 || ps3NameIndex == -1)
+                {
+                    throw new Exception("Could not find property name indices");
+                }
+
+                var exportTable = uObject.ExportTable;
+                if (exportTable == null)
+                {
+                    throw new Exception("Export table not found for Default__TdUIScene_ControlsSettings");
+                }
+
+                searchStart = exportTable.SerialOffset;
+                searchEnd = exportTable.SerialOffset + exportTable.SerialSize;
+
+                pcNameIndexBytes = BitConverter.GetBytes((long)pcNameIndex);
+                ps3NameIndexBytes = BitConverter.GetBytes((long)ps3NameIndex);
             }
 
-            try
+            byte[] export = UePackageLocator.ReadRange(tdGamePackagePath, searchStart, (int)(searchEnd - searchStart));
+
+            int pcPropertyOffset = -1;
+            int ps3PropertyOffset = -1;
+
+            for (int i = 0; i < export.Length - 8; i++)
             {
-                long searchStart;
-                long searchEnd;
-                byte[] pcNameIndexBytes;
-                byte[] ps3NameIndexBytes;
-
-                // The package reader must be disposed before the file is rewritten,
-                // because Windows refuses to replace a file while another handle is open on it.
-                using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
+                if (pcPropertyOffset == -1 && export.AsSpan(i, 8).SequenceEqual(pcNameIndexBytes))
                 {
-                    package?.InitializePackage();
-
-                    if (package == null)
-                        throw new Exception("Failed to load TdGame.u package.");
-
-                    var controlsSettingsClass = package.FindObject<UClass>("TdUIScene_ControlsSettings");
-
-                    if (controlsSettingsClass == null)
-                    {
-                        throw new Exception("TdUIScene_ControlsSettings class not found in TdGame.u");
-                    }
-
-                    string defaultObjectName = $"Default__{controlsSettingsClass.Name}";
-
-                    var defaultObject = package.Objects
-                        .FirstOrDefault(o => o.Name == defaultObjectName);
-
-                    if (defaultObject == null || !(defaultObject is UObject uObject))
-                    {
-                        throw new Exception($"Default object not found for class {controlsSettingsClass.Name}");
-                    }
-
-                    uObject.Load<UObjectRecordStream>();
-
-                    if (uObject.Properties == null)
-                    {
-                        throw new Exception("Failed to load properties for Default__TdUIScene_ControlsSettings");
-                    }
-
-                    var pcControllerImagePathProp = uObject.Properties
-                        .OfType<UDefaultProperty>()
-                        .FirstOrDefault(p => p.Name?.ToString() == "PCControllerImagePath");
-
-                    var ps3ControllerImagePathProp = uObject.Properties
-                        .OfType<UDefaultProperty>()
-                        .FirstOrDefault(p => p.Name?.ToString() == "PS3ControllerImagePath");
-
-                    if (pcControllerImagePathProp == null || ps3ControllerImagePathProp == null)
-                    {
-                        throw new Exception("Required controller image path properties not found");
-                    }
-
-                    string currentPcPath = pcControllerImagePathProp.Value.Trim('"');
-
-                    bool shouldSwap = (buttonType == "ps3" && currentPcPath.Contains("Xbox", StringComparison.OrdinalIgnoreCase)) ||
-                                      (buttonType == "xbox" && currentPcPath.Contains("PS3", StringComparison.OrdinalIgnoreCase));
-
-                    if (!shouldSwap)
-                    {
-                        return;
-                    }
-
-                    int pcNameIndex = package.Names.FindIndex(n => n.ToString() == "PCControllerImagePath");
-                    int ps3NameIndex = package.Names.FindIndex(n => n.ToString() == "PS3ControllerImagePath");
-
-                    if (pcNameIndex == -1 || ps3NameIndex == -1)
-                    {
-                        throw new Exception("Could not find property name indices");
-                    }
-
-                    var exportTable = uObject.ExportTable;
-                    if (exportTable == null)
-                    {
-                        throw new Exception("Export table not found for Default__TdUIScene_ControlsSettings");
-                    }
-
-                    searchStart = exportTable.SerialOffset;
-                    searchEnd = exportTable.SerialOffset + exportTable.SerialSize;
-
-                    pcNameIndexBytes = BitConverter.GetBytes((long)pcNameIndex);
-                    ps3NameIndexBytes = BitConverter.GetBytes((long)ps3NameIndex);
+                    pcPropertyOffset = i;
                 }
 
-                byte[] data = File.ReadAllBytes(tdGamePackagePath);
-
-                long pcPropertyOffset = -1;
-                long ps3PropertyOffset = -1;
-
-                for (long i = searchStart; i < searchEnd - 8; i++)
+                if (ps3PropertyOffset == -1 && export.AsSpan(i, 8).SequenceEqual(ps3NameIndexBytes))
                 {
-                    bool matchesPc = true;
-                    for (int j = 0; j < 8; j++)
-                    {
-                        if (data[i + j] != pcNameIndexBytes[j])
-                        {
-                            matchesPc = false;
-                            break;
-                        }
-                    }
-
-                    if (matchesPc && pcPropertyOffset == -1)
-                    {
-                        pcPropertyOffset = i;
-                    }
-
-                    bool matchesPs3 = true;
-                    for (int j = 0; j < 8; j++)
-                    {
-                        if (data[i + j] != ps3NameIndexBytes[j])
-                        {
-                            matchesPs3 = false;
-                            break;
-                        }
-                    }
-
-                    if (matchesPs3 && ps3PropertyOffset == -1)
-                    {
-                        ps3PropertyOffset = i;
-                    }
-
-                    if (pcPropertyOffset != -1 && ps3PropertyOffset != -1)
-                    {
-                        break;
-                    }
+                    ps3PropertyOffset = i;
                 }
 
-                if (pcPropertyOffset == -1 || ps3PropertyOffset == -1)
+                if (pcPropertyOffset != -1 && ps3PropertyOffset != -1)
                 {
-                    throw new Exception("Could not find property name index offsets");
-                }
-
-                Array.Copy(ps3NameIndexBytes, 0, data, pcPropertyOffset, 8);
-                Array.Copy(pcNameIndexBytes, 0, data, ps3PropertyOffset, 8);
-
-                PatchUtility.WritePreservingAttributes(tdGamePackagePath, data);
-            }
-            finally
-            {
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(tdGamePackagePath, File.GetAttributes(tdGamePackagePath) | FileAttributes.ReadOnly);
+                    break;
                 }
             }
+
+            if (pcPropertyOffset == -1 || ps3PropertyOffset == -1)
+            {
+                throw new Exception("Could not find property name index offsets");
+            }
+
+            PatchUtility.PatchPreservingAttributes(tdGamePackagePath,
+            [
+                (searchStart + pcPropertyOffset, ps3NameIndexBytes),
+                (searchStart + ps3PropertyOffset, pcNameIndexBytes),
+            ]);
         }
 
         private static byte[]? GetGamepadReplacement(string countryCode, string buttonType)

@@ -1,4 +1,5 @@
 using MirrorsEdgeTweaks.Helpers;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -84,6 +85,66 @@ namespace MirrorsEdgeTweaks.Tests
         public void FindUnique_ThrowsWhenAmbiguous()
         {
             Assert.Throws<InvalidOperationException>(() => PatternHelper.FindUnique(Data, new byte[] { 0xAA, 0xBB }));
+        }
+
+        [Theory]
+        [InlineData(20, 0)]
+        [InlineData(20, 5)]
+        [InlineData(20, 6)]
+        [InlineData(20, 7)]
+        [InlineData(20, 16)]
+        [InlineData(16, 12)]
+        public void FileContainsAny_FindsAMatch_WhereverItSitsAgainstTheChunks(int length, int position)
+        {
+            using var temp = new TempDirectory();
+            byte[] pattern = { 0xAA, 0xBB, 0xCC, 0xDD };
+            byte[] content = new byte[length];
+            pattern.CopyTo(content, position);
+
+            Assert.True(PatternHelper.FileContainsAny(CreateFile(temp, content), [pattern], chunkSize: 8));
+        }
+
+        [Fact]
+        public void FileContainsAny_FindsTheSecondPattern()
+        {
+            using var temp = new TempDirectory();
+            byte[] content = new byte[20];
+            content[9] = 0xEE;
+
+            Assert.True(PatternHelper.FileContainsAny(CreateFile(temp, content), [[0xAA, 0xBB], [0x00, 0xEE, 0x00]], chunkSize: 8));
+        }
+
+        [Fact]
+        public void FileContainsAny_ReturnsFalse_WhenNoPatternOccurs()
+        {
+            using var temp = new TempDirectory();
+
+            Assert.False(PatternHelper.FileContainsAny(CreateFile(temp, new byte[20]), [[0xAA, 0xBB], [0xCC]], chunkSize: 8));
+        }
+
+        [Fact]
+        public void FileContainsAny_ReturnsFalse_WhenEveryPatternIsEmpty()
+        {
+            using var temp = new TempDirectory();
+            string path = CreateFile(temp, new byte[20]);
+
+            Assert.False(PatternHelper.FileContainsAny(path, [[]], chunkSize: 8));
+            Assert.False(PatternHelper.FileContainsAny(path, [], chunkSize: 8));
+        }
+
+        [Fact]
+        public void FileContainsAny_ReturnsFalse_ForAnEmptyFile()
+        {
+            using var temp = new TempDirectory();
+
+            Assert.False(PatternHelper.FileContainsAny(CreateFile(temp, []), [[0xAA]], chunkSize: 8));
+        }
+
+        private static string CreateFile(TempDirectory temp, byte[] content)
+        {
+            string path = Path.Combine(temp.Path, "TdGame.u");
+            File.WriteAllBytes(path, content);
+            return path;
         }
     }
 }

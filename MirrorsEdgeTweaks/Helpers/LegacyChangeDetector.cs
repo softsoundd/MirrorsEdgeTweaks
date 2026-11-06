@@ -329,6 +329,9 @@ namespace MirrorsEdgeTweaks.Helpers
         internal static bool ContainsBetaHighResCommand(byte[] data) =>
             BetaHighResCommands.Any(command => PatternHelper.FindPattern(data, command) != -1);
 
+        internal static bool ContainsBetaHighResCommand(string path) =>
+            PatternHelper.FileContainsAny(path, BetaHighResCommands);
+
         private static int? ReadTextureSize(UnrealPackage pkg, string textureName)
         {
             var texture = UePackageLocator.FindExportObject(pkg, textureName, "TdUIResources_InGame");

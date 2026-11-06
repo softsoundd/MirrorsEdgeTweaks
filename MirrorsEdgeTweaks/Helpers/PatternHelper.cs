@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace MirrorsEdgeTweaks.Helpers
 {
     // The other FindPattern helpers delegate here.
@@ -20,6 +22,38 @@ namespace MirrorsEdgeTweaks.Helpers
 
             int idx = data.AsSpan(start, endExclusive - start).IndexOf(pattern);
             return idx < 0 ? -1 : start + idx;
+        }
+
+        // Searches the file in chunks, so a large package never has to fit in one array.
+        // Each chunk starts with the previous chunk's last bytes, so a match across a chunk boundary is still found.
+        public static bool FileContainsAny(string path, IReadOnlyList<byte[]> patterns, int chunkSize = 64 * 1024)
+        {
+            if (!patterns.Any(pattern => pattern.Length > 0))
+                return false;
+
+            int overlap = patterns.Max(pattern => pattern.Length) - 1;
+            byte[] buffer = new byte[overlap + chunkSize];
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 0, FileOptions.SequentialScan);
+
+            int carried = 0;
+            while (true)
+            {
+                int read = stream.ReadAtLeast(buffer.AsSpan(carried, chunkSize), chunkSize, throwOnEndOfStream: false);
+                int filled = carried + read;
+                ReadOnlySpan<byte> window = buffer.AsSpan(0, filled);
+                foreach (byte[] pattern in patterns)
+                {
+                    if (pattern.Length > 0 && window.IndexOf(pattern) >= 0)
+                        return true;
+                }
+
+                if (read < chunkSize)
+                    return false;
+
+                carried = Math.Min(overlap, filled);
+                buffer.AsSpan(filled - carried, carried).CopyTo(buffer);
+            }
         }
 
         // Matches may overlap.

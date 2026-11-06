@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -44,23 +45,20 @@ namespace MirrorsEdgeTweaks.Helpers
                     if (functionExport == null)
                         throw new InvalidOperationException($"Export table entry missing for {className}.{functionName}.");
 
-                    byte[] data = File.ReadAllBytes(tdGamePath);
-
                     ulong currentFlagsValue = function.FunctionFlags;
                     uint uelibFlags = (uint)currentFlagsValue;
                     byte[] uelibFlagsBytes = BitConverter.GetBytes(uelibFlags);
 
-                    long flagsOffset = LocateFlagsOffset(data, package, functionExport, functionName, uelibFlagsBytes);
+                    long flagsOffset = LocateFlagsOffset(tdGamePath, package, functionExport, functionName, uelibFlagsBytes);
 
                     const uint UE3_EXEC_FLAG = 0x00000200;
                     uint newUelibFlags = uelibFlags | UE3_EXEC_FLAG;
                     byte[] newUelibFlagsBytes = BitConverter.GetBytes(newUelibFlags);
-                    Array.Copy(newUelibFlagsBytes, 0, data, flagsOffset, 4);
 
                     package.Dispose();
                     package = null;
 
-                    PatchUtility.WritePreservingAttributes(tdGamePath, data);
+                    PatchUtility.PatchPreservingAttributes(tdGamePath, [(flagsOffset, newUelibFlagsBytes)]);
                 }
                 finally
                 {
@@ -73,25 +71,20 @@ namespace MirrorsEdgeTweaks.Helpers
         // The current flags value is searched for within the export's serialized range.
         // When it occurs more than once, the real field is the one followed within 16 bytes by the function's FriendlyName name index.
         // Anything still ambiguous throws, because patching the wrong DWORD corrupts the package.
-        private static long LocateFlagsOffset(byte[] data, UnrealPackage package, UELib.UExportTableItem functionExport, string functionName, byte[] currentFlagsBytes)
+        private static long LocateFlagsOffset(string tdGamePath, UnrealPackage package, UELib.UExportTableItem functionExport, string functionName, byte[] currentFlagsBytes)
         {
+            long fileLength = new FileInfo(tdGamePath).Length;
             long serialStart = functionExport.SerialOffset;
-            long serialEnd = Math.Min((long)data.Length - 4, serialStart + functionExport.SerialSize);
+            long serialEnd = Math.Min(fileLength - 4, serialStart + functionExport.SerialSize);
 
-            var matches = new List<long>();
-            for (long i = serialStart; i <= serialEnd - 4; i++)
+            // The FriendlyName check reads up to 20 bytes past the export, so the window includes them.
+            long windowEnd = Math.Min(fileLength, serialStart + functionExport.SerialSize + 20);
+            byte[] window = UePackageLocator.ReadRange(tdGamePath, serialStart, (int)(windowEnd - serialStart));
+
+            var matches = new List<int>();
+            for (int i = 0; i <= serialEnd - 4 - serialStart; i++)
             {
-                bool match = true;
-                for (int j = 0; j < 4; j++)
-                {
-                    if (data[i + j] != currentFlagsBytes[j])
-                    {
-                        match = false;
-                        break;
-                    }
-                }
-
-                if (match)
+                if (window.AsSpan(i, 4).SequenceEqual(currentFlagsBytes))
                     matches.Add(i);
             }
 
@@ -99,40 +92,30 @@ namespace MirrorsEdgeTweaks.Helpers
                 throw new InvalidOperationException($"Current function flags for {functionName} not found within its export range.");
 
             if (matches.Count == 1)
-                return matches[0];
+                return serialStart + matches[0];
 
             int nameIndex = package.Names.FindIndex(n => n.ToString() == functionName);
             if (nameIndex != -1)
             {
                 byte[] friendlyNameBytes = BitConverter.GetBytes((long)nameIndex);
-                var validated = matches.Where(m => FollowedByName(data, m, friendlyNameBytes)).ToList();
+                var validated = matches.Where(m => FollowedByName(window, m, friendlyNameBytes)).ToList();
                 if (validated.Count == 1)
-                    return validated[0];
+                    return serialStart + validated[0];
             }
 
             throw new InvalidOperationException(
                 $"Ambiguous function-flags location for {functionName} ({matches.Count} candidates); refusing to patch.");
         }
 
-        private static bool FollowedByName(byte[] data, long matchOffset, byte[] friendlyNameBytes)
+        private static bool FollowedByName(byte[] window, int matchOffset, byte[] friendlyNameBytes)
         {
             for (int k = 4; k <= 16; k++)
             {
-                long p = matchOffset + k;
-                if (p + friendlyNameBytes.Length > data.Length)
+                int p = matchOffset + k;
+                if (p + friendlyNameBytes.Length > window.Length)
                     break;
 
-                bool equal = true;
-                for (int j = 0; j < friendlyNameBytes.Length; j++)
-                {
-                    if (data[p + j] != friendlyNameBytes[j])
-                    {
-                        equal = false;
-                        break;
-                    }
-                }
-
-                if (equal)
+                if (window.AsSpan(p, friendlyNameBytes.Length).SequenceEqual(friendlyNameBytes))
                     return true;
             }
 

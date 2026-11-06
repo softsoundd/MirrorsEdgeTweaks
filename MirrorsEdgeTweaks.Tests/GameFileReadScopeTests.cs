@@ -229,5 +229,21 @@ namespace MirrorsEdgeTweaks.Tests
                 Assert.Equal([7, 8, 9], GameFileReadScope.ReadAllBytes(path));
             }
         }
+
+        [Fact]
+        public void PatchPreservingAttributes_DropsTheSharedRead()
+        {
+            string path = Path.Combine(_temp.Path, "Engine.u");
+            File.WriteAllBytes(path, [1, 2, 3]);
+
+            using (GameFileReadScope.Begin())
+            {
+                Assert.Equal([1, 2, 3], GameFileReadScope.ReadAllBytes(path));
+
+                PatchUtility.PatchPreservingAttributes(path, [(1, new byte[] { 8 })]);
+
+                Assert.Equal([1, 8, 3], GameFileReadScope.ReadAllBytes(path));
+            }
+        }
     }
 }

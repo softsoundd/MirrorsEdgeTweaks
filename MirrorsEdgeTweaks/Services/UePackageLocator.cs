@@ -9,6 +9,7 @@ namespace MirrorsEdgeTweaks.Services
     internal sealed class UeFunctionInfo
     {
         public int SerialOffset;
+        public int SerialSize;
 
         // Holds the 1-based export index, which is also the export's object reference.
         public int ExportIndex;
@@ -52,6 +53,7 @@ namespace MirrorsEdgeTweaks.Services
             return new UeFunctionInfo
             {
                 SerialOffset = (int)func.ExportTable.SerialOffset,
+                SerialSize = func.ExportTable.SerialSize,
                 ExportIndex = (int)func.PackageIndex,
                 Tokens = func.ByteCodeManager.DeserializedTokens,
             };
@@ -108,6 +110,16 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         public static int ObjRef(UObject? o) => o == null ? 0 : (int)o.PackageIndex;
+
+        // Opens its own handle, so it works while a loaded package still holds the file open.
+        public static byte[] ReadRange(string path, long offset, int count)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            stream.Position = offset;
+            byte[] bytes = new byte[count];
+            stream.ReadExactly(bytes);
+            return bytes;
+        }
 
         public static int FindNameIndex(UnrealPackage package, string name)
         {

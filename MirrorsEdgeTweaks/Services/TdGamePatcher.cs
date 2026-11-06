@@ -32,9 +32,9 @@ namespace MirrorsEdgeTweaks.Services
 
         public static TdGamePatchState DetectState(string tdGamePath)
         {
-            byte[] data = GameFileReadScope.ReadAllBytes(tdGamePath);
             using var lease = GameFileReadScope.OpenPackage(tdGamePath, headerOnly: true);
-            return DetectStateCore(data, lease.Package);
+            long length = new FileInfo(tdGamePath).Length;
+            return DetectStateCore(lease.Package, length, (offset, count) => UePackageLocator.ReadRange(tdGamePath, offset, count));
         }
 
         internal static TdGamePatchState DetectState(byte[] data, UnrealPackage pkg) => DetectStateCore(data, pkg);
@@ -973,7 +973,11 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        static TdGamePatchState DetectStateCore(byte[] data, UnrealPackage pkg)
+        static TdGamePatchState DetectStateCore(byte[] data, UnrealPackage pkg) =>
+            DetectStateCore(pkg, data.Length, (offset, count) => data.AsSpan((int)offset, count).ToArray());
+
+        // The read delegate throws for a range past the end of the file, which leaves the later checks false.
+        static TdGamePatchState DetectStateCore(UnrealPackage pkg, long length, Func<long, int, byte[]> read)
         {
             var result = new TdGamePatchState();
             try
@@ -982,13 +986,11 @@ namespace MirrorsEdgeTweaks.Services
                 {
                     int so = UePackageLocator.FindExportSerialOffset(pkg, outerName, funcName);
                     if (so < 0) return Array.Empty<byte>();
-                    int bss = (int)PackageSplicer.ReadBSS(data, so);
+                    int bss = (int)BitConverter.ToUInt32(read(so + BytecodeBuilder.BSS_REL, sizeof(uint)));
                     if (bss <= 0 || bss > 100_000) return Array.Empty<byte>();
                     int bcStart = so + BytecodeBuilder.SCRIPT_HDR;
-                    if (bcStart + bss > data.Length) return Array.Empty<byte>();
-                    byte[] bc = new byte[bss];
-                    Buffer.BlockCopy(data, bcStart, bc, 0, bss);
-                    return bc;
+                    if (bcStart + bss > length) return Array.Empty<byte>();
+                    return read(bcStart, bss);
                 }
 
                 byte[] tzsBc = FuncBc("TdHUD", "ToggleZoomState");

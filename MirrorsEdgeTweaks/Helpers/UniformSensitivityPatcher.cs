@@ -15,63 +15,40 @@ namespace MirrorsEdgeTweaks.Helpers
 
         public static void Apply(string tdGamePackagePath, float targetValue)
         {
-            FileAttributes attributes = File.GetAttributes(tdGamePackagePath);
-            bool wasReadOnly = (attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly;
+            long floatOffset;
 
-            if (wasReadOnly)
+            // The package reader must be disposed before the file is rewritten,
+            // because Windows refuses to replace a file while another handle is open on it.
+            using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
             {
-                File.SetAttributes(tdGamePackagePath, attributes & ~FileAttributes.ReadOnly);
+                package?.InitializePackage();
+
+                if (package == null)
+                    throw new Exception("Failed to load TdGame.u package.");
+
+                var tdPlayerController = package.FindObject<UClass>("TdPlayerController");
+                if (tdPlayerController == null)
+                    throw new Exception("TdPlayerController class not found in TdGame.u");
+
+                var updateRotationFunc = tdPlayerController.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "UpdateRotation");
+                if (updateRotationFunc == null)
+                    throw new Exception("UpdateRotation function not found in TdPlayerController class.");
+
+                updateRotationFunc.Load<UObjectRecordStream>();
+
+                floatOffset = FindRotSpeedModFloatOffset(updateRotationFunc);
             }
 
-            try
+            if (floatOffset == -1)
+                throw new Exception("Could not locate the rotation speed modifier float in UpdateRotation function.");
+
+            float currentValue = BitConverter.ToSingle(UePackageLocator.ReadRange(tdGamePackagePath, floatOffset, sizeof(float)));
+            if (Math.Abs(currentValue - DisabledValue) > 0.1f && Math.Abs(currentValue - EnabledValue) > 0.1f)
             {
-                long floatOffset;
-
-                // The package reader must be disposed before the file is rewritten,
-                // because Windows refuses to replace a file while another handle is open on it.
-                using (var package = UnrealLoader.LoadPackage(tdGamePackagePath, FileAccess.Read))
-                {
-                    package?.InitializePackage();
-
-                    if (package == null)
-                        throw new Exception("Failed to load TdGame.u package.");
-
-                    var tdPlayerController = package.FindObject<UClass>("TdPlayerController");
-                    if (tdPlayerController == null)
-                        throw new Exception("TdPlayerController class not found in TdGame.u");
-
-                    var updateRotationFunc = tdPlayerController.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "UpdateRotation");
-                    if (updateRotationFunc == null)
-                        throw new Exception("UpdateRotation function not found in TdPlayerController class.");
-
-                    updateRotationFunc.Load<UObjectRecordStream>();
-
-                    floatOffset = FindRotSpeedModFloatOffset(updateRotationFunc);
-                }
-
-                if (floatOffset == -1)
-                    throw new Exception("Could not locate the rotation speed modifier float in UpdateRotation function.");
-
-                byte[] data = File.ReadAllBytes(tdGamePackagePath);
-
-                float currentValue = BitConverter.ToSingle(data, (int)floatOffset);
-                if (Math.Abs(currentValue - DisabledValue) > 0.1f && Math.Abs(currentValue - EnabledValue) > 0.1f)
-                {
-                    throw new Exception($"Unexpected current value at offset {floatOffset}: {currentValue}. Expected either 16384 or 66536.");
-                }
-
-                byte[] newValueBytes = BitConverter.GetBytes(targetValue);
-                Array.Copy(newValueBytes, 0, data, floatOffset, 4);
-
-                PatchUtility.WritePreservingAttributes(tdGamePackagePath, data);
+                throw new Exception($"Unexpected current value at offset {floatOffset}: {currentValue}. Expected either 16384 or 66536.");
             }
-            finally
-            {
-                if (wasReadOnly)
-                {
-                    File.SetAttributes(tdGamePackagePath, attributes);
-                }
-            }
+
+            PatchUtility.PatchPreservingAttributes(tdGamePackagePath, [(floatOffset, BitConverter.GetBytes(targetValue))]);
         }
 
         public static bool? ReadIsEnabled(string? tdGamePackagePath)
@@ -98,8 +75,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (floatOffset == -1)
                     return null;
 
-                byte[] data = GameFileReadScope.ReadAllBytes(tdGamePackagePath);
-                float currentValue = BitConverter.ToSingle(data, (int)floatOffset);
+                float currentValue = BitConverter.ToSingle(UePackageLocator.ReadRange(tdGamePackagePath, floatOffset, sizeof(float)));
 
                 return Math.Abs(currentValue - EnabledValue) < 0.1f;
             }

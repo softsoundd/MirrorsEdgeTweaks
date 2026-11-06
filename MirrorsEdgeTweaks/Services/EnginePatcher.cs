@@ -380,6 +380,7 @@ namespace MirrorsEdgeTweaks.Services
         }
 
         // The Engine.u patches are always applied, so reconciling only adds what is missing.
+        // Throws when the patches cannot be applied, so a return means Engine.u is fully patched.
         public static void Reconcile(string enginePath)
         {
             var state = DetectState(enginePath);

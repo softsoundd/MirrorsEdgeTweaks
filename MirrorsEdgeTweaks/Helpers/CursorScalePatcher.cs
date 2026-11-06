@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.IO;
 using UELib;
 using UELib.Core;
@@ -33,8 +34,7 @@ namespace MirrorsEdgeTweaks.Helpers
 
         static void SetArrowSize(string filePath, int newSize)
         {
-            byte[] data = File.ReadAllBytes(filePath);
-            bool changed = false;
+            var patches = new List<(long Offset, byte[] Bytes)>();
 
             using (var pkg = UnrealLoader.LoadPackage(filePath, FileAccess.Read))
             {
@@ -48,7 +48,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (arrow.Properties == null) return;
 
                 long start = arrow.ExportTable.SerialOffset;
-                long end = start + arrow.ExportTable.SerialSize;
+                byte[] export = UePackageLocator.ReadRange(filePath, start, arrow.ExportTable.SerialSize);
 
                 foreach (string propName in new[] { "SizeX", "SizeY" })
                 {
@@ -59,36 +59,29 @@ namespace MirrorsEdgeTweaks.Helpers
                     int nameIdx = pkg.Names.FindIndex(n => n.ToString() == propName);
                     if (nameIdx < 0) continue;
 
-                    if (WriteIntPropertyValue(data, nameIdx, cur, newSize, start, end))
-                        changed = true;
+                    int valueOffset = FindIntPropertyValue(export, nameIdx, cur);
+                    if (valueOffset >= 0)
+                        patches.Add((start + valueOffset, BitConverter.GetBytes(newSize)));
                 }
             }
 
-            if (changed)
-                PatchUtility.WritePreservingAttributes(filePath, data);
+            if (patches.Count > 0)
+                PatchUtility.PatchPreservingAttributes(filePath, patches);
         }
 
         // A property tag is <NameIndex:8><TypeName:8><Size:4><ArrayIndex:4><Value>, so an int value sits 24 bytes after the name.
         // The tag is found by its name index and confirmed by its current value.
-        static bool WriteIntPropertyValue(byte[] data, int nameIdx, int curValue, int newValue, long start, long end)
+        // Returns the value's offset in the export.
+        // Returns -1 when the export has no such tag.
+        static int FindIntPropertyValue(byte[] export, int nameIdx, int curValue)
         {
             byte[] nameBytes = BitConverter.GetBytes((long)nameIdx);
-            long limit = Math.Min(end, data.Length) - 28;
-            for (long i = start; i < limit; i++)
+            for (int i = 0; i < export.Length - 28; i++)
             {
-                bool match = true;
-                for (int j = 0; j < 8; j++)
-                    if (data[i + j] != nameBytes[j]) { match = false; break; }
-                if (!match) continue;
-
-                long valueOff = i + 24;
-                if (valueOff + 4 > data.Length) continue;
-                if (BitConverter.ToInt32(data, (int)valueOff) != curValue) continue;
-
-                BitConverter.GetBytes(newValue).CopyTo(data, (int)valueOff);
-                return true;
+                if (export.AsSpan(i, 8).SequenceEqual(nameBytes) && BitConverter.ToInt32(export, i + 24) == curValue)
+                    return i + 24;
             }
-            return false;
+            return -1;
         }
     }
 }

@@ -34,12 +34,11 @@ namespace MirrorsEdgeTweaks.Services
 
         public static void ApplyEngine(string enginePath)
         {
-            byte[] data = File.ReadAllBytes(enginePath);
-            if (Helpers.LegacyChangeDetector.ContainsBetaHighResCommand(data))
+            if (Helpers.LegacyChangeDetector.ContainsBetaHighResCommand(enginePath))
                 throw Helpers.LegacyChangeDetector.PackageRestoreRequired("Engine.u");
 
             EngineRefs r;
-            int serialOffset, insertBc;
+            int serialOffset, serialSize, insertBc;
             List<int> jumpPositions;
             using (var pkg = UePackageLocator.Load(enginePath))
             {
@@ -50,6 +49,7 @@ namespace MirrorsEdgeTweaks.Services
                 var fn = UePackageLocator.FindFunction(pkg, "HUD", "PreCalcValues")
                     ?? throw new InvalidOperationException("Cannot find HUD.PreCalcValues in Engine.u");
                 serialOffset = fn.SerialOffset;
+                serialSize = fn.SerialSize;
                 insertBc = FindReturnInsertBc(fn.Tokens);
                 jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
@@ -57,35 +57,32 @@ namespace MirrorsEdgeTweaks.Services
             byte[] blob = BytecodeBuilder.BuildHighResApplyBlob(
                 r.PlayerOwnerRef, r.ConsoleNameIdx, r.ConsoleReturnValueRef, r.SizeXRef, r.SizeYRef);
 
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
+            byte[] export = UePackageLocator.ReadRange(enginePath, serialOffset, serialSize);
+            int bcStart = BytecodeBuilder.SCRIPT_HDR;
 
             // The betas' blob also contains HighResSignature, so only this exact blob counts as installed.
-            int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
-            if (BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss) != -1)
+            int bss = (int)PackageSplicer.ReadBSS(export, 0);
+            if (BytecodeBuilder.FindPattern(export, blob, bcStart, bcStart + bss) != -1)
                 return;
 
-            int origLen = data.Length;
-            int insertFile = bcStart + insertBc;
+            int origLen = (int)new FileInfo(enginePath).Length;
+            int insertFile = serialOffset + bcStart + insertBc;
 
-            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, blob.Length);
-            data = PackageSplicer.InsertBytes(data, insertFile, blob);
+            PackageSplicer.ShiftJumpTargets(export, bcStart, jumpPositions, insertBc, blob.Length);
+            PackageSplicer.UpdateBSS(export, 0, blob.Length);
+            export = PackageSplicer.InsertBytes(export, bcStart + insertBc, blob);
 
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, insertFile, origLen, blob.Length);
-
-            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
+            PackageSplicer.SpliceExport(enginePath, serialOffset, serialSize, export, (header, hdr) =>
+                PackageSplicer.UpdateExportsHeuristic(header, hdr, serialOffset, insertFile, origLen, blob.Length));
         }
 
         public static void RemoveEngine(string enginePath)
         {
-            byte[] data = File.ReadAllBytes(enginePath);
-            if (BytecodeBuilder.FindPattern(data, BytecodeBuilder.HighResSignature) == -1)
+            if (!Helpers.PatternHelper.FileContainsAny(enginePath, [BytecodeBuilder.HighResSignature]))
                 return;
 
             EngineRefs r;
-            int serialOffset;
+            int serialOffset, serialSize;
             List<int> jumpPositions;
             using (var pkg = UePackageLocator.Load(enginePath))
             {
@@ -93,29 +90,28 @@ namespace MirrorsEdgeTweaks.Services
                 var fn = UePackageLocator.FindFunction(pkg, "HUD", "PreCalcValues")
                     ?? throw new InvalidOperationException("Cannot find HUD.PreCalcValues in Engine.u");
                 serialOffset = fn.SerialOffset;
+                serialSize = fn.SerialSize;
                 jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
 
             byte[] blob = BytecodeBuilder.BuildHighResApplyBlob(
                 r.PlayerOwnerRef, r.ConsoleNameIdx, r.ConsoleReturnValueRef, r.SizeXRef, r.SizeYRef);
 
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
-            int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
-            int origLen = data.Length;
+            byte[] export = UePackageLocator.ReadRange(enginePath, serialOffset, serialSize);
+            int bcStart = BytecodeBuilder.SCRIPT_HDR;
+            int bss = (int)PackageSplicer.ReadBSS(export, 0);
+            int origLen = (int)new FileInfo(enginePath).Length;
 
-            int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
+            int blobPos = BytecodeBuilder.FindPattern(export, blob, bcStart, bcStart + bss);
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
-            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, -blob.Length);
-            data = PackageSplicer.RemoveBytes(data, blobPos, blob.Length);
+            PackageSplicer.ShiftJumpTargets(export, bcStart, jumpPositions, insertBc, -blob.Length);
+            PackageSplicer.UpdateBSS(export, 0, -blob.Length);
+            export = PackageSplicer.RemoveBytes(export, blobPos, blob.Length);
 
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsHeuristic(data, hdr, exportStart, blobPos, origLen, -blob.Length);
-
-            Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
+            PackageSplicer.SpliceExport(enginePath, serialOffset, serialSize, export, (header, hdr) =>
+                PackageSplicer.UpdateExportsHeuristic(header, hdr, serialOffset, serialOffset + blobPos, origLen, -blob.Length));
         }
 
         // Holds each TdSPHUD crosshair texture member with its stock pixel size.
@@ -161,9 +157,8 @@ namespace MirrorsEdgeTweaks.Services
 
         public static void ApplyCrosshair(string tdGamePath)
         {
-            byte[] data = File.ReadAllBytes(tdGamePath);
             CrosshairRefs r;
-            int serialOffset, exportIndex, insertBc;
+            int serialOffset, serialSize, exportIndex, insertBc;
             List<int> jumpPositions;
             using (var pkg = UePackageLocator.Load(tdGamePath))
             {
@@ -171,6 +166,7 @@ namespace MirrorsEdgeTweaks.Services
                 var fn = UePackageLocator.FindFunction(pkg, "TdSPHUD", "DrawLivingHUD")
                     ?? throw new InvalidOperationException("Cannot find TdSPHUD.DrawLivingHUD in TdGame.u");
                 serialOffset = fn.SerialOffset;
+                serialSize = fn.SerialSize;
                 exportIndex = fn.ExportIndex;
                 jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
 
@@ -179,29 +175,26 @@ namespace MirrorsEdgeTweaks.Services
                 insertBc = FindLastReturnInsertBc(fn.Tokens);
             }
 
-            if (BytecodeBuilder.FindPattern(data, CrosshairSig(r)) != -1)
+            if (Helpers.PatternHelper.FileContainsAny(tdGamePath, [CrosshairSig(r)]))
                 return;
 
             byte[] blob = CrosshairBlob(r);
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
+            byte[] export = UePackageLocator.ReadRange(tdGamePath, serialOffset, serialSize);
+            int bcStart = BytecodeBuilder.SCRIPT_HDR;
 
-            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, blob.Length);
-            data = PackageSplicer.InsertBytes(data, bcStart + insertBc, blob);
+            PackageSplicer.ShiftJumpTargets(export, bcStart, jumpPositions, insertBc, blob.Length);
+            PackageSplicer.UpdateBSS(export, 0, blob.Length);
+            export = PackageSplicer.InsertBytes(export, bcStart + insertBc, blob);
 
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsStructural(data, hdr,
-                new List<(int, int, int)> { (exportStart, blob.Length, exportIndex) });
-
-            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
+            PackageSplicer.SpliceExport(tdGamePath, serialOffset, serialSize, export, (header, hdr) =>
+                PackageSplicer.UpdateExportsStructural(header, hdr,
+                    new List<(int, int, int)> { (serialOffset, blob.Length, exportIndex) }));
         }
 
         public static void RemoveCrosshair(string tdGamePath)
         {
-            byte[] data = File.ReadAllBytes(tdGamePath);
             CrosshairRefs r;
-            int serialOffset, exportIndex;
+            int serialOffset, serialSize, exportIndex;
             List<int> jumpPositions;
             using (var pkg = UePackageLocator.Load(tdGamePath))
             {
@@ -209,28 +202,27 @@ namespace MirrorsEdgeTweaks.Services
                 var fn = UePackageLocator.FindFunction(pkg, "TdSPHUD", "DrawLivingHUD")
                     ?? throw new InvalidOperationException("Cannot find TdSPHUD.DrawLivingHUD in TdGame.u");
                 serialOffset = fn.SerialOffset;
+                serialSize = fn.SerialSize;
                 exportIndex = fn.ExportIndex;
                 jumpPositions = UePackageLocator.ExtractJumpPositions(fn.Tokens);
             }
 
             byte[] blob = CrosshairBlob(r);
-            int exportStart = serialOffset;
-            int bcStart = exportStart + BytecodeBuilder.SCRIPT_HDR;
-            int bss = (int)PackageSplicer.ReadBSS(data, exportStart);
+            byte[] export = UePackageLocator.ReadRange(tdGamePath, serialOffset, serialSize);
+            int bcStart = BytecodeBuilder.SCRIPT_HDR;
+            int bss = (int)PackageSplicer.ReadBSS(export, 0);
 
-            int blobPos = BytecodeBuilder.FindPattern(data, blob, bcStart, bcStart + bss);
+            int blobPos = BytecodeBuilder.FindPattern(export, blob, bcStart, bcStart + bss);
             if (blobPos == -1) return;
             int insertBc = blobPos - bcStart;
 
-            PackageSplicer.ShiftJumpTargets(data, bcStart, jumpPositions, insertBc, -blob.Length);
-            PackageSplicer.UpdateBSS(data, exportStart, -blob.Length);
-            data = PackageSplicer.RemoveBytes(data, blobPos, blob.Length);
+            PackageSplicer.ShiftJumpTargets(export, bcStart, jumpPositions, insertBc, -blob.Length);
+            PackageSplicer.UpdateBSS(export, 0, -blob.Length);
+            export = PackageSplicer.RemoveBytes(export, blobPos, blob.Length);
 
-            var hdr = PackageSplicer.ParseHeader(data);
-            PackageSplicer.UpdateExportsStructural(data, hdr,
-                new List<(int, int, int)> { (exportStart, -blob.Length, exportIndex) });
-
-            Helpers.PatchUtility.WritePreservingAttributes(tdGamePath, data);
+            PackageSplicer.SpliceExport(tdGamePath, serialOffset, serialSize, export, (header, hdr) =>
+                PackageSplicer.UpdateExportsStructural(header, hdr,
+                    new List<(int, int, int)> { (serialOffset, -blob.Length, exportIndex) }));
         }
 
         sealed class EngineRefs

@@ -1,5 +1,5 @@
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Models;
-using System.IO;
 
 namespace MirrorsEdgeTweaks.Services
 {
@@ -10,7 +10,7 @@ namespace MirrorsEdgeTweaks.Services
         public static void Write(string enginePath, PackageOffsets offsets, float fov)
         {
             byte[] value = BitConverter.GetBytes(fov);
-            using var stream = new FileStream(enginePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            var patches = new List<(long Offset, byte[] Bytes)>();
             foreach (long offset in new[]
             {
                 offsets.PlayerControllerDefaultFovOffset,
@@ -20,11 +20,12 @@ namespace MirrorsEdgeTweaks.Services
                 offsets.CameraActorFovAngleOffset,
             })
             {
-                if (offset == -1)
-                    continue;
-                stream.Position = offset;
-                stream.Write(value, 0, value.Length);
+                if (offset != -1)
+                    patches.Add((offset, value));
             }
+
+            if (patches.Count > 0)
+                PatchUtility.PatchPreservingAttributes(enginePath, patches);
         }
     }
 }

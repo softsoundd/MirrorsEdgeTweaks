@@ -489,12 +489,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     Post(() => _gameStatus.Status = "Patching Engine.u...");
 
-                    using (var stream = new FileStream(enginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
-                    {
-                        stream.Position = consoleHeightOffset;
-                        byte[] newValue = BitConverter.GetBytes(0.4f);
-                        stream.Write(newValue, 0, newValue.Length);
-                    }
+                    PatchUtility.PatchPreservingAttributes(enginePackagePath, [(consoleHeightOffset, BitConverter.GetBytes(0.4f))]);
 
                     string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
                     if (SetCommandPatchHelper.IsDlcVersion(exePath))
@@ -581,12 +576,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
 
                     dispatcher.Invoke(() => _gameStatus.Status = "Patching Engine.u...");
-                    using (var stream = new FileStream(enginePackagePath, FileMode.Open, FileAccess.Write, FileShare.None))
-                    {
-                        stream.Position = consoleHeightOffset;
-                        byte[] originalValue = BitConverter.GetBytes(0.75f);
-                        stream.Write(originalValue, 0, originalValue.Length);
-                    }
+                    PatchUtility.PatchPreservingAttributes(enginePackagePath, [(consoleHeightOffset, BitConverter.GetBytes(0.75f))]);
                 });
 
                 _gameStatus.Status = "Ready.";

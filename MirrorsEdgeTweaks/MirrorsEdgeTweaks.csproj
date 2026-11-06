@@ -33,6 +33,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Many patches allocate arrays the size of whole game files, and this level makes the GC compact the large object heap rather than grow it. -->
+		<RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="Eliot.UELib" Version="1.13.7" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />

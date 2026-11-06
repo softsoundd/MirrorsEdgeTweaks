@@ -11,10 +11,14 @@ namespace MirrorsEdgeTweaks.Services
     {
         event Action? PackagesReloaded;
 
-        // Intermediate reloads pass notify: false, which skips PackagesReloaded until the final reload.
-        void LoadPackages(bool notify = true);
+        void LoadPackages();
 
-        Task ReloadPackagesAsync(bool notify = true);
+        Task ReloadPackagesAsync();
+
+        // Finds the Engine.u offsets again after a splice moves them, without loading TdGame.u or refreshing the view models.
+        // When it throws, some offsets may still point to where the data was before the splice.
+        void FindEngineOffsets(string enginePath);
+
         void UpdateConsoleStatus();
     }
 
@@ -54,14 +58,14 @@ namespace MirrorsEdgeTweaks.Services
             else dispatcher.Invoke(action);
         }
 
-        public async Task ReloadPackagesAsync(bool notify = true)
+        public async Task ReloadPackagesAsync()
         {
             await Task.Delay(500);
-            await Task.Run(() => LoadPackages(notify));
+            await Task.Run(LoadPackages);
         }
 
         // The PackagesReloaded handlers run inside this method's read scope, so their status checks reuse these loads.
-        public void LoadPackages(bool notify = true)
+        public void LoadPackages()
         {
             var config = _session.Config;
             if (string.IsNullOrEmpty(config.GameDirectoryPath)) return;
@@ -96,8 +100,7 @@ namespace MirrorsEdgeTweaks.Services
 
                 _session.PackagesLoaded = true;
                 SetupEditors(engineLease.Package, tdGameLease.Package);
-                if (notify)
-                    PackagesReloaded?.Invoke();
+                PackagesReloaded?.Invoke();
             }
             catch (Exception ex)
             {
@@ -115,6 +118,14 @@ namespace MirrorsEdgeTweaks.Services
             }
         }
 
+        public void FindEngineOffsets(string enginePath)
+        {
+            using var lease = GameFileReadScope.OpenPackage(enginePath);
+            FindEngineFovOffsets(lease.Package, enginePath);
+            FindAspectRatioOffset(lease.Package);
+            FindConsoleHeightOffset(lease.Package);
+        }
+
         private static PackageLease? TryOpenPackage(string path)
         {
             try
@@ -130,7 +141,7 @@ namespace MirrorsEdgeTweaks.Services
         private void SetupEditors(UnrealPackage enginePackage, UnrealPackage tdGamePackage)
         {
             bool fovSuccess = SetupFovEditor(enginePackage, tdGamePackage);
-            bool arSuccess = SetupAspectRatioEditor(enginePackage);
+            bool arSuccess = FindAspectRatioOffset(enginePackage);
             bool consoleSuccess = SetupConsoleEditor(enginePackage);
 
             Dispatch(() => _gameStatus.IsGameTweaksEnabled = fovSuccess || arSuccess || consoleSuccess);
@@ -138,20 +149,31 @@ namespace MirrorsEdgeTweaks.Services
 
         private bool SetupFovEditor(UnrealPackage package, UnrealPackage tdGamePackage)
         {
+            FindEngineFovOffsets(package, _session.Config.EnginePackagePath);
+            FindTdGameFovOffsets(tdGamePackage);
+
             var offsets = _session.Offsets;
-            var config = _session.Config;
+            return offsets.PlayerControllerDefaultFovOffset != -1 ||
+                offsets.PlayerControllerDesiredFovOffset != -1 ||
+                offsets.PlayerControllerFovAngleOffset != -1 ||
+                offsets.CameraFovOffset != -1 ||
+                offsets.CameraActorFovAngleOffset != -1 ||
+                offsets.SeqActCameraFovOffset != -1 ||
+                offsets.UnzoomFovRateOffset != -1 ||
+                offsets.TdMoveVertigoZoomFovOffset != -1 ||
+                offsets.NearClippingPlaneOffset != -1 ||
+                offsets.FovScaleMultiplierOffset != -1;
+        }
+
+        private void FindEngineFovOffsets(UnrealPackage package, string? enginePath)
+        {
+            var offsets = _session.Offsets;
 
             offsets.PlayerControllerDefaultFovOffset = -1;
             offsets.PlayerControllerDesiredFovOffset = -1;
             offsets.PlayerControllerFovAngleOffset = -1;
             offsets.CameraFovOffset = -1;
             offsets.CameraActorFovAngleOffset = -1;
-            offsets.SeqActCameraFovOffset = -1;
-            offsets.UnzoomFovRateOffset = -1;
-            offsets.TdMoveVertigoZoomFovOffset = -1;
-            offsets.TdMoveVertigoZoomFovFlagsOffset = -1;
-            offsets.NearClippingPlaneOffset = -1;
-            offsets.FovScaleMultiplierOffset = -1;
 
             _session.DetectedCameraFov = null;
 
@@ -161,15 +183,15 @@ namespace MirrorsEdgeTweaks.Services
                 playerControllerCDO.Load<UObjectRecordStream>();
                 var defaultFovProp = playerControllerCDO.Properties.FirstOrDefault(p => p.Name == "DefaultFOV");
                 if (defaultFovProp != null && float.TryParse(defaultFovProp.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentDefaultFov))
-                    offsets.PlayerControllerDefaultFovOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "DefaultFOV", currentDefaultFov, package, config.EnginePackagePath);
+                    offsets.PlayerControllerDefaultFovOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "DefaultFOV", currentDefaultFov, package, enginePath);
 
                 var desiredFovProp = playerControllerCDO.Properties.FirstOrDefault(p => p.Name == "DesiredFOV");
                 if (desiredFovProp != null && float.TryParse(desiredFovProp.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentDesiredFov))
-                    offsets.PlayerControllerDesiredFovOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "DesiredFOV", currentDesiredFov, package, config.EnginePackagePath);
+                    offsets.PlayerControllerDesiredFovOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "DesiredFOV", currentDesiredFov, package, enginePath);
 
                 var fovAngleProp = playerControllerCDO.Properties.FirstOrDefault(p => p.Name == "FOVAngle");
                 if (fovAngleProp != null && float.TryParse(fovAngleProp.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentFovAngle))
-                    offsets.PlayerControllerFovAngleOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "FOVAngle", currentFovAngle, package, config.EnginePackagePath);
+                    offsets.PlayerControllerFovAngleOffset = _offsetFinder.FindPropertyOffsetByName(playerControllerCDO, "FOVAngle", currentFovAngle, package, enginePath);
             }
 
             var cameraClass = package.FindObject<UClass>("Camera");
@@ -180,7 +202,7 @@ namespace MirrorsEdgeTweaks.Services
                 if (fovProperty != null && float.TryParse(fovProperty.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentFov))
                 {
                     _session.DetectedCameraFov = currentFov;
-                    offsets.CameraFovOffset = _offsetFinder.FindPropertyOffsetByName(cameraCDO, "DefaultFOV", currentFov, package, config.EnginePackagePath);
+                    offsets.CameraFovOffset = _offsetFinder.FindPropertyOffsetByName(cameraCDO, "DefaultFOV", currentFov, package, enginePath);
                 }
             }
 
@@ -190,8 +212,21 @@ namespace MirrorsEdgeTweaks.Services
                 cameraActorCDO.Load<UObjectRecordStream>();
                 var fovAngleProperty = cameraActorCDO.Properties.FirstOrDefault(p => p.Name == "FOVAngle");
                 if (fovAngleProperty != null && float.TryParse(fovAngleProperty.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float currentFovAngle))
-                    offsets.CameraActorFovAngleOffset = _offsetFinder.FindPropertyOffsetByName(cameraActorCDO, "FOVAngle", currentFovAngle, package, config.EnginePackagePath);
+                    offsets.CameraActorFovAngleOffset = _offsetFinder.FindPropertyOffsetByName(cameraActorCDO, "FOVAngle", currentFovAngle, package, enginePath);
             }
+        }
+
+        private void FindTdGameFovOffsets(UnrealPackage tdGamePackage)
+        {
+            var offsets = _session.Offsets;
+            var config = _session.Config;
+
+            offsets.SeqActCameraFovOffset = -1;
+            offsets.UnzoomFovRateOffset = -1;
+            offsets.TdMoveVertigoZoomFovOffset = -1;
+            offsets.TdMoveVertigoZoomFovFlagsOffset = -1;
+            offsets.NearClippingPlaneOffset = -1;
+            offsets.FovScaleMultiplierOffset = -1;
 
             var seqActClass = tdGamePackage.FindObject<UClass>("SeqAct_TdCameraFOV");
             if (seqActClass?.Default is UObject seqActCDO)
@@ -252,20 +287,9 @@ namespace MirrorsEdgeTweaks.Services
                     offsets.FovScaleMultiplierOffset = _offsetFinder.FindFovScaleMultiplierOffset(playerInputFunc);
                 }
             }
-
-            return offsets.PlayerControllerDefaultFovOffset != -1 ||
-                offsets.PlayerControllerDesiredFovOffset != -1 ||
-                offsets.PlayerControllerFovAngleOffset != -1 ||
-                offsets.CameraFovOffset != -1 ||
-                offsets.CameraActorFovAngleOffset != -1 ||
-                offsets.SeqActCameraFovOffset != -1 ||
-                offsets.UnzoomFovRateOffset != -1 ||
-                offsets.TdMoveVertigoZoomFovOffset != -1 ||
-                offsets.NearClippingPlaneOffset != -1 ||
-                offsets.FovScaleMultiplierOffset != -1;
         }
 
-        private bool SetupAspectRatioEditor(UnrealPackage package)
+        private bool FindAspectRatioOffset(UnrealPackage package)
         {
             var offsets = _session.Offsets;
 
@@ -291,22 +315,13 @@ namespace MirrorsEdgeTweaks.Services
         {
             var offsets = _session.Offsets;
 
-            offsets.ConsoleHeightOffset = -1;
             Dispatch(() =>
             {
                 _console.IsInstallConsoleEnabled = false;
                 _console.IsUninstallConsoleEnabled = false;
             });
 
-            var consoleClass = package.FindObject<UClass>("Console");
-            var openState = consoleClass?.EnumerateFields<UState>().FirstOrDefault(s => s.Name == "Open");
-            var postRenderFunc = openState?.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "PostRender_Console");
-
-            if (postRenderFunc != null)
-            {
-                postRenderFunc.Load<UObjectRecordStream>();
-                offsets.ConsoleHeightOffset = _offsetFinder.FindConsoleHeightOffset(postRenderFunc);
-            }
+            FindConsoleHeightOffset(package);
 
             UpdateConsoleStatus();
 
@@ -322,6 +337,22 @@ namespace MirrorsEdgeTweaks.Services
 
             Dispatch(() => _console.ConsoleStatus = "(Status: Offset not found)");
             return false;
+        }
+
+        private void FindConsoleHeightOffset(UnrealPackage package)
+        {
+            var offsets = _session.Offsets;
+            offsets.ConsoleHeightOffset = -1;
+
+            var consoleClass = package.FindObject<UClass>("Console");
+            var openState = consoleClass?.EnumerateFields<UState>().FirstOrDefault(s => s.Name == "Open");
+            var postRenderFunc = openState?.EnumerateFields<UFunction>().FirstOrDefault(f => f.Name == "PostRender_Console");
+
+            if (postRenderFunc != null)
+            {
+                postRenderFunc.Load<UObjectRecordStream>();
+                offsets.ConsoleHeightOffset = _offsetFinder.FindConsoleHeightOffset(postRenderFunc);
+            }
         }
 
         public void UpdateConsoleStatus()

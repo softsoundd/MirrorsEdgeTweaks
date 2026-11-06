@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace MirrorsEdgeTweaks.Services
 {
     public static class PackageSplicer
@@ -111,7 +113,10 @@ namespace MirrorsEdgeTweaks.Services
             public int ImportOffset;
         }
 
-        public static PackageHeader ParseHeader(byte[] data)
+        public static PackageHeader ParseHeader(byte[] data) => ParseHeader(data, data.Length);
+
+        // The layout check compares against fileLength, so data may hold only the start of the package.
+        public static PackageHeader ParseHeader(byte[] data, long fileLength)
         {
             uint tag = BitConverter.ToUInt32(data, 0);
             if (tag != UE3_TAG)
@@ -120,7 +125,7 @@ namespace MirrorsEdgeTweaks.Services
             int val8 = BitConverter.ToInt32(data, 8);
             int off;
             int totalHdr;
-            if (val8 > 10_000 && val8 < data.Length)
+            if (val8 > 10_000 && val8 < fileLength)
             {
                 totalHdr = val8;
                 off = 12;
@@ -152,6 +157,23 @@ namespace MirrorsEdgeTweaks.Services
                 ImportCount = ic,
                 ImportOffset = io,
             };
+        }
+
+        // Replaces the export's serialized bytes without holding the package in memory.
+        // UE3 packages keep the export table in the header, so fixExportTable only receives the header.
+        public static void SpliceExport(string path, int exportStart, int exportSize, byte[] newExport,
+            Action<byte[], PackageHeader> fixExportTable)
+        {
+            long fileLength = new FileInfo(path).Length;
+            PackageHeader hdr = ParseHeader(UePackageLocator.ReadRange(path, 0, (int)Math.Min(fileLength, 4096)), fileLength);
+            byte[] header = UePackageLocator.ReadRange(path, 0, hdr.TotalHeaderSize);
+            fixExportTable(header, hdr);
+
+            Helpers.PatchUtility.SplicePreservingAttributes(path,
+            [
+                (0, header.Length, header),
+                (exportStart, exportSize, newExport),
+            ]);
         }
 
         // Fixes up the export table by scanning it for SerialSize and SerialOffset pairs instead of parsing its entries.

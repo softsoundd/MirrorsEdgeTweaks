@@ -34,7 +34,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private bool _isRenderResolutionDragging;
 
         // Caches whether Engine.u has every dynamic FOV scaling patch.
-        // Detecting that reads the whole package, so RefreshEnginePatchState only runs after a package reload or a resolution reconcile.
+        // Detecting that reads the whole package, so it is only refreshed after a package reload or a resolution reconcile.
         private bool _enginePatchesApplied;
 
         public GraphicsOption VSync { get; }

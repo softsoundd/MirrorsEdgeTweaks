@@ -10,7 +10,7 @@ namespace MirrorsEdgeTweaks.Services
     // Outside a scope, every read is fresh and private.
     // Inside a scope, the returned arrays and packages are shared, so callers must not modify them or keep them past the scope.
     // Shared packages are not thread-safe, so the checks inside a scope must run one at a time.
-    // Only PatchUtility.WritePreservingAttributes releases a file that the scope holds, so other writes must run outside a scope.
+    // Only the PatchUtility write methods release a file that the scope holds, so other writes must run outside a scope.
     internal sealed class GameFileReadScope : IDisposable
     {
         private static readonly AsyncLocal<GameFileReadScope?> Ambient = new();

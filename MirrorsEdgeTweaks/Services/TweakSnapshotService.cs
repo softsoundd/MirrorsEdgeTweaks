@@ -164,18 +164,25 @@ namespace MirrorsEdgeTweaks.Services
                 result.ReappliedSettings.Add("High-res UI fix");
             }
 
-            // The splices above move the Engine.u defaults, so these writes use offsets from a fresh load.
+            // The splices above move the Engine.u defaults, so these writes use offsets found after them.
+            // Each write waits for the one lookup, so a failed lookup fails the writes rather than letting them use stale offsets.
             if (scope.HasFlag(TweakScope.Engine) && (snapshot.Fov != null || snapshot.ConsoleInstalled))
             {
-                await Task.Run(() => _gameData.LoadPackages(notify: false));
+                Task findOffsets = Task.Run(() => _gameData.FindEngineOffsets(enginePath));
                 PackageOffsets offsets = _session.Offsets;
-                _session.PackagesLoaded = false;
 
                 if (snapshot.Fov is { } fov)
-                    await Step(result, "FOV patches", () => EngineFovWriter.Write(enginePath, offsets, fov));
+                    await StepAsync(result, "FOV patches", async () =>
+                    {
+                        await findOffsets.ConfigureAwait(false);
+                        EngineFovWriter.Write(enginePath, offsets, fov);
+                    });
                 if (snapshot.ConsoleInstalled)
-                    await Step(result, "Developer console height",
-                        () => WriteConsoleHeight(enginePath, offsets.ConsoleHeightOffset));
+                    await StepAsync(result, "Developer console height", async () =>
+                    {
+                        await findOffsets.ConfigureAwait(false);
+                        WriteConsoleHeight(enginePath, offsets.ConsoleHeightOffset);
+                    });
             }
 
             List<string> distinctReapplied = result.ReappliedSettings.Distinct(StringComparer.Ordinal).ToList();
@@ -273,9 +280,7 @@ namespace MirrorsEdgeTweaks.Services
             if (offset == -1)
                 throw new InvalidOperationException("The console height was not found in Engine.u.");
 
-            using var stream = new FileStream(enginePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-            stream.Position = offset;
-            stream.Write(BitConverter.GetBytes(InstalledConsoleHeight));
+            PatchUtility.PatchPreservingAttributes(enginePath, [(offset, BitConverter.GetBytes(InstalledConsoleHeight))]);
         }
     }
 }

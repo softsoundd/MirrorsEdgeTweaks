@@ -37,11 +37,58 @@ namespace MirrorsEdgeTweaks.Helpers
                 stack.Pop();
         }
 
-        // Every binary patch target, such as the exe, .u and .upk files, is written through this.
+        // Every patch to a binary game file, such as the exe, .u and .upk files, is written through this,
+        // PatchPreservingAttributes or SplicePreservingAttributes.
         // A read-only attribute is cleared for the write and restored afterwards.
         // The pre-write backup is deleted on success, unless a BackupOperationScope is active.
         // The content goes to a temporary file that is renamed over the target, so a crash cannot leave a half-written file.
-        public static void WritePreservingAttributes(string path, byte[] content)
+        public static void WritePreservingAttributes(string path, byte[] content) =>
+            WriteWithBackup(path, () => WriteAtomically(path,
+                tempPath => File.WriteAllBytes(tempPath, content),
+                _ => File.WriteAllBytes(path, content)));
+
+        // Writes each patch at its offset in the same way as WritePreservingAttributes, without holding the file in memory.
+        // Throws without writing anything when a patch runs past the end of the file.
+        public static void PatchPreservingAttributes(string path, IReadOnlyList<(long Offset, byte[] Bytes)> patches)
+        {
+            long length = new FileInfo(path).Length;
+            foreach (var (offset, bytes) in patches)
+            {
+                if (offset < 0 || offset + bytes.Length > length)
+                    throw new ArgumentOutOfRangeException(nameof(patches),
+                        $"A patch at offset {offset} runs past the end of {Path.GetFileName(path)}.");
+            }
+
+            WriteWithBackup(path, () => WriteAtomically(path,
+                tempPath =>
+                {
+                    File.Copy(path, tempPath, overwrite: true);
+                    WritePatches(tempPath, patches);
+                },
+                _ => WritePatches(path, patches)));
+        }
+
+        // Replaces each range of Length bytes at Offset with Bytes, which may be longer or shorter,
+        // in the same way as WritePreservingAttributes, without holding the file in memory.
+        // Throws without writing anything when the ranges are out of file order, overlap or run past the end of the file.
+        public static void SplicePreservingAttributes(string path, IReadOnlyList<(long Offset, int Length, byte[] Bytes)> splices)
+        {
+            long fileLength = new FileInfo(path).Length;
+            long previousEnd = 0;
+            foreach (var (offset, length, _) in splices)
+            {
+                if (offset < previousEnd || length < 0 || offset + length > fileLength)
+                    throw new ArgumentOutOfRangeException(nameof(splices),
+                        $"A splice at offset {offset} overlaps the one before it or runs past the end of {Path.GetFileName(path)}.");
+                previousEnd = offset + length;
+            }
+
+            WriteWithBackup(path, () => WriteAtomically(path,
+                tempPath => WriteSpliced(path, tempPath, splices),
+                tempPath => CopyContent(tempPath, path)));
+        }
+
+        private static void WriteWithBackup(string path, Action write)
         {
             GameFileReadScope.Invalidate(path);
 
@@ -50,11 +97,10 @@ namespace MirrorsEdgeTweaks.Helpers
             if (wasReadOnly)
                 File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
 
-            byte[] preWriteBytes = File.ReadAllBytes(path);
-            StageBackup(path, preWriteBytes);
+            StageBackup(path);
             try
             {
-                WriteAtomically(path, content);
+                write();
                 OnWriteSucceeded(path);
             }
             finally
@@ -64,7 +110,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
         }
 
-        internal static void StageBackup(string path, byte[] preWriteBytes)
+        private static void StageBackup(string path)
         {
             try
             {
@@ -73,7 +119,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 Directory.CreateDirectory(backupDir);
 
                 string lastBackup = Path.Combine(backupDir, fileName + ".last.bak");
-                File.WriteAllBytes(lastBackup, preWriteBytes);
+                File.Copy(path, lastBackup, overwrite: true);
                 File.WriteAllText(Path.Combine(backupDir, "source.txt"), path);
                 File.SetAttributes(lastBackup, FileAttributes.Normal);
             }
@@ -104,12 +150,13 @@ namespace MirrorsEdgeTweaks.Helpers
             return Convert.ToHexString(hash, 0, 6).ToLowerInvariant();
         }
 
-        private static void WriteAtomically(string path, byte[] content)
+        // writeInPlace receives the path of the finished temporary file.
+        private static void WriteAtomically(string path, Action<string> writeTemp, Action<string> writeInPlace)
         {
             string tempPath = path + ".metweaks.writetmp";
             try
             {
-                File.WriteAllBytes(tempPath, content);
+                writeTemp(tempPath);
                 try
                 {
                     File.Move(tempPath, path, overwrite: true);
@@ -119,8 +166,8 @@ namespace MirrorsEdgeTweaks.Helpers
                     // Renaming over the destination needs delete access, which Windows refuses
                     // while any handle without FileShare.Delete is open on it,
                     // such as an undisposed UELib package reader or an antivirus scan.
-                    // The in-place rewrite is not atomic, but it is allowed whenever the file is writable.
-                    File.WriteAllBytes(path, content);
+                    // The in-place write is not atomic, but it is allowed whenever the file is writable.
+                    writeInPlace(tempPath);
                     File.Delete(tempPath);
                 }
             }
@@ -129,6 +176,54 @@ namespace MirrorsEdgeTweaks.Helpers
                 try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
                 throw;
             }
+        }
+
+        private static void WritePatches(string path, IReadOnlyList<(long Offset, byte[] Bytes)> patches)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            foreach (var (offset, bytes) in patches)
+            {
+                stream.Position = offset;
+                stream.Write(bytes);
+            }
+        }
+
+        private static void WriteSpliced(string sourcePath, string destinationPath, IReadOnlyList<(long Offset, int Length, byte[] Bytes)> splices)
+        {
+            using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 0, FileOptions.SequentialScan);
+            using var destination = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 0);
+            byte[] buffer = new byte[81920];
+            long position = 0;
+            foreach (var (offset, length, bytes) in splices)
+            {
+                CopyRange(source, destination, position, offset - position, buffer);
+                destination.Write(bytes);
+                position = offset + length;
+            }
+            CopyRange(source, destination, position, source.Length - position, buffer);
+        }
+
+        private static void CopyRange(FileStream source, FileStream destination, long offset, long count, byte[] buffer)
+        {
+            source.Position = offset;
+            while (count > 0)
+            {
+                int read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, count));
+                if (read == 0)
+                    throw new EndOfStreamException();
+                destination.Write(buffer, 0, read);
+                count -= read;
+            }
+        }
+
+        // Opens the destination the way File.WriteAllBytes does, so the copy works wherever that write would.
+        private static void CopyContent(string sourcePath, string destinationPath)
+        {
+            using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 0, FileOptions.SequentialScan);
+            using var destination = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 0);
+            source.CopyTo(destination);
         }
 
         public static void DecryptOoaInPlace(byte[] data)
