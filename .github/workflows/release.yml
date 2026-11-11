@@ -49,12 +49,11 @@ jobs:
       - name: Package zip
         shell: pwsh
         run: |
-          $extra = Get-ChildItem publish -Recurse -File | Where-Object Name -notin 'MirrorsEdgeTweaks.exe', 'MirrorsEdgeTweaks.pdb'
+          $extra = Get-ChildItem publish -Recurse -File | Where-Object Name -notin "Mirror's Edge Tweaks.exe", "Mirror's Edge Tweaks.pdb"
           if ($extra) {
             throw "The release zip would leave out: $($extra.Name -join ', ')"
           }
           $exe = "publish/Mirror's Edge Tweaks.exe"
-          Move-Item -LiteralPath "publish/MirrorsEdgeTweaks.exe" -Destination $exe
           Compress-Archive -LiteralPath $exe -DestinationPath MirrorsEdgeTweaks.zip
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
           "SHA-256 of Mirror's Edge Tweaks.exe: $hash" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
