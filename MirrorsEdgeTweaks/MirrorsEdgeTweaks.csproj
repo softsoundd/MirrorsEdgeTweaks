@@ -3,7 +3,6 @@
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net10.0-windows</TargetFramework>
-		<AssemblyName>Mirror's Edge Tweaks</AssemblyName>
 		<Nullable>enable</Nullable>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -51,6 +50,19 @@
 		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.161" />
 		<PackageReference Include="MaterialDesignThemes" Version="5.4.0" />
 	</ItemGroup>
+
+	<Target Name="RenamePublishedExecutable" AfterTargets="Publish">
+		<PropertyGroup>
+			<_PublishedExe>$(PublishDir)$(AssemblyName).exe</_PublishedExe>
+			<_PublishedPdb>$(PublishDir)$(AssemblyName).pdb</_PublishedPdb>
+			<_ReleaseExe>$(PublishDir)Mirror's Edge Tweaks.exe</_ReleaseExe>
+			<_ReleasePdb>$(PublishDir)Mirror's Edge Tweaks.pdb</_ReleasePdb>
+		</PropertyGroup>
+		<Delete Files="$(_ReleaseExe)" />
+		<Delete Files="$(_ReleasePdb)" />
+		<Move SourceFiles="$(_PublishedExe)" DestinationFiles="$(_ReleaseExe)" />
+		<Move SourceFiles="$(_PublishedPdb)" DestinationFiles="$(_ReleasePdb)" Condition="Exists('$(_PublishedPdb)')" />
+	</Target>
 
 </Project>
 
