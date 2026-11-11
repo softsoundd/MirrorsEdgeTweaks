@@ -196,6 +196,60 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public void RemoveFromImage_UndoesEveryFix_AndFreesTheirBlocks()
+        {
+            byte[] stock = BuildViewportImage(BuildFlat());
+            byte[] patched = RenderTargetPatcher.PatchImage((byte[])stock.Clone(), "steam", out _)!;
+            Assert.True(RenderTargetPatcher.HasAnyFix(patched));
+
+            byte[] restored = RenderTargetPatcher.RemoveFromImage(patched)!;
+
+            Assert.False(RenderTargetPatcher.HasAnyFix(restored));
+            Assert.True(restored.AsSpan((int)FlatTextRva, FlatSectionSize)
+                .SequenceEqual(stock.AsSpan((int)FlatTextRva, FlatSectionSize)));
+            Assert.Equal(CaveHeaderSize, CaveSection.Open(restored).CurrentWatermark);
+        }
+
+        [Fact]
+        public void RemoveFromImage_FreesBothBlocks_FromAFixedTextPaddingCave()
+        {
+            byte[] stock = BuildViewportImage(BuildFixedCave(256));
+            byte[] patched = RenderTargetPatcher.PatchImage((byte[])stock.Clone(), "retail", out _)!;
+
+            byte[] restored = RenderTargetPatcher.RemoveFromImage(patched)!;
+
+            int codeLength = FixedCaveStart - (int)FlatTextRva;
+            Assert.True(restored.AsSpan((int)FlatTextRva, codeLength).SequenceEqual(stock.AsSpan((int)FlatTextRva, codeLength)));
+            Assert.Equal(CaveHeaderSize, CaveSection.Open(restored).CurrentWatermark);
+        }
+
+        [Fact]
+        public void RemoveFromImage_UndoesTheAllocateFix_WhenTheImageHasNoViewportSites()
+        {
+            byte[] image = BuildImage();
+            byte[] stock = (byte[])image.Clone();
+            RenderTargetPatcher.ApplyAllocateFix(image);
+
+            Assert.Equal(stock, RenderTargetPatcher.RemoveFromImage(image));
+        }
+
+        [Fact]
+        public void RemoveFromImage_ReturnsNull_ForAStockImage()
+        {
+            byte[] stock = BuildViewportImage(BuildFlat());
+
+            Assert.False(RenderTargetPatcher.HasAnyFix(stock));
+            Assert.Null(RenderTargetPatcher.RemoveFromImage((byte[])stock.Clone()));
+        }
+
+        [Fact]
+        public void HasAnyFix_ReturnsNull_WhenTheImageHasNoRenderTargetSite()
+        {
+            Assert.Null(RenderTargetPatcher.HasAnyFix(SyntheticPe.Build()));
+            Assert.Null(RenderTargetPatcher.RemoveFromImage(SyntheticPe.Build()));
+        }
+
+        [Fact]
         public void PatchImage_SkipsTheViewportFixes_ForAnUnknownVersion()
         {
             byte[] stock = BuildViewportImage(BuildFlat());

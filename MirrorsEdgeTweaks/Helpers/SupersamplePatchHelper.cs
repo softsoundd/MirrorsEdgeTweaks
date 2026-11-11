@@ -43,7 +43,7 @@ namespace MirrorsEdgeTweaks.Helpers
             "allocate_site_deferred_b", "allocate_site_deferred_shading",
         };
 
-        private static readonly string[] HookNames =
+        internal static readonly string[] HookNames =
         {
             "scaleViewport_centering",
             "computeUpscale_centering",
@@ -184,6 +184,13 @@ namespace MirrorsEdgeTweaks.Helpers
             var state = GetPatchStateFromData(data, addrs);
             if (state != SupersamplePatchState.Patched) return;
 
+            // Each hook overwrites Size bytes, so only a pattern of that length can put them all back.
+            foreach (string hookName in HookNames)
+            {
+                if (addrs.Hooks[hookName].Pattern.Length != addrs.Hooks[hookName].Size)
+                    throw new InvalidOperationException($"The {hookName} pattern does not cover all the bytes its hook replaces.");
+            }
+
             uint? caveBase = null;
 
             foreach (string name in InlinePatchNames)
@@ -213,9 +220,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     caveBase = ImageBase + (uint)foff + 5u
                         + (uint)BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(foff + 1, 4));
 
-                Buffer.BlockCopy(hdef.Pattern, 0, data, foff, hdef.Pattern.Length);
-                for (int i = hdef.Pattern.Length; i < hdef.Size; i++)
-                    data[foff + i] = 0x90;
+                Buffer.BlockCopy(hdef.Pattern, 0, data, foff, hdef.Size);
             }
 
             if (caveBase != null)

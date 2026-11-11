@@ -100,19 +100,80 @@ namespace MirrorsEdgeTweaks.Services
             return flipped ? data : null;
         }
 
+        // Returns null when the executable has no recognisable render target site.
+        public static bool? IsApplied(string exePath)
+        {
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            return HasAnyFix(OoaService.HasOoaSection(exe.Raw) ? exe.GetDecrypted() : exe.Raw);
+        }
+
+        public static void Remove(string exePath) => PatchUtility.RewriteExe(exePath, RemoveFromImage);
+
+        // EA images must already be decrypted.
+        // Returns null when the image has no recognisable render target site.
+        internal static bool? HasAnyFix(byte[] data)
+        {
+            int site = FindAllocateSite(data);
+            if (site < 0 || data[site] is not (JNE or JMP))
+                return null;
+            if (data[site] == JMP)
+                return true;
+
+            var pe = PeImageLayout.Parse(data);
+            if (!TryFindViewportSites(data, pe, out ViewportSites s))
+                return false;
+            return UnpatchedHazeTarget(data, pe, s.HazeOff, s.HazeVa, s.DynamicRhiVa) == null
+                || !IsDepthHookUnpatched(data, pe, s.DepthOff, s.DepthVa, s.ResumeVa, s.DynamicRhiVa);
+        }
+
+        // Returns null when the image has none of the fixes.
+        // Each block is freed only when it is the top of its cave, so a block below another patch's block stays allocated.
+        internal static byte[]? RemoveFromImage(byte[] data)
+        {
+            int site = FindAllocateSite(data);
+            if (site < 0)
+                return null;
+
+            if (data[site] is not (JNE or JMP))
+                throw new InvalidOperationException(
+                    $"Unexpected byte 0x{data[site]:X2} at render target patch site (expected JNE 0x75 or JMP 0xEB).");
+            bool changed = data[site] == JMP;
+            data[site] = JNE;
+
+            var pe = PeImageLayout.Parse(data);
+            if (!TryFindViewportSites(data, pe, out ViewportSites s))
+                return changed ? data : null;
+
+            uint? hazeBlockVa = null, depthBlockVa = null;
+            if (UnpatchedHazeTarget(data, pe, s.HazeOff, s.HazeVa, s.DynamicRhiVa) == null)
+            {
+                hazeBlockVa = Rel32Target(data, s.HazeOff, s.HazeVa);
+                int tailOff = pe.FileOffsetOf(hazeBlockVa.Value, HazeCaveLength) + HazeCaveLength - 5;
+                uint drawQuadVa = Rel32Target(data, tailOff, hazeBlockVa.Value + (uint)(HazeCaveLength - 5));
+                WriteBranch(data, s.HazeOff, s.HazeVa, 0xE8, drawQuadVa, 5);
+            }
+            if (!IsDepthHookUnpatched(data, pe, s.DepthOff, s.DepthVa, s.ResumeVa, s.DynamicRhiVa))
+            {
+                depthBlockVa = Rel32Target(data, s.DepthOff, s.DepthVa);
+                DepthDisplaced.CopyTo(data, s.DepthOff);
+            }
+
+            // ApplyViewportFixes allocates the depth block after the haze block.
+            if (depthBlockVa != null)
+                data = Reclaim(data, depthBlockVa.Value, DepthCaveLength);
+            if (hazeBlockVa != null)
+                data = Reclaim(data, hazeBlockVa.Value, HazeCaveLength);
+
+            return changed || hazeBlockVa != null || depthBlockVa != null ? data : null;
+        }
+
         // Returns false when the flag test already jumps.
         internal static bool ApplyAllocateFix(byte[] data)
         {
-            var text = PeImageLayout.Parse(data).FindSectionByName(".text")
-                ?? throw new InvalidOperationException("No .text section in executable.");
-            int start = (int)text.PointerToRawData;
-            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
-
-            int suffix = PatternHelper.FindUnique(data, SiteSuffix, start, end);
-            if (suffix < 0)
+            int site = FindAllocateSite(data);
+            if (site < 0)
                 throw new InvalidOperationException("Cannot find render target patch site in executable.");
 
-            int site = suffix - 1;
             if (data[site] == JMP) return false;
             if (data[site] != JNE)
                 throw new InvalidOperationException(
@@ -270,6 +331,53 @@ namespace MirrorsEdgeTweaks.Services
             if (at < 0)
                 throw new InvalidOperationException($"Cannot find {what} in the executable, or it is not unique.");
             return at;
+        }
+
+        // Returns the offset of the flag test's jump, which the suffix locates both before and after patching.
+        // Returns -1 when the executable has no such site.
+        // Throws when the suffix occurs more than once.
+        private static int FindAllocateSite(byte[] data)
+        {
+            var text = PeImageLayout.Parse(data).FindSectionByName(".text");
+            if (text == null)
+                return -1;
+            int start = (int)text.PointerToRawData;
+            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
+
+            int suffix = PatternHelper.FindUnique(data, SiteSuffix, start, end);
+            return suffix < 0 ? -1 : suffix - 1;
+        }
+
+        private readonly record struct ViewportSites(int HazeOff, uint HazeVa, int DepthOff, uint DepthVa, uint DynamicRhiVa)
+        {
+            public uint ResumeVa => DepthVa + (uint)DepthDisplaced.Length;
+        }
+
+        // Returns false when a site is missing or not unique, because ApplyViewportFixes cannot have patched such an image.
+        private static bool TryFindViewportSites(byte[] data, PeImageLayout pe, out ViewportSites sites)
+        {
+            int haze = HazeCallPattern.FindUniqueInText(data, pe);
+            int depth = DepthLoopPattern.FindUniqueInText(data, pe);
+            int rhi = DynamicRhiPattern.FindUniqueInText(data, pe);
+            if (haze < 0 || depth < 0 || rhi < 0)
+            {
+                sites = default;
+                return false;
+            }
+
+            int hazeOff = haze + HazeCallOffset, depthOff = depth + DepthHookOffset;
+            sites = new ViewportSites(hazeOff, pe.OffsetToVa(hazeOff), depthOff, pe.OffsetToVa(depthOff),
+                BitConverter.ToUInt32(data, rhi + DynamicRhiOffset));
+            return true;
+        }
+
+        // Each allocation starts on a 4-byte boundary, so once a later block is freed,
+        // the watermark can sit up to 3 bytes past the end of the block before it.
+        private static byte[] Reclaim(byte[] data, uint blockVa, int length)
+        {
+            data = CaveSection.ReclaimIfTopmost(data, blockVa, length);
+            int aligned = (length + 3) & ~3;
+            return aligned == length ? data : CaveSection.ReclaimIfTopmost(data, blockVa, aligned);
         }
 
         private static bool MatchesAtVa(byte[] data, PeImageLayout pe, uint va, byte[] expected)

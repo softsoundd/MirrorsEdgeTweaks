@@ -266,5 +266,31 @@ namespace MirrorsEdgeTweaks.Helpers
             data = patch(data);
             return FinishOoa(data, session);
         }
+
+        // The transform receives EA images decrypted, and returns null when it has nothing to change.
+        // The exe is only rewritten when the transform changed it, because re-encrypting an EA image strips its signature.
+        public static void RewriteExe(string exePath, Func<byte[], byte[]?> transform)
+        {
+            byte[] data = File.ReadAllBytes(exePath);
+            byte[]? result;
+            if (OoaService.HasOoaSection(data))
+            {
+                bool changed = false;
+                byte[] reencrypted = ApplyUnderOoa(data, image =>
+                {
+                    byte[]? transformed = transform(image);
+                    changed = transformed != null;
+                    return transformed ?? image;
+                });
+                result = changed ? reencrypted : null;
+            }
+            else
+            {
+                result = transform(data);
+            }
+
+            if (result != null)
+                WritePreservingAttributes(exePath, result);
+        }
     }
 }

@@ -42,39 +42,17 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _isLoading = true;
 
                 string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
+                string? deviceName = AudioBackendHelper.ReadDeviceName(tdEnginePath);
 
-                if (!File.Exists(tdEnginePath))
-                    return;
-
-                var lines = File.ReadAllLines(tdEnginePath);
-                bool inALAudioSection = false;
-
-                foreach (var line in lines)
+                if (deviceName == AudioBackendHelper.DefaultDeviceName)
                 {
-                    string trimmedLine = line.Trim();
-
-                    if (trimmedLine.StartsWith("["))
-                    {
-                        inALAudioSection = trimmedLine == "[ALAudio.ALAudioDevice]";
-                        continue;
-                    }
-
-                    if (inALAudioSection && trimmedLine.StartsWith("DeviceName="))
-                    {
-                        string value = trimmedLine.Substring("DeviceName=".Length).Trim();
-
-                        if (value == "Generic Hardware")
-                        {
-                            SelectedAudioBackendIndex = 0;
-                        }
-                        else if (value == "OpenAL Soft")
-                        {
-                            bool hrtfInstalled = !string.IsNullOrEmpty(_session.Config.GameDirectoryPath)
-                                && File.Exists(Path.Combine(_session.Config.GameDirectoryPath!, "Binaries", "soft_oal.dll"));
-                            SelectedAudioBackendIndex = hrtfInstalled ? 2 : 1;
-                        }
-                        return;
-                    }
+                    SelectedAudioBackendIndex = 0;
+                }
+                else if (deviceName == AudioBackendHelper.OpenAlSoftDeviceName)
+                {
+                    bool hrtfInstalled = !string.IsNullOrEmpty(_session.Config.GameDirectoryPath)
+                        && AudioBackendHelper.IsHrtfInstalled(_session.Config.GameDirectoryPath);
+                    SelectedAudioBackendIndex = hrtfInstalled ? 2 : 1;
                 }
             }
             catch (Exception ex)
@@ -128,19 +106,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                 switch (selectedIndex)
                 {
                     case 0:
-                        fileName = "OpenAL.zip";
+                        fileName = AudioBackendHelper.DefaultAssetFileName;
                         maxChannels = 32;
-                        deviceName = "Generic Hardware";
+                        deviceName = AudioBackendHelper.DefaultDeviceName;
                         break;
                     case 1:
                         fileName = "OpenALSoft.zip";
                         maxChannels = 256;
-                        deviceName = "OpenAL Soft";
+                        deviceName = AudioBackendHelper.OpenAlSoftDeviceName;
                         break;
                     case 2:
                         fileName = "OpenALSoftHRTF.zip";
                         maxChannels = 256;
-                        deviceName = "OpenAL Soft";
+                        deviceName = AudioBackendHelper.OpenAlSoftDeviceName;
                         break;
                     default:
                         return;
@@ -157,7 +135,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     "audio backend files");
 
                 if (selectedIndex != 2)
-                    CleanupHrtfFiles();
+                    AudioBackendHelper.DeleteHrtfFiles(_session.Config.GameDirectoryPath!);
 
                 string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
@@ -249,23 +227,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     RefreshAudioBackendSetting();
                 }
                 _gameStatus.IsUiEnabled = true;
-            }
-        }
-
-        private void CleanupHrtfFiles()
-        {
-            var gameDir = _session.Config.GameDirectoryPath;
-            if (string.IsNullOrEmpty(gameDir))
-                return;
-
-            string binDir = Path.Combine(gameDir, "Binaries");
-            string[] hrtfFiles = { "soft_oal.dll", "alsoft.ini", "openal-hrtf-proxy.ini" };
-
-            foreach (string file in hrtfFiles)
-            {
-                string path = Path.Combine(binDir, file);
-                if (File.Exists(path))
-                    File.Delete(path);
             }
         }
 

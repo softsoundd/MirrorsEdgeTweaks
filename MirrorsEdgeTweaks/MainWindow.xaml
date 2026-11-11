@@ -150,8 +150,9 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="5,10,0,30">
-            <Button Command="{Binding LaunchGameCommand}"
+        <DockPanel Grid.Row="2" LastChildFill="False" Margin="5,10,0,30">
+            <Button DockPanel.Dock="Left"
+                    Command="{Binding LaunchGameCommand}"
                     Style="{StaticResource MaterialDesignRaisedButton}"
                     Margin="0,0,10,0"
                     Height="28"
@@ -161,7 +162,8 @@
                     <TextBlock Text="Launch Game" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button Command="{Binding LaunchGameWithArgsCommand}"
+            <Button DockPanel.Dock="Left"
+                    Command="{Binding LaunchGameWithArgsCommand}"
                     Style="{StaticResource MaterialDesignOutlinedButton}"
                     Height="28"
                     Padding="8,4">
@@ -170,7 +172,22 @@
                     <TextBlock Text="Launch Game w/ Args" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-        </StackPanel>
+            <!-- The grey must be opaque, because WPF draws text in a semi-transparent brush lighter than the outline and icon. -->
+            <Button DockPanel.Dock="Right"
+                    Command="{Binding RestoreSettingsCommand}"
+                    IsEnabled="{Binding GameStatus.IsMainTabEnabled}"
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Foreground="#767676"
+                    BorderBrush="#767676"
+                    Height="28"
+                    Padding="8,4"
+                    ToolTip="Undo every change Mirror's Edge Tweaks has made to your game.">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="BackupRestore" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="Restore Settings" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </DockPanel>
 
         <Border Grid.Row="3" BorderBrush="LightGray" BorderThickness="0,2,0,0" Margin="0,0,0,0">
             <TabControl x:Name="MainTabControl" Margin="0,0,0,10"

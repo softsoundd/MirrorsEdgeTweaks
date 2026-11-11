@@ -194,17 +194,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task ShowVerifyDialogAsync(string gameDir)
         {
-            string version = await Task.Run(() => ReadExeVersion(gameDir));
-            string verify = version switch
-            {
-                "steam" => "In Steam, right-click Mirror's Edge in your library, select Properties, open Installed Files, " +
-                    "and select \"Verify integrity of game files\".",
-                "ea" => "In the EA app, open Mirror's Edge from your library, select the three dots next to Play, " +
-                    "and select \"Repair\".",
-                "gog" => "In GOG Galaxy, open Mirror's Edge, select the settings icon next to Play, " +
-                    "and select Manage installation > Verify / Repair.",
-                _ => "Reinstall Mirror's Edge, along with any official patches you had installed.",
-            };
+            string verify = await Task.Run(() => VerifyGameFilesHelper.GetInstructions(gameDir));
 
             await _dialogService.ShowMessageAsync("Verify Game Files",
                 $"{UnsupportedChangesIntro}\n\n" +
@@ -214,13 +204,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "If you use Unlocked Configs, Launch Arguments, Enable Logging, Multi-instance or Ambiguous Bypass, " +
                 "enable them again afterwards.",
                 DialogMessageType.Warning);
-        }
-
-        private static string ReadExeVersion(string gameDir)
-        {
-            string exePath = Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe");
-            try { return ExeVersionDetector.DetectVersion(File.ReadAllBytes(exePath), exePath) ?? string.Empty; }
-            catch { return string.Empty; }
         }
 
         private async Task ShowSummaryAsync(List<string> restored, List<string> failures, TweakReapplyResult result,

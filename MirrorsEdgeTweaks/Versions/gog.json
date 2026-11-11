@@ -55,14 +55,14 @@
             "scan_size": 512
         },
         "scaleViewport_centering": {
-            "pattern": "2B 0F 5F D1 E9 03 CD 89 0B 2B 16",
+            "pattern": "2B 0F 5F D1 E9 03 CD 89 0B 2B 16 8B 4C 24 1C D1 EA 03 54 24 10 5E 5D 89 11 5B",
             "size": 26,
             "return_offset": 26,
             "scan_start": "0x00B31C70",
             "scan_size": 512
         },
         "computeUpscale_centering": {
-            "pattern": "DB 01 8B 01 85 C0 7D 06 D8 05 20 93 A9 01",
+            "pattern": "DB 01 8B 01 85 C0 7D 06 D8 05 20 93 A9 01 D8 64 24 20 D9 05 18 93 A9 01 DC C9 D9 44 24 18 DE E2 D9 C9 D9 5C 24 20 F3 0F 2C 44 24 20 8B 4C 24 08 89 01 8B 12 85 D2 89 54 24 20 DB 44 24 20 7D 06 D8 05 20 93 A9 01 D8 64 24 24 DE C9 D8 6C 24 1C D9 5C 24 20 F3 0F 2C 44 24 20 8B 4C 24 0C 89 01",
             "size": 96,
             "return_offset": 96,
             "scan_start": "0x00B31D78",

@@ -8,6 +8,9 @@ namespace MirrorsEdgeTweaks.Helpers
     {
         public const string Marker = "// MET:ToneMapper=FaithfulLuma";
 
+        public const string FaithfulLumaAssetFileName = "FaithfulLumaTonemap.zip";
+        public const string OriginalAssetFileName = "OriginalTonemap.zip";
+
         public static readonly IReadOnlyList<string> ShaderFileNames = new[]
         {
             "TdCalibrationShader.usf",
@@ -17,25 +20,29 @@ namespace MirrorsEdgeTweaks.Helpers
             "TdToneMappingPixelShader.usf",
         };
 
-        public static bool IsFaithfulLumaInstalled(string? gameDirectory, IFileService files)
+        public static bool IsFaithfulLumaInstalled(string? gameDirectory, IFileService files) =>
+            CountFaithfulLumaFiles(gameDirectory, files) == ShaderFileNames.Count;
+
+        // Unlike IsFaithfulLumaInstalled, this also finds an install that replaced only some of the shaders.
+        public static bool HasFaithfulLumaFiles(string? gameDirectory, IFileService files) =>
+            CountFaithfulLumaFiles(gameDirectory, files) > 0;
+
+        private static int CountFaithfulLumaFiles(string? gameDirectory, IFileService files)
         {
             if (string.IsNullOrEmpty(gameDirectory))
-                return false;
+                return 0;
 
             try
             {
-                foreach (string fileName in ShaderFileNames)
+                return ShaderFileNames.Count(fileName =>
                 {
                     string path = files.CombinePaths(gameDirectory, "Engine", "Shaders", fileName);
-                    if (!files.FileExists(path) || !HasMarkerAtTop(files.ReadAllLines(path)))
-                        return false;
-                }
-
-                return true;
+                    return files.FileExists(path) && HasMarkerAtTop(files.ReadAllLines(path));
+                });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return false;
+                return 0;
             }
         }
 

@@ -1,0 +1,2 @@
+# The game checks its config files against hashes in MirrorsEdge.exe, so these stock copies must keep their exact bytes.
+MirrorsEdgeTweaks/StockConfig/** -text

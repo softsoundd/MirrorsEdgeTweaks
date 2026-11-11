@@ -29,6 +29,39 @@ namespace MirrorsEdgeTweaks.Services
 
         public static void Remove(string exePath) => Transform(exePath, patch: false);
 
+        // Returns null when a site is missing or holds bytes that neither the game nor the fix writes.
+        public static bool? IsApplied(string exePath)
+        {
+            ExeImage exe = GameFileReadScope.ReadExe(exePath);
+            return IsAppliedToImage(OoaService.HasOoaSection(exe.Raw) ? exe.GetDecrypted() : exe.Raw);
+        }
+
+        // EA images must already be decrypted.
+        internal static bool? IsAppliedToImage(byte[] data)
+        {
+            var text = PeImageLayout.Parse(data).FindSectionByName(".text");
+            if (text == null)
+                return null;
+            int start = (int)text.PointerToRawData;
+            int end = Math.Min(start + (int)text.SizeOfRawData, data.Length);
+
+            bool applied = false;
+            foreach (Site site in new[] { DrawSite, TrimSite })
+            {
+                int pos = site.FindUnique(data, start, end);
+                if (pos < 0)
+                    return null;
+
+                byte shr = data[pos + site.ShrOffset];
+                byte jge = data[pos + site.JgeOffset];
+                if (shr == SAR && jge == JMP)
+                    applied = true;
+                else if (shr != SHR || jge != JGE)
+                    return null;
+            }
+            return applied;
+        }
+
         static void Transform(string exePath, bool patch)
         {
             byte[] data = File.ReadAllBytes(exePath);

@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Services;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
@@ -56,12 +57,71 @@ namespace MirrorsEdgeTweaks.Helpers
             if (!IsDlcVersion(exePath))
                 return SetCommandPatchApplyResult.NotApplicable;
 
-            byte[] buffer = File.ReadAllBytes(exePath);
+            byte[]? patched = ApplyToImage(File.ReadAllBytes(exePath));
+            if (patched == null)
+                return SetCommandPatchApplyResult.AlreadyPatched;
+
+            WriteAllBytesPreservingAttributes(exePath, patched);
+            return SetCommandPatchApplyResult.Patched;
+        }
+
+        // Returns false for an executable other than the 1.1.0.0 DLC build, which never holds the patch.
+        // Returns null when the jumps cannot be read, or hold neither the stock nor the patched targets.
+        public static bool? IsPatched(string exePath)
+        {
+            if (!IsDlcVersion(exePath))
+                return false;
+
+            try
+            {
+                byte[] buffer = GameFileReadScope.ReadAllBytes(exePath);
+                return GetPatchState(buffer, PeImageLayout.Parse(buffer)) switch
+                {
+                    SetCommandPatchState.Patched => true,
+                    SetCommandPatchState.Unpatched => false,
+                    _ => null,
+                };
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        public static void Remove(string exePath)
+        {
+            if (IsDlcVersion(exePath))
+                PatchUtility.RewriteExe(exePath, RemoveFromImage);
+        }
+
+        // Points both jumps back at their stock target, and frees the payload when it is the top of the cave.
+        // Returns null when the image does not have the patch.
+        internal static byte[]? RemoveFromImage(byte[] buffer)
+        {
+            var image = PeImageLayout.Parse(buffer);
+            SetCommandPatchState state = GetPatchState(buffer, image);
+            if (state == SetCommandPatchState.Unpatched)
+                return null;
+            if (state != SetCommandPatchState.Patched)
+                throw new InvalidOperationException("Unsupported DLC executable revision for set-command patching.");
+
+            // The payload starts with PerformSetCommand, which the SET trampoline follows.
+            uint trampolineSetVa = DecodeJccRel32Target(JneSetVa, image.ReadAtVa(JneSetVa, 6));
+            uint payloadVa = checked(trampolineSetVa - ExpectedPerformSetSize);
+
+            image.WriteAtVa(JneSetVa, BuildJneBytes(JneSetVa, OriginalTargetVa));
+            image.WriteAtVa(JneSetNoPecVa, BuildJneBytes(JneSetNoPecVa, OriginalTargetVa));
+            return CaveSection.ReclaimIfTopmost(buffer, payloadVa, TotalPayloadSize);
+        }
+
+        // Returns null when the image already has the patch.
+        internal static byte[]? ApplyToImage(byte[] buffer)
+        {
             var image = PeImageLayout.Parse(buffer);
 
             SetCommandPatchState state = GetPatchState(buffer, image);
             if (state == SetCommandPatchState.Patched)
-                return SetCommandPatchApplyResult.AlreadyPatched;
+                return null;
 
             if (state != SetCommandPatchState.Unpatched)
                 throw new InvalidOperationException("Unsupported DLC executable revision for set-command patching.");
@@ -93,9 +153,7 @@ namespace MirrorsEdgeTweaks.Helpers
             image = PeImageLayout.Parse(buffer);
             image.WriteAtVa(JneSetVa, BuildJneBytes(JneSetVa, trampolineSetVa));
             image.WriteAtVa(JneSetNoPecVa, BuildJneBytes(JneSetNoPecVa, trampolineSetNoPecVa));
-
-            WriteAllBytesPreservingAttributes(exePath, buffer);
-            return SetCommandPatchApplyResult.Patched;
+            return buffer;
         }
 
         private static SetCommandPatchState GetPatchState(byte[] buffer, PeImageLayout image)

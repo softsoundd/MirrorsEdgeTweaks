@@ -24,9 +24,18 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
         public const int CertificateEntryOffset = OptionalHeaderOffset + 96 + 4 * 8;
 
         // A requested certificate follows .rdata, as signed builds carry theirs after the last section.
-        public static byte[] Build(int certificateSize = 0)
+        public static byte[] Build(int certificateSize = 0) => Build(TextRva, TextSize, certificateSize);
+
+        // Maps .text at textRva, so a test can reach the fixed addresses of a game build.
+        // The textSize must be a multiple of the 0x200 file alignment.
+        public static byte[] BuildWithText(uint textRva, int textSize) => Build(textRva, textSize, certificateSize: 0);
+
+        private static byte[] Build(uint textRva, int textSize, int certificateSize)
         {
-            byte[] image = new byte[SectionsEnd + certificateSize];
+            uint rdataRva = (textRva + (uint)textSize + 0xFFF) & ~0xFFFu;
+            int rdataRaw = TextRaw + textSize;
+            int sectionsEnd = rdataRaw + RdataSize;
+            byte[] image = new byte[sectionsEnd + certificateSize];
 
             image[0] = (byte)'M';
             image[1] = (byte)'Z';
@@ -43,18 +52,18 @@ namespace MirrorsEdgeTweaks.Tests.TestSupport
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 28, 4), ImageBase);
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 32, 4), 0x1000);  // SectionAlignment
             BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 36, 4), 0x200);   // FileAlignment
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 56, 4), 0x3000);  // SizeOfImage
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 60, 4), TextRaw); // SizeOfHeaders
-            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 92, 4), 16);      // NumberOfRvaAndSizes
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 56, 4), rdataRva + 0x1000); // SizeOfImage
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 60, 4), TextRaw);           // SizeOfHeaders
+            BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(opt + 92, 4), 16);                // NumberOfRvaAndSizes
 
             int sectionTable = opt + OptionalHeaderSize;
-            WriteSection(image, sectionTable, ".text", TextRva, TextRaw, TextSize, 0x60000020);          // code | execute | read
-            WriteSection(image, sectionTable + 40, ".rdata", RdataRva, RdataRaw, RdataSize, 0x40000040); // initialized data | read
+            WriteSection(image, sectionTable, ".text", textRva, TextRaw, textSize, 0x60000020);          // code | execute | read
+            WriteSection(image, sectionTable + 40, ".rdata", rdataRva, rdataRaw, RdataSize, 0x40000040); // initialized data | read
 
             if (certificateSize > 0)
             {
-                image.AsSpan(SectionsEnd).Fill(0xA5);
-                BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(CertificateEntryOffset, 4), SectionsEnd);
+                image.AsSpan(sectionsEnd).Fill(0xA5);
+                BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(CertificateEntryOffset, 4), sectionsEnd);
                 BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(CertificateEntryOffset + 4, 4), certificateSize);
             }
 

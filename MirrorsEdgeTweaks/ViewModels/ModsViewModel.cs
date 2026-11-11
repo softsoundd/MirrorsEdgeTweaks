@@ -51,8 +51,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return false;
             }
 
-            string scriptFilePath = Path.Combine(gameDir, "TdGame", "CookedPC", "MirrorsEdgeTweaksScripts.u");
-            return _fileService.FileExists(scriptFilePath);
+            return _fileService.FileExists(TweaksScriptsInstallHelper.GetPackagePath(gameDir));
         }
 
         public void RefreshTweaksScriptsStatus()
@@ -172,7 +171,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             try
             {
                 await _assetUrls.EnsureLoadedAsync();
-                string downloadUrl = _assetUrls.For("MirrorsEdgeTweaksScripts.zip");
+                string downloadUrl = _assetUrls.For(TweaksScriptsInstallHelper.AssetFileName);
 
                 await RunDownloadAndExtractAsync(
                     _download,
@@ -247,45 +246,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                int filesDeleted = await Task.Run(() =>
-                {
-                    string cookedPcPath = Path.Combine(gameDir, "TdGame", "CookedPC");
-                    string binariesPath = Path.Combine(gameDir, "Binaries");
-
-                    string scriptFile = Path.Combine(cookedPcPath, "MirrorsEdgeTweaksScripts.u");
-
-                    var binaryFiles = new List<string>
-                    {
-                        "Cheats",
-                        "CheatsOff",
-                        "Speedrun",
-                        "SpeenrunOff",
-                        "TimeTrialOrder",
-                        "TrainerHUD",
-                        "TrainerHUDOff",
-                        "TweaksScriptsSettings"
-                    };
-
-                    int deletedCount = 0;
-
-                    if (_fileService.FileExists(scriptFile))
-                    {
-                        _fileService.DeleteFile(scriptFile);
-                        deletedCount++;
-                    }
-
-                    foreach (var fileName in binaryFiles)
-                    {
-                        string filePath = Path.Combine(binariesPath, fileName);
-                        if (_fileService.FileExists(filePath))
-                        {
-                            _fileService.DeleteFile(filePath);
-                            deletedCount++;
-                        }
-                    }
-
-                    return deletedCount;
-                });
+                int filesDeleted = await Task.Run(() => TweaksScriptsInstallHelper.DeleteFiles(gameDir, _fileService));
 
                 _gameStatus.Status = "Ready.";
                 RefreshTweaksScriptsStatus();

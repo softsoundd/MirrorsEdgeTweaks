@@ -136,6 +136,7 @@ namespace MirrorsEdgeTweaks
             services.AddSingleton<LaunchArgumentsViewModel>();
             services.AddSingleton<LanguageSettingsViewModel>();
             services.AddSingleton<LegacyRestoreViewModel>();
+            services.AddSingleton<RestoreSettingsViewModel>();
             services.AddSingleton<MainViewModel>();
 
             services.AddSingleton<MainWindow>();

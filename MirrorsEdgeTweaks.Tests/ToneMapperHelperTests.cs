@@ -76,6 +76,27 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.False(ToneMapperHelper.IsFaithfulLumaInstalled("", new InMemoryFileService()));
         }
 
+        [Fact]
+        public void HasFaithfulLumaFiles_FindsAnInstallThatReplacedOnlySomeShaders()
+        {
+            var files = new InMemoryFileService();
+            string gameDir = @"C:\ME";
+            SeedAllShaders(files, gameDir, "float4 Color;");
+            files.Seed(ShaderPath(gameDir, "TdToneMappingPixelShader.usf"), ToneMapperHelper.Marker, "shader body");
+
+            Assert.True(ToneMapperHelper.HasFaithfulLumaFiles(gameDir, files));
+            Assert.False(ToneMapperHelper.IsFaithfulLumaInstalled(gameDir, files));
+        }
+
+        [Fact]
+        public void HasFaithfulLumaFiles_ReturnsFalseForTheOriginalShaders()
+        {
+            var files = new InMemoryFileService();
+            SeedAllShaders(files, @"C:\ME", "float4 Color;");
+
+            Assert.False(ToneMapperHelper.HasFaithfulLumaFiles(@"C:\ME", files));
+        }
+
         private static void SeedAllShaders(InMemoryFileService files, string gameDir, params string[] lines)
         {
             foreach (string fileName in ToneMapperHelper.ShaderFileNames)

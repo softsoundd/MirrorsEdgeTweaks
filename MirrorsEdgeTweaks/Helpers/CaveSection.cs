@@ -104,6 +104,42 @@ namespace MirrorsEdgeTweaks.Helpers
             return peData;
         }
 
+        // Empties every cave that the image already holds, and keeps each cave's header, so its version tag stays readable.
+        // No patch may still run code from the caves.
+        // Returns null when the image has no cave or every cave is already empty.
+        public static byte[]? ResetExistingCaves(byte[] peData)
+        {
+            var primary = new CaveSection { _peData = peData };
+            primary.ParsePe();
+
+            // Open and OpenSecondary both use the .cave section when the image has one.
+            if (primary._sectionExists)
+                return primary.ResetToEmpty();
+
+            // An image with room for another section header gets a .cave section rather than padding caves.
+            if (primary.CanAddSection())
+                return null;
+
+            byte[]? reset = primary.TryUsePadding(".text", WriteFlag, createIfMissing: false)
+                ? primary.ResetToEmpty()
+                : null;
+
+            var secondary = new CaveSection { _peData = reset ?? peData, _secondary = true };
+            secondary.ParsePe();
+            if (secondary.TryUsePadding(".rdata", ExecuteFlag | WriteFlag, createIfMissing: false))
+                reset = secondary.ResetToEmpty() ?? reset;
+            return reset;
+        }
+
+        // Returns null when the cave is already empty.
+        private byte[]? ResetToEmpty()
+        {
+            if (_watermark == InitialAlloc)
+                return null;
+            RewindTo(InitialAlloc);
+            return Finalize();
+        }
+
         private bool Holds(uint va)
         {
             EnsureSection();
@@ -272,9 +308,12 @@ namespace MirrorsEdgeTweaks.Helpers
             return headersEnd <= sizeOfHeaders;
         }
 
+        private void UsePadding(string name, uint flags) => TryUsePadding(name, flags, createIfMissing: true);
+
         // A padding cave takes the zero bytes past the section's virtual size, from a 16-byte boundary.
         // Finalize gives the section the flags, so opening a cave leaves the image unchanged.
-        private void UsePadding(string name, uint flags)
+        // Returns false without opening a cave when createIfMissing is false and the section holds none.
+        private bool TryUsePadding(string name, uint flags, bool createIfMissing)
         {
             var d = _peData;
             int hdr = -1;
@@ -288,7 +327,11 @@ namespace MirrorsEdgeTweaks.Helpers
             }
 
             if (hdr < 0)
+            {
+                if (!createIfMissing)
+                    return false;
                 throw new InvalidOperationException($"No {name} section found for a padding cave.");
+            }
 
             uint virtSize = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 8, 4));
             uint rva = BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(hdr + 12, 4));
@@ -313,6 +356,8 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             else
             {
+                if (!createIfMissing)
+                    return false;
                 if (end - start < 256)
                     throw new InvalidOperationException(
                         $"Only {Math.Max(end - start, 0)} bytes of NUL padding in {name} (need at least 256).");
@@ -327,6 +372,7 @@ namespace MirrorsEdgeTweaks.Helpers
             _sectionVirtSize = end - start;
             _usingPadding = true;
             _paddingFlags = flags;
+            return true;
         }
 
         private static int? FindPaddingCaveHeader(byte[] d, int floor, int end)

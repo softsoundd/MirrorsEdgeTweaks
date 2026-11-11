@@ -21,7 +21,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             string variantName = index == 1 ? "Faithful Luma" : "Original";
-            string zipName = index == 1 ? "FaithfulLumaTonemap.zip" : "OriginalTonemap.zip";
+            string zipName = index == 1 ? ToneMapperHelper.FaithfulLumaAssetFileName : ToneMapperHelper.OriginalAssetFileName;
 
             _gameStatus.IsUiEnabled = false;
 

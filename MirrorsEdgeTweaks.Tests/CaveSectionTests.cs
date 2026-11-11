@@ -83,6 +83,63 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public void ResetExistingCaves_EmptiesTheCaveSection_AndKeepsItsVersionTag()
+        {
+            var cave = CaveSection.Open(BuildFlat(), versionTag: "gog");
+            uint lower = cave.Alloc(32);
+            uint upper = cave.Alloc(32);
+            cave.Write(lower, Enumerable.Repeat((byte)0xAB, 32).ToArray());
+            cave.Write(upper, Enumerable.Repeat((byte)0xCD, 32).ToArray());
+            byte[] patched = cave.Finalize();
+
+            byte[] reset = CaveSection.ResetExistingCaves(patched)!;
+
+            Assert.Equal(CaveHeaderSize, CaveSection.Open(reset).CurrentWatermark);
+            Assert.Equal(-1, reset.AsSpan((int)(lower - ImageBase), 64).IndexOfAnyExcept((byte)0));
+            Assert.Equal("gog", ExeVersionDetector.DetectVersion(reset));
+        }
+
+        [Fact]
+        public void ResetExistingCaves_EmptiesBothPaddingCaves()
+        {
+            var primary = CaveSection.Open(BuildFixedCave(256, rdataTailBytes: 0x400), versionTag: "retail");
+            primary.Write(primary.Alloc(32), Enumerable.Repeat((byte)0xAB, 32).ToArray());
+            var secondary = CaveSection.OpenSecondary(primary.Finalize(), versionTag: "retail");
+            secondary.Write(secondary.Alloc(32), Enumerable.Repeat((byte)0xCD, 32).ToArray());
+            byte[] patched = secondary.Finalize();
+
+            byte[] reset = CaveSection.ResetExistingCaves(patched)!;
+
+            Assert.Equal(CaveHeaderSize, CaveSection.Open(reset).CurrentWatermark);
+            Assert.Equal(CaveHeaderSize, CaveSection.OpenSecondary(reset).CurrentWatermark);
+            Assert.Equal("retail", ExeVersionDetector.DetectVersion(reset));
+        }
+
+        [Fact]
+        public void ResetExistingCaves_NeverAddsACave()
+        {
+            byte[] flat = BuildFlat();
+            byte[] fixedCave = BuildFixedCave(256, rdataTailBytes: 0x400);
+            byte[] stockFlat = (byte[])flat.Clone();
+            byte[] stockFixedCave = (byte[])fixedCave.Clone();
+
+            Assert.Null(CaveSection.ResetExistingCaves(flat));
+            Assert.Null(CaveSection.ResetExistingCaves(fixedCave));
+            Assert.Equal(stockFlat, flat);
+            Assert.Equal(stockFixedCave, fixedCave);
+        }
+
+        [Fact]
+        public void ResetExistingCaves_ReturnsNull_WhenTheCaveIsAlreadyEmpty()
+        {
+            var cave = CaveSection.Open(BuildFlat(), versionTag: "gog");
+            uint va = cave.Alloc(16);
+            byte[] reclaimed = CaveSection.ReclaimIfTopmost(cave.Finalize(), va, 16);
+
+            Assert.Null(CaveSection.ResetExistingCaves(reclaimed));
+        }
+
+        [Fact]
         public void ReclaimIfTopmost_FreesABlockInTheRdataTail()
         {
             var cave = CaveSection.OpenSecondary(BuildFixedCave(256, rdataTailBytes: 0x400), versionTag: "retail");

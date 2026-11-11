@@ -19,6 +19,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IGameProcessMonitor _processMonitor;
         private readonly ISteamService _steamService;
         private readonly LegacyRestoreViewModel _legacyRestore;
+        private readonly RestoreSettingsViewModel _restoreSettings;
 
         public GameSession Session { get; }
 
@@ -59,6 +60,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             LaunchArgumentsViewModel launchArguments,
             LanguageSettingsViewModel language,
             LegacyRestoreViewModel legacyRestore,
+            RestoreSettingsViewModel restoreSettings,
             IGameDataService gameData,
             IAppSettingsService settings,
             IGameLauncher gameLauncher,
@@ -97,6 +99,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _processMonitor = processMonitor;
             _steamService = steamService;
             _legacyRestore = legacyRestore;
+            _restoreSettings = restoreSettings;
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
             _processMonitor.RunningStateChanged += OnGameRunningChanged;
@@ -173,7 +176,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         public async Task ProcessGameDirectoryAsync(string path) =>
             await Session.ApplyGate.RunAsync(() => ProcessGameDirectoryCoreAsync(path));
 
-        private async Task ProcessGameDirectoryCoreAsync(string path)
+        private async Task ProcessGameDirectoryCoreAsync(string path, bool checkLegacyChanges = true)
         {
             _ = Task.Run(BackupRetentionService.PruneOrphanedBackups);
 
@@ -209,15 +212,18 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 });
 
-                try
+                if (checkLegacyChanges)
                 {
-                    await _legacyRestore.RunAsync(path);
-                }
-                catch (Exception ex)
-                {
-                    await _dialogService.ShowErrorAsync(
-                        "Could not check the game files for outdated patches from older versions of Tweaks.",
-                        ex, "Older Tweaks Changes", DialogMessageType.Warning);
+                    try
+                    {
+                        await _legacyRestore.RunAsync(path);
+                    }
+                    catch (Exception ex)
+                    {
+                        await _dialogService.ShowErrorAsync(
+                            "Could not check the game files for outdated patches from older versions of Tweaks.",
+                            ex, "Older Tweaks Changes", DialogMessageType.Warning);
+                    }
                 }
 
                 // The restore above rewrites game files, so the shared reads start after it.
@@ -596,6 +602,60 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _dialogService.ShowError("Could not launch the game with launch arguments.", ex);
             }
+        }
+
+        [RelayCommand]
+        private async Task RestoreSettingsAsync()
+        {
+            var gameDir = Session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDir) || !IsValidGameDirectory(gameDir))
+            {
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
+                return;
+            }
+
+            if (!await _restoreSettings.ConfirmAsync())
+                return;
+
+            // Mirror's Edge can start while the confirmation is open.
+            if (_processMonitor.IsGameRunning)
+            {
+                _dialogService.ShowMessage("Error", "Close Mirror's Edge before restoring its settings.", DialogMessageType.Error);
+                return;
+            }
+
+            RestoreSettingsReport? report = null;
+            Exception? failure = null;
+
+            // The reload runs inside the same gate hold, because the gate is not reentrant.
+            await Session.ApplyGate.RunAsync(async () =>
+            {
+                try
+                {
+                    report = await _restoreSettings.RunAsync(gameDir);
+                    ClearStoredTweakInputs();
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+
+                // The check for older changes would save tweaks to re-apply after a verification, which would undo the restore.
+                await ProcessGameDirectoryCoreAsync(gameDir, checkLegacyChanges: false);
+            });
+
+            if (report != null)
+                await _restoreSettings.ShowSummaryAsync(report);
+            else if (failure != null)
+                await _dialogService.ShowErrorAsync("Could not restore your settings.", failure);
+        }
+
+        // ProcessGameDirectoryCoreAsync saves these entries, which describe tweaks that the restore removed.
+        private void ClearStoredTweakInputs()
+        {
+            Graphics.NewFovValue = string.Empty;
+            Input.Cm360 = string.Empty;
+            LaunchArguments.LaunchArguments = string.Empty;
         }
 
         [RelayCommand]

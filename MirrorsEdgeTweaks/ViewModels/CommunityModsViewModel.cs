@@ -72,7 +72,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 _gameStatus.IsUiEnabled = false;
 
                 await _assetUrls.EnsureLoadedAsync();
-                string fileName = enabled ? "FaithModelCinematic.zip" : "FaithModelOriginal.zip";
+                string fileName = enabled ? CinematicFaithHelper.CinematicAssetFileName : CinematicFaithHelper.OriginalAssetFileName;
                 string downloadUrl = _assetUrls.For(fileName);
 
                 await RunDownloadAndExtractAsync(
@@ -102,17 +102,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                string playerModelPath = Path.Combine(_session.Config.GameDirectoryPath, "TdGame", "CookedPC", "Characters", "CH_TKY_Crim_Fixer.upk");
-
-                if (!File.Exists(playerModelPath))
-                    return;
-
-                long fileSize = new FileInfo(playerModelPath).Length;
-
-                if (fileSize == 15063782)
-                    SetSilently(() => CinematicFaithIndex = 1);
-                else if (fileSize == 8155273)
-                    SetSilently(() => CinematicFaithIndex = 0);
+                if (CinematicFaithHelper.IsCinematicInstalled(_session.Config.GameDirectoryPath) is { } cinematic)
+                    SetSilently(() => CinematicFaithIndex = cinematic ? 1 : 0);
             }
             catch
             {

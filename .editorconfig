@@ -6,6 +6,13 @@ charset = utf-8
 insert_final_newline = true
 trim_trailing_whitespace = true
 
+# The game checks its config files against hashes in MirrorsEdge.exe, so these stock copies must keep their exact bytes.
+[MirrorsEdgeTweaks/StockConfig/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
 [*.{csproj,props,targets,xaml,xml}]
 indent_style = space
 indent_size = 2
