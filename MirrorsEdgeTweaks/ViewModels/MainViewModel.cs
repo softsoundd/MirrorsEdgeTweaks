@@ -18,7 +18,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IFolderPickerService _folderPicker;
         private readonly IGameProcessMonitor _processMonitor;
         private readonly ISteamService _steamService;
-        private readonly IAssetUrlProvider _assetUrls;
         private readonly LegacyRestoreViewModel _legacyRestore;
 
         public GameSession Session { get; }
@@ -68,8 +67,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IFileService fileService,
             IFolderPickerService folderPicker,
             IGameProcessMonitor processMonitor,
-            ISteamService steamService,
-            IAssetUrlProvider assetUrls)
+            ISteamService steamService)
         {
             Session = session;
             GameStatus = gameStatus;
@@ -98,7 +96,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             _folderPicker = folderPicker;
             _processMonitor = processMonitor;
             _steamService = steamService;
-            _assetUrls = assetUrls;
             _legacyRestore = legacyRestore;
 
             _gameData.PackagesReloaded += OnPackagesReloaded;
@@ -138,8 +135,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         public async Task InitializeAsync()
         {
-            _ = _assetUrls.EnsureLoadedAsync();
-
             LoadSettings();
 
             GameStatus.IsGameRunning = _processMonitor.IsGameRunning;

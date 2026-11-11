@@ -34,6 +34,9 @@
         <None Update="Fixtures\17410_install.vdf">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="..\assets-manifest.json" Link="Fixtures\assets-manifest.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

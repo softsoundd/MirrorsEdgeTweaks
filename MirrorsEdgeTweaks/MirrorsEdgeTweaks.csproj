@@ -9,7 +9,6 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
-		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		<!-- With CET compatibility, the app crashes at startup when hardware-enforced stack protection is on but Windows lacks the required updates. -->
 		<CetCompat>false</CetCompat>
 
@@ -17,6 +16,12 @@
 		<AssemblyVersion>4.5.0.0</AssemblyVersion>
 		<FileVersion>4.5.0.0</FileVersion>
 		<InformationalVersion>4.5.0</InformationalVersion>
+
+		<Product>Mirror's Edge Tweaks</Product>
+		<AssemblyTitle>Mirror's Edge Tweaks</AssemblyTitle>
+		<Description>Modding, settings and fixes for Mirror's Edge</Description>
+		<Company>softsoundd</Company>
+		<Copyright>Copyright (C) 2025-2026 softsoundd</Copyright>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -42,7 +47,6 @@
 		<PackageReference Include="Eliot.UELib" Version="1.13.7" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
 		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.161" />
-		<PackageReference Include="NativeSharpLzo" Version="0.3.5" />
 		<PackageReference Include="MaterialDesignThemes" Version="5.4.0" />
 	</ItemGroup>
 

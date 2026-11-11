@@ -16,9 +16,10 @@ namespace MirrorsEdgeTweaks.Services
 
     public class AssetUrlProvider : IAssetUrlProvider
     {
+        // The first download of a session waits for the manifest, so a slow fetch gives way to the cached copy or the defaults.
         private static readonly HttpClient ManifestClient = new()
         {
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(5)
         };
 
         private readonly string _cacheFilePath;
@@ -148,7 +149,7 @@ namespace MirrorsEdgeTweaks.Services
             _assetBase = assetBase;
             _overrides = manifest!.Overrides != null
                 ? manifest.Overrides
-                    .Select(kvp => (kvp.Key, Url: AssetManifest.ValidateHttpsUrl(kvp.Value)))
+                    .Select(kvp => (kvp.Key, Url: AssetManifest.ValidateAssetUrl(kvp.Value)))
                     .Where(entry => entry.Url != null)
                     .ToDictionary(entry => entry.Key, entry => entry.Url!, StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

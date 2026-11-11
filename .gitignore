@@ -216,6 +216,8 @@ publish/
 # but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
 *.publishproj
+# The release workflow publishes with this profile, so it is tracked.
+!MirrorsEdgeTweaks/Properties/PublishProfiles/FolderProfile.pubxml
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
 # checkin your Azure Web App publish settings, but sensitive information contained

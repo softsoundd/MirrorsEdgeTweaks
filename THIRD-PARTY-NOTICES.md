@@ -16,14 +16,6 @@ authors and is subject to its own license terms.
 - Copyright: Copyright (c) Eliot van Uytfanghe
 - Usage: Unreal Engine package reading.
 
-### NativeSharpLzo
-- Author: BigBang1112 (fork of SharpLzo by wtfblub)
-- Source: https://github.com/BigBang1112/NativeSharpLzo
-- License: GPL-3.0-only
-- Usage: Unreal Engine package decompression.
-- Note: Wraps the LZO data compression library by Markus F. X. J. Oberhumer
-  (http://www.oberhumer.com/opensource/lzo/), licensed under GPL-2.0-or-later.
-
 ### CommunityToolkit.Mvvm
 - Author: .NET Foundation and Contributors
 - Source: https://github.com/CommunityToolkit/dotnet
@@ -70,6 +62,19 @@ authors and is subject to its own license terms.
   Copyright (c) 2019 Robin Kertels, Copyright (c) 2023 Jeffrey Ellison
 - Usage: Direct3D 9 to Vulkan translation layer which provides the
   32-bit float depth buffer for the reversed depth setting.
+
+---
+
+## File formats
+
+### LZO1X
+- Author: Markus F. X. J. Oberhumer, as part of the LZO library
+- Source: http://www.oberhumer.com/opensource/lzo/
+- Usage: Unreal Engine package decompression.
+- Note: The LZO library is not bundled. Mirror's Edge Tweaks reads the format
+  with its own decoder (`MirrorsEdgeTweaks/Services/Lzo1xDecoder.cs`), which
+  follows the Linux kernel's description of the format
+  (https://docs.kernel.org/staging/lzo.html).
 
 ---
 
@@ -133,5 +138,4 @@ freely, subject to the following restrictions:
 ## License texts
 
 - `GPL-3.0`: https://www.gnu.org/licenses/gpl-3.0.html
-- `GPL-2.0`: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 - `LGPL-2.1`: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html

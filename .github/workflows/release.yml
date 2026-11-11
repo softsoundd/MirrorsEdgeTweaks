@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
 
 permissions:
   contents: write
@@ -19,6 +20,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The release step below would turn an existing release back into a draft and replace its download.
+      - name: Stop if the tag already has a release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $output = gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) {
+            throw "A release for $env:GITHUB_REF_NAME already exists. Delete it, or push a new tag."
+          }
+          if ($output -notmatch 'release not found') {
+            throw "Could not check for an existing release: $output"
+          }
+          exit 0
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -28,15 +44,25 @@ jobs:
         run: dotnet test --solution MirrorsEdgeTweaks.slnx --configuration Release
 
       - name: Publish
-        run: dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj --configuration Release --output publish
+        run: dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj --configuration Release -p:PublishProfile=FolderProfile --output publish
 
       - name: Package zip
         shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath "MirrorsEdgeTweaks-${{ github.ref_name }}.zip"
+        run: |
+          $extra = Get-ChildItem publish -Recurse -File | Where-Object Name -notin 'MirrorsEdgeTweaks.exe', 'MirrorsEdgeTweaks.pdb'
+          if ($extra) {
+            throw "The release zip would leave out: $($extra.Name -join ', ')"
+          }
+          $exe = "publish/Mirror's Edge Tweaks.exe"
+          Move-Item -LiteralPath "publish/MirrorsEdgeTweaks.exe" -Destination $exe
+          Compress-Archive -LiteralPath $exe -DestinationPath MirrorsEdgeTweaks.zip
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          "SHA-256 of Mirror's Edge Tweaks.exe: $hash" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Create GitHub release with asset
         uses: softprops/action-gh-release@v3
         with:
-          files: MirrorsEdgeTweaks-${{ github.ref_name }}.zip
+          files: MirrorsEdgeTweaks.zip
           draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true

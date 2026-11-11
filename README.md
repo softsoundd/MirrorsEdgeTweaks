@@ -80,7 +80,7 @@ dotnet test --configuration Release
 
 ### Third party software / libraries
 - **[UELib](https://github.com/EliotVU/Unreal-Library)** by Eliot van Uytfanghe (EliotVU) - Unreal Engine package reading
-- **[NativeSharpLzo](https://github.com/BigBang1112/NativeSharpLzo)** by BigBang1112 - Unreal Engine package decompression (wraps [LZO](http://www.oberhumer.com/opensource/lzo/) by Markus F. X. J. Oberhumer)
+- **[LZO](http://www.oberhumer.com/opensource/lzo/)** by Markus F. X. J. Oberhumer - Unreal Engine package compression format which Tweaks reads with its own decoder
 - **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Audio backend upgrade
 - **[DXVK](https://github.com/doitsujin/dxvk)** by Philip Rebohle (doitsujin) - Provides the 32-bit float depth for the Z-fighting fix
 - **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** by the .NET Foundation - MVVM framework

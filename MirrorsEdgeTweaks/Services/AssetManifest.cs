@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -34,10 +35,10 @@ namespace MirrorsEdgeTweaks.Services
 
         public string? GetValidatedAssetBase()
         {
-            return ValidateHttpsUrl(AssetBase, requireTrailingSlash: true);
+            return ValidateAssetUrl(AssetBase, requireTrailingSlash: true);
         }
 
-        public static string? ValidateHttpsUrl(string? url, bool requireTrailingSlash = false)
+        public static string? ValidateAssetUrl(string? url, bool requireTrailingSlash = false)
         {
             if (string.IsNullOrWhiteSpace(url))
                 return null;
@@ -48,10 +49,25 @@ namespace MirrorsEdgeTweaks.Services
                 return null;
             }
 
-            if (!requireTrailingSlash)
-                return url;
+            // AbsoluteUri has ".." path steps resolved, so they cannot lead out of a trusted prefix.
+            // An encoded slash or backslash is refused, because a server could decode it into such a step.
+            string normalised = uri.AbsoluteUri;
+            if (normalised.Contains("%2F", StringComparison.OrdinalIgnoreCase)
+                || normalised.Contains("%5C", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
 
-            return url.EndsWith('/') ? url : url + "/";
+            if (requireTrailingSlash && !normalised.EndsWith('/'))
+                normalised += "/";
+
+            foreach (string prefix in DownloadUrls.TrustedAssetPrefixes)
+            {
+                if (normalised.StartsWith(prefix, StringComparison.Ordinal))
+                    return normalised;
+            }
+
+            return null;
         }
     }
 }

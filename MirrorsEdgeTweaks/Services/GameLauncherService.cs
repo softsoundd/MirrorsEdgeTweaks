@@ -1,4 +1,5 @@
 using MirrorsEdgeTweaks.Helpers;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 
@@ -9,13 +10,35 @@ namespace MirrorsEdgeTweaks.Services
         void Launch(string exePath, string arguments);
     }
 
+    internal interface IProcessStarter
+    {
+        bool IsElevated { get; }
+
+        void StartDirect(string fileName, string arguments, string workingDirectory);
+        void StartViaShell(string fileName, string arguments, string workingDirectory);
+        bool TryStartUnelevated(string fileName, string arguments, string workingDirectory);
+    }
+
     public class GameLauncherService : IGameLauncher
     {
+        private const int ErrorVirusInfected = 225;
+        private const int ErrorVirusDeleted = 226;
+        private const int ErrorElevationRequired = 740;
+        private const int ErrorCancelled = 1223;
+        private const int ErrorAccessDisabledByPolicy = 1260;
+
         private readonly ISteamService _steamService;
+        private readonly IProcessStarter _processStarter;
 
         public GameLauncherService(ISteamService steamService)
+            : this(steamService, new ProcessStarter())
+        {
+        }
+
+        internal GameLauncherService(ISteamService steamService, IProcessStarter processStarter)
         {
             _steamService = steamService;
+            _processStarter = processStarter;
         }
 
         public void Launch(string exePath, string arguments)
@@ -32,12 +55,7 @@ namespace MirrorsEdgeTweaks.Services
                 throw new InvalidOperationException("Could not determine a valid game working directory.");
             }
 
-            StartProcessWithFallbacks(
-                exePath,
-                arguments,
-                workingDirectory,
-                includeCmdFallback: true,
-                "Windows could not start Mirror's Edge.");
+            Start(exePath, arguments, workingDirectory, "Windows could not start Mirror's Edge.");
         }
 
         internal static string BuildSteamApplaunchArguments(string gameArguments)
@@ -63,103 +81,87 @@ namespace MirrorsEdgeTweaks.Services
                 throw new InvalidOperationException("Could not determine a valid Steam working directory.");
             }
 
-            StartProcessWithFallbacks(
+            Start(
                 steamExe,
                 BuildSteamApplaunchArguments(gameArguments),
                 steamDirectory,
-                includeCmdFallback: false,
                 "Steam could not start Mirror's Edge.");
         }
 
-        private static void StartProcessWithFallbacks(
-            string exePath,
-            string arguments,
-            string workingDirectory,
-            bool includeCmdFallback,
-            string failureMessage)
-        {
-            List<string> launchErrors = new List<string>();
-
-            if (TryStartProcess(exePath, arguments, workingDirectory, useShellExecute: false, launchErrors))
-                return;
-
-            if (TryStartProcess(exePath, arguments, workingDirectory, useShellExecute: true, launchErrors))
-                return;
-
-            if (includeCmdFallback && TryStartViaCmd(exePath, arguments, workingDirectory, launchErrors))
-                return;
-
-            throw new UserFacingException(failureMessage, new InvalidOperationException(string.Join(" | ", launchErrors)));
-        }
-
-        private static bool TryStartProcess(
-            string exePath,
-            string arguments,
-            string workingDirectory,
-            bool useShellExecute,
-            List<string> launchErrors)
+        // A failed start is reported and not retried by another route.
+        // A second route cannot start what Windows or antivirus software refused, and it could start the program twice.
+        private void Start(string fileName, string arguments, string workingDirectory, string failureMessage)
         {
             try
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = arguments,
-                    WorkingDirectory = workingDirectory,
-                    UseShellExecute = useShellExecute
-                };
+                if (_processStarter.IsElevated && _processStarter.TryStartUnelevated(fileName, arguments, workingDirectory))
+                    return;
 
-                Process? process = Process.Start(startInfo);
-                if (process == null)
+                try
                 {
-                    launchErrors.Add($"UseShellExecute={useShellExecute}: Process.Start returned null.");
-                    return false;
+                    _processStarter.StartDirect(fileName, arguments, workingDirectory);
                 }
-
-                return true;
+                catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorElevationRequired)
+                {
+                    StartWithAdministratorPrompt(fileName, arguments, workingDirectory);
+                }
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode is ErrorVirusInfected or ErrorVirusDeleted)
+            {
+                throw new UserFacingException(
+                    $"Antivirus software blocked {Path.GetFileName(fileName)} from starting, and may have quarantined it. " +
+                    "Check your antivirus software's protection history for details.", ex);
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorAccessDisabledByPolicy)
+            {
+                throw new UserFacingException(
+                    $"A security policy on this PC blocked {Path.GetFileName(fileName)} from starting.", ex);
             }
             catch (Exception ex)
             {
-                launchErrors.Add($"UseShellExecute={useShellExecute}: {ex.Message}");
-                return false;
+                throw new UserFacingException(failureMessage, ex);
             }
         }
 
-        private static bool TryStartViaCmd(
-            string exePath,
-            string arguments,
-            string workingDirectory,
-            List<string> launchErrors)
+        private void StartWithAdministratorPrompt(string fileName, string arguments, string workingDirectory)
         {
             try
             {
-                string cmdArguments = string.IsNullOrWhiteSpace(arguments)
-                    ? $"/c start \"\" \"{exePath}\""
-                    : $"/c start \"\" \"{exePath}\" {arguments}";
-
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = cmdArguments,
-                    WorkingDirectory = workingDirectory,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                Process? process = Process.Start(startInfo);
-                if (process == null)
-                {
-                    launchErrors.Add("cmd fallback: Process.Start returned null.");
-                    return false;
-                }
-
-                return true;
+                _processStarter.StartViaShell(fileName, arguments, workingDirectory);
             }
-            catch (Exception ex)
+            catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
             {
-                launchErrors.Add($"cmd fallback: {ex.Message}");
-                return false;
+                // The user declined the prompt, which is not a failure to report.
             }
+        }
+    }
+
+    internal sealed class ProcessStarter : IProcessStarter
+    {
+        public bool IsElevated => Environment.IsPrivilegedProcess;
+
+        public void StartDirect(string fileName, string arguments, string workingDirectory) =>
+            Start(fileName, arguments, workingDirectory, useShellExecute: false);
+
+        public void StartViaShell(string fileName, string arguments, string workingDirectory) =>
+            Start(fileName, arguments, workingDirectory, useShellExecute: true);
+
+        public bool TryStartUnelevated(string fileName, string arguments, string workingDirectory) =>
+            UnelevatedLauncher.TryStart(fileName, arguments, workingDirectory);
+
+        private static void Start(string fileName, string arguments, string workingDirectory, bool useShellExecute)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = useShellExecute
+            };
+
+            // Process.Start returns null when ShellExecute starts no new process, which is not a failure.
+            // Disposing the Process releases its handle and leaves the program running.
+            Process.Start(startInfo)?.Dispose();
         }
     }
 }

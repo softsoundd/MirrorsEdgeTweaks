@@ -1,4 +1,3 @@
-using SharpLzo;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -405,7 +404,7 @@ namespace MirrorsEdgeTweaks.Services
                 return method switch
                 {
                     CompressZlib => DecompressWithZlib(compressedData, expectedUncompressedSize),
-                    CompressLzo => DecompressWithLzo(compressedData, expectedUncompressedSize),
+                    CompressLzo => Lzo1xDecoder.Decompress(compressedData, expectedUncompressedSize),
                     CompressLzx => throw new NotSupportedException("LZX compressed packages are not supported by MirrorsEdgeTweaks."),
                     _ => throw new InvalidDataException($"Unsupported compression method: {method}.")
                 };
@@ -457,28 +456,8 @@ namespace MirrorsEdgeTweaks.Services
         private static byte[] DecompressWithZlib(byte[] compressedData, int expectedUncompressedSize)
         {
             using var compressedStream = new MemoryStream(compressedData, writable: false);
-            using var zlibStream = new ZLibStream(compressedStream, System.IO.Compression.CompressionMode.Decompress);
+            using var zlibStream = new ZLibStream(compressedStream, CompressionMode.Decompress);
             return ReadExactly(zlibStream, expectedUncompressedSize);
-        }
-
-        private static byte[] DecompressWithLzo(byte[] compressedData, int expectedUncompressedSize)
-        {
-            try
-            {
-                return Lzo.Decompress(compressedData, expectedUncompressedSize);
-            }
-            catch (LzoException ex)
-            {
-                throw new InvalidDataException(
-                    $"SharpLzo failed to decompress LZO block (result: {ex.Result}).",
-                    ex);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidDataException(
-                    "SharpLzo failed to decompress LZO block.",
-                    ex);
-            }
         }
 
         private static byte[] ReadExactly(Stream stream, int expectedLength)

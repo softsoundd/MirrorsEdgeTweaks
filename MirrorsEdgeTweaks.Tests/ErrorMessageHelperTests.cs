@@ -19,10 +19,10 @@ namespace MirrorsEdgeTweaks.Tests
         public void Details_ReturnsTheInnerMessageOfAUserFacingException()
         {
             var ex = new UserFacingException("Windows could not start Mirror's Edge.",
-                new InvalidOperationException("UseShellExecute=False: Access is denied."));
+                new InvalidOperationException("Access is denied."));
 
             Assert.Equal("Windows could not start Mirror's Edge.", ErrorMessageHelper.Explain(ex));
-            Assert.Equal("UseShellExecute=False: Access is denied.", ErrorMessageHelper.Details(ex));
+            Assert.Equal("Access is denied.", ErrorMessageHelper.Details(ex));
         }
 
         [Fact]
