@@ -59,7 +59,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "To run the game with no FPS limiter at all, click 'Remove Limit'."),
 
             ["AntiAliasing"] = ("Anti-Aliasing Information",
-                "Anti-aliasing smooths jagged edges in the rendered image. Higher values provide better quality but reduce performance."),
+                "Anti-aliasing smooths jagged edges in the rendered image. Higher values provide better quality but reduce performance.\n\n" +
+                "Note: This setting has no effect while RTX Remix NGX is installed, because its upscalers handle anti-aliasing instead."),
 
             ["PhysX"] = ("PhysX Information",
                 "PhysX provides additional physics effects such as detailed debris and cloth simulations, and spawns extra physics props.\n\n" +
@@ -78,7 +79,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Controls the internal rendering resolution relative to your display output.\n\n" +
                 "Below 100%: renders at a lower resolution and upscales, improving performance on lower-end systems.\n\n" +
                 "Above 100%: renders at a higher resolution and downscales to your display, producing sharper visuals " +
-                "with reduced aliasing. Setting 200% renders at 4× pixel density."),
+                "with reduced aliasing. Setting 200% renders at 4× pixel density.\n\n" +
+                "Note: While RTX Remix NGX is installed, its upscaler sets the render resolution instead, so this setting has no effect."),
 
             ["TextureDetail"] = ("Texture Detail Information",
                 "Texture detail controls the resolution and LODs of textures, as well as the level of anisotropic filtering and bicubic filtering applied.\n\n" +
@@ -138,10 +140,21 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Tone mapping adjusts the post-process exposure and colour curves, which are applied on a per-map basis. " +
                 "Disabling tone mapping typically makes the image appear brighter with less contrast."),
 
+            ["Renderer"] = ("Renderer Information",
+                "Chooses how Mirror's Edge renders. Selecting DXVK or RTX Remix NGX downloads and installs it into the game's Binaries folder, " +
+                "and selecting Direct3D 9 removes it.\n\n" +
+                "• Direct3D 9 (default) — The game's original renderer.\n\n" +
+                "• DXVK (Vulkan) — Runs the game through Vulkan. The 'Reversed Depth' setting needs DXVK or RTX Remix NGX to work.\n\n" +
+                "• RTX Remix NGX — A cut-down version of RTX Remix that adds modern upscaling and frame generation to the game's own graphics: " +
+                "DLSS, DLAA, XeSS and AMD FSR upscaling, DLSS and AMD FSR frame generation, and NVIDIA Reflex. " +
+                "It also works with the 'Reversed Depth' setting.\n\n" +
+                "To choose an upscaler, press Alt + X in-game to open the Remix menu, then go to User Graphics Settings > General.\n\n" +
+                "Note: DXVK and RTX Remix NGX need a graphics driver with Vulkan 1.3 support, and DLSS needs an NVIDIA RTX graphics card."),
+
             ["ReversedDepth"] = ("Reversed Depth Information",
                 "Reduces Z-fighting (flickering textures), especially on distant buildings. It also addresses the extra Z-fighting from the 'Compensated near clipping plane' FOV option.\n\n" +
-                "Requires DXVK, which Tweaks will install if it is missing.\n\n" +
-                "Note: DXVK needs a graphics driver with Vulkan 1.3 support."),
+                "Requires DXVK or RTX Remix NGX, which you can choose in the 'Renderer' setting. If neither is installed, Tweaks offers to install DXVK.\n\n" +
+                "Note: DXVK and RTX Remix NGX need a graphics driver with Vulkan 1.3 support."),
 
             ["TextureManagement"] = ("Texture Management Information",
                 "The \"Modern\" setting removes the 250 MB VRAM allocation limit for textures and forces textures to remain in the texture pool once loaded. " +

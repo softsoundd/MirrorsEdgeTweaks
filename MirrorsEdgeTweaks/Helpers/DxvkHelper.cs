@@ -1,21 +1,10 @@
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 
 namespace MirrorsEdgeTweaks.Helpers
 {
-    public enum DxvkState
-    {
-        // Binaries holds no d3d9.dll.
-        Missing,
-        OtherWrapper,
-        // The DXVK predates 2.0, which added d3d9.useD32forD24.
-        Outdated,
-        Supported
-    }
-
-    // Detects, installs and removes DXVK beside MirrorsEdge.exe, and turns on its float depth.
+    // Recognises, installs and removes DXVK beside MirrorsEdge.exe, and turns on its float depth.
     // DXVK's d3d9.useD32forD24 stores D24S8 surfaces as D32_SFLOAT_S8_UINT, which reversed depth needs.
     public static class DxvkHelper
     {
@@ -26,20 +15,10 @@ namespace MirrorsEdgeTweaks.Helpers
         private const string GameSection = "mirrorsedge.exe";
         private static readonly byte[] FloatDepthKeyBytes = Encoding.ASCII.GetBytes(FloatDepthKey);
 
-        // DXVK reports the version of Windows' d3d9.dll, so a DXVK with d3d9.useD32forD24 is recognised by the option's name in the DLL.
-        public static DxvkState GetState(string binariesDirectory)
-        {
-            string dll = Path.Combine(binariesDirectory, "d3d9.dll");
-            if (!File.Exists(dll))
-                return DxvkState.Missing;
-            if (!IsDxvkProduct(FileVersionInfo.GetVersionInfo(dll).ProductName))
-                return DxvkState.OtherWrapper;
-            return HasFloatDepthOption(File.ReadAllBytes(dll)) ? DxvkState.Supported : DxvkState.Outdated;
-        }
-
         internal static bool IsDxvkProduct(string? productName) =>
             string.Equals(productName?.Trim(), "DXVK", StringComparison.OrdinalIgnoreCase);
 
+        // DXVK reports the version of Windows' d3d9.dll, so a DXVK with d3d9.useD32forD24 is recognised by the option's name in the DLL.
         internal static bool HasFloatDepthOption(ReadOnlySpan<byte> dll) => dll.IndexOf(FloatDepthKeyBytes) >= 0;
 
         // Installs only the asset's d3d9.dll, and throws rather than replace an existing one.
@@ -51,12 +30,21 @@ namespace MirrorsEdgeTweaks.Helpers
             entry.ExtractToFile(Path.Combine(binariesDirectory, "d3d9.dll"), overwrite: false);
         }
 
-        // Deletes d3d9.dll, DXVK's log, and a dxvk.conf that holds nothing but the line EnableFloatDepth writes.
         public static void RemoveDxvk(string binariesDirectory)
+        {
+            RemoveDll(binariesDirectory);
+            DeleteFloatDepthOnlyConf(binariesDirectory);
+        }
+
+        // Keeps dxvk.conf, because RTX Remix NGX reads it too.
+        public static void RemoveDll(string binariesDirectory)
         {
             File.Delete(Path.Combine(binariesDirectory, "d3d9.dll"));
             File.Delete(Path.Combine(binariesDirectory, "MirrorsEdge_d3d9.log"));
+        }
 
+        public static void DeleteFloatDepthOnlyConf(string binariesDirectory)
+        {
             string conf = Path.Combine(binariesDirectory, "dxvk.conf");
             if (File.Exists(conf) && File.ReadAllLines(conf).Select(line => line.Trim()).Where(line => line.Length > 0)
                     .SequenceEqual(new[] { FloatDepthLine }))
@@ -69,9 +57,12 @@ namespace MirrorsEdgeTweaks.Helpers
             return File.Exists(conf) && IsFloatDepthEnabled(File.ReadAllLines(conf));
         }
 
+        internal static bool IsFloatDepthEnabled(IEnumerable<string> lines) => ReadFloatDepth(lines) ?? false;
+
         // DXVK applies the global options, then the [MirrorsEdge.exe] section.
         // A later line overrides an earlier one.
-        internal static bool IsFloatDepthEnabled(IEnumerable<string> lines)
+        // Returns null when no line sets the option.
+        internal static bool? ReadFloatDepth(IEnumerable<string> lines)
         {
             bool? global = null, game = null;
             string? section = null;
@@ -87,7 +78,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 if (section == null) global = value;
                 else if (section == GameSection) game = value;
             }
-            return game ?? global ?? false;
+            return game ?? global;
         }
 
         public static void EnableFloatDepth(string binariesDirectory)

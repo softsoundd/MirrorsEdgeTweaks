@@ -340,6 +340,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             Graphics.RefreshFpsLimit();
             Graphics.RefreshToneMapper();
             await Graphics.RefreshReversedDepthAsync();
+            await Graphics.RefreshRuntimeAsync();
+            _ = Graphics.CheckForRuntimeUpdateAsync();
 
             if (Session.PackagesLoaded)
             {

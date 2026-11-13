@@ -62,30 +62,38 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                await _dialogService.ShowErrorAsync(
-                    $"Reversed depth {(enable ? "applied" : "removed")}, but Tweaks could not update DXVK.", ex);
+                await _dialogService.ShowErrorAsync(enable
+                    ? "Reversed depth applied, but Tweaks could not set up the renderer for it."
+                    : "Reversed depth removed, but Tweaks could not remove DXVK.", ex);
             }
         }
 
-        // Reversed depth only gains precision when DXVK stores the depth buffer as float.
+        // Reversed depth only gains precision when the runtime stores the depth buffer as float.
         private async Task SetUpFloatDepthAsync(string binariesDirectory)
         {
-            switch (await Task.Run(() => DxvkHelper.GetState(binariesDirectory)))
+            switch (await Task.Run(() => RemixRuntimeHelper.Detect(binariesDirectory)))
             {
-                case DxvkState.Missing:
+                case D3D9Runtime.Stock:
                     await OfferDxvkInstallAsync(binariesDirectory);
                     return;
-                case DxvkState.OtherWrapper:
+                case D3D9Runtime.RemixNgx:
+                    await EnableRemixFloatDepthAsync(binariesDirectory);
+                    return;
+                case D3D9Runtime.RemixNgxOutdated:
+                    await OfferRemixUpdateAsync(binariesDirectory);
+                    return;
+                case D3D9Runtime.RemixPathTraced:
+                case D3D9Runtime.OtherWrapper:
                     await _dialogService.ShowMessageAsync("Reversed Depth",
-                        "Reversed depth applied, but it requires DXVK. " +
-                        "Another mod's d3d9.dll (for example ReShade) is in the game's Binaries folder, so Tweaks cannot install DXVK there.\n\n" +
+                        $"Reversed depth applied, but it needs DXVK or {RemixNgxName}, and another mod's d3d9.dll (for example ReShade) " +
+                        "is in the game's Binaries folder.\n\n" +
                         "Please remove that d3d9.dll and try again.",
                         DialogMessageType.Warning);
                     return;
-                case DxvkState.Outdated:
+                case D3D9Runtime.DxvkOutdated:
                     await _dialogService.ShowMessageAsync("Reversed Depth",
-                        "Reversed depth applied, but it requires DXVK 2.0 or later, and the DXVK in the game's Binaries folder is older.\n\n" +
-                        "Please update DXVK, or remove it and try again so Tweaks can install the latest version.",
+                        "Reversed depth applied, but the DXVK in the game's Binaries folder is too old for it.\n\n" +
+                        "Click 'Update' next to the 'Renderer' setting to install the latest version.",
                         DialogMessageType.Warning);
                     return;
             }
@@ -108,32 +116,29 @@ namespace MirrorsEdgeTweaks.ViewModels
         private async Task OfferDxvkInstallAsync(string binariesDirectory)
         {
             bool install = await _dialogService.ShowConfirmationAsync("Reversed Depth",
-                "Reversed depth applied, but it requires DXVK to reduce Z-fighting.\n\n" +
+                $"Reversed depth applied, but it needs DXVK or {RemixNgxName} to reduce Z-fighting.\n\n" +
                 "Download and install DXVK into the game's Binaries folder?\n\n" +
+                $"You can also choose {RemixNgxName} in the 'Renderer' setting above instead, which adds upscaling and frame generation as well.\n\n" +
                 "Note: DXVK runs the game through Vulkan, so it needs a graphics driver with Vulkan 1.3 support.");
-            if (!install)
-                return;
+            if (install)
+                await InstallDxvkCoreAsync(binariesDirectory, "Reversed Depth");
+        }
 
-            _gameStatus.IsUiEnabled = false;
-            try
-            {
-                await _assetUrls.EnsureLoadedAsync();
-                string url = _assetUrls.For(DxvkHelper.AssetFileName);
-                await RunDownloadAndExtractAsync(_download, _fileService, url, binariesDirectory, "DXVK",
-                    customExtract: (zip, dest) => Task.Run(() => DxvkHelper.ExtractAssetDll(zip, dest)));
-            }
-            catch (Exception ex)
-            {
-                _gameStatus.Status = "Installation failed.";
-                await _dialogService.ShowErrorAsync("Could not install DXVK.", ex);
-                return;
-            }
-            finally
-            {
-                _gameStatus.IsUiEnabled = true;
-            }
+        // RTX Remix NGX stores depth as float by default, but the dxvk.conf line also covers a later switch to DXVK.
+        private async Task EnableRemixFloatDepthAsync(string binariesDirectory)
+        {
+            DxvkHelper.EnableFloatDepth(binariesDirectory);
+            if (RemixRuntimeHelper.IsFloatDepthOffInRtxConf(binariesDirectory))
+                await _dialogService.ShowMessageAsync("Reversed Depth", RtxConfFloatDepthOffMessage("Reversed depth applied"), DialogMessageType.Warning);
+            else
+                await _dialogService.ShowMessageAsync("Reversed Depth", "Reversed depth applied.", DialogMessageType.Success);
+        }
 
-            await EnableFloatDepthAsync(binariesDirectory, "DXVK installed and set up for reversed depth.");
+        private async Task OfferRemixUpdateAsync(string binariesDirectory)
+        {
+            if (await _dialogService.ShowConfirmationAsync("Reversed Depth",
+                    $"Reversed depth applied, but the installed {RemixNgxName} is too old to support it.\n\nUpdate {RemixNgxName} now?"))
+                await InstallRemixCoreAsync(binariesDirectory, "Reversed Depth");
         }
 
         private async Task EnableFloatDepthAsync(string binariesDirectory, string successMessage)
@@ -144,7 +149,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task OfferDxvkRemovalAsync(string binariesDirectory)
         {
-            if (await Task.Run(() => DxvkHelper.GetState(binariesDirectory)) != DxvkState.Supported)
+            if (await Task.Run(() => RemixRuntimeHelper.Detect(binariesDirectory)) != D3D9Runtime.Dxvk)
                 return;
 
             bool remove = await _dialogService.ShowConfirmationAsync("Reversed Depth",
@@ -153,6 +158,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
 
             DxvkHelper.RemoveDxvk(binariesDirectory);
+            await RefreshRuntimeAsync();
             await _dialogService.ShowMessageAsync("Reversed Depth", "DXVK removed.", DialogMessageType.Success);
         }
 

@@ -83,6 +83,7 @@ dotnet test --configuration Release
 - **[LZO](http://www.oberhumer.com/opensource/lzo/)** by Markus F. X. J. Oberhumer - Unreal Engine package compression format which Tweaks reads with its own decoder
 - **[OpenAL Soft](https://github.com/kcat/openal-soft)** by Chris Robinson (kcat) - Audio backend upgrade
 - **[DXVK](https://github.com/doitsujin/dxvk)** by Philip Rebohle (doitsujin) - Provides the 32-bit float depth for the Z-fighting fix
+- **[RTX Remix](https://github.com/NVIDIAGameWorks/dxvk-remix)** by NVIDIA, through the [dxvk-remix-mirrorsedge](https://github.com/softsoundd/dxvk-remix-mirrorsedge) fork - Passes the game's rendering through to DLSS, frame generation, XeSS and AMD FSR
 - **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** by the .NET Foundation - MVVM framework
 - **[Microsoft.Xaml.Behaviors.Wpf](https://github.com/microsoft/XamlBehaviorsWpf)** by Microsoft - XAML behaviors for WPF
 - **[MaterialDesignThemes](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)** by James Willock - UI theming and controls

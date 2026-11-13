@@ -61,9 +61,48 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(new byte[32], File.ReadAllBytes(_enginePath));
         }
 
+        [Fact]
+        public async Task ReapplyAsync_AppliesTheRenderTargetFix_WhileRtxRemixNgxIsInstalled()
+        {
+            byte[] original = WriteExe(out string exePath);
+            byte[]? expected = RenderTargetPatcher.PatchImage((byte[])original.Clone(), "steam", out _);
+
+            TweakReapplyResult result = await ReapplyExe(new TweakSnapshot { RemixNgxInstalled = true });
+
+            Assert.Equal(expected, File.ReadAllBytes(exePath));
+            Assert.Contains("Render resolution", result.ReappliedSettings);
+        }
+
+        [Fact]
+        public async Task ReapplyAsync_LeavesTheExeAlone_WithoutRtxRemixNgxOrALowerRenderResolution()
+        {
+            byte[] original = WriteExe(out string exePath);
+
+            TweakReapplyResult result = await ReapplyExe(new TweakSnapshot());
+
+            Assert.Equal(original, File.ReadAllBytes(exePath));
+            Assert.Empty(result.ReappliedSettings);
+        }
+
         // The other dependencies only serve tweaks and scopes that these tests leave out, so they are null.
         private Task<TweakReapplyResult> Reapply(IGameDataService gameData) =>
             new TweakSnapshotService(_session, gameData, null!, null!, null!)
                 .ReapplyAsync(new TweakSnapshot { Fov = 100f, ConsoleInstalled = true }, TweakScope.Engine);
+
+        // The empty user folder has no TdEngine.ini, so no render resolution is read.
+        private Task<TweakReapplyResult> ReapplyExe(TweakSnapshot snapshot)
+        {
+            _session.Config.UserFolderPath = Path.Combine(_temp.Path, "UserFolder");
+            return new TweakSnapshotService(_session, null!, null!, null!, null!).ReapplyAsync(snapshot, TweakScope.Exe);
+        }
+
+        // The cave's version tag identifies the build, as it does on an executable that Tweaks has patched before.
+        private byte[] WriteExe(out string exePath)
+        {
+            byte[] image = CaveSection.Open(RenderTargetPatcherTests.BuildViewportImage(SyntheticPe.BuildFlat()), "steam").Finalize();
+            exePath = Path.Combine(Directory.CreateDirectory(Path.Combine(_temp.Path, "Binaries")).FullName, "MirrorsEdge.exe");
+            File.WriteAllBytes(exePath, image);
+            return image;
+        }
     }
 }

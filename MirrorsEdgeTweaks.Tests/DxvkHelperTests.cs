@@ -18,23 +18,6 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
-        public void GetState_IsMissing_WithoutAD3D9Dll()
-        {
-            using var temp = new TempDirectory();
-
-            Assert.Equal(DxvkState.Missing, DxvkHelper.GetState(temp.Path));
-        }
-
-        [Fact]
-        public void GetState_IsOtherWrapper_WhenTheDllIsNotDxvk_EvenWithTheOptionName()
-        {
-            using var temp = new TempDirectory();
-            File.WriteAllBytes(Path.Combine(temp.Path, "d3d9.dll"), "MZ\0d3d9.useD32forD24\0"u8.ToArray());
-
-            Assert.Equal(DxvkState.OtherWrapper, DxvkHelper.GetState(temp.Path));
-        }
-
-        [Fact]
         public void HasFloatDepthOption_LooksForTheOptionName()
         {
             Assert.True(DxvkHelper.HasFloatDepthOption("\0d3d9.shaderModel\0d3d9.useD32forD24\0"u8));
@@ -92,6 +75,27 @@ namespace MirrorsEdgeTweaks.Tests
 
             Assert.False(File.Exists(Path.Combine(temp.Path, "d3d9.dll")));
             Assert.True(File.Exists(conf));
+        }
+
+        [Fact]
+        public void RemoveDll_KeepsAConfHoldingOnlyFloatDepth()
+        {
+            using var temp = new TempDirectory();
+            File.WriteAllBytes(Path.Combine(temp.Path, "d3d9.dll"), new byte[] { 0x4D, 0x5A });
+            File.WriteAllText(Path.Combine(temp.Path, "MirrorsEdge_d3d9.log"), "info:  DXVK: v3.1.1");
+            DxvkHelper.EnableFloatDepth(temp.Path);
+
+            DxvkHelper.RemoveDll(temp.Path);
+
+            Assert.Equal(new[] { Path.Combine(temp.Path, "dxvk.conf") }, Directory.GetFiles(temp.Path));
+        }
+
+        [Fact]
+        public void ReadFloatDepth_IsNull_WithoutALineThatSetsIt()
+        {
+            Assert.Null(DxvkHelper.ReadFloatDepth(new[] { "# d3d9.useD32forD24 = False", "[Other.exe]", "d3d9.useD32forD24 = False" }));
+            Assert.False(DxvkHelper.ReadFloatDepth(new[] { "d3d9.useD32forD24 = False" }));
+            Assert.True(DxvkHelper.ReadFloatDepth(new[] { "d3d9.useD32forD24 = False", "[MirrorsEdge.exe]", "d3d9.useD32forD24 = True" }));
         }
 
         [Fact]

@@ -43,7 +43,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             "This undoes every change Mirror's Edge Tweaks has made, returning your game to how it was after a fresh install:\n\n" +
             "• All patches and tweaks are removed.\n\n" +
             "• The developer console, Tweaks Scripts packages, the Cinematic Faith Model, Faithful Luma tonemapper, " +
-            "OpenAL Soft and DXVK are uninstalled.\n\n" +
+            "OpenAL Soft, DXVK and RTX Remix NGX are uninstalled.\n\n" +
             "• Your in-game settings and keybinds go back to their defaults.\n\n" +
             "Your game language and saves are kept. Some original game files are downloaded, so an internet connection is needed. " +
             "This cannot be undone. Do you want to continue?";
@@ -160,7 +160,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             public required bool CinematicFaithInstalled { get; init; }
             public required bool FaithfulLumaInstalled { get; init; }
             public required bool OpenAlSoftInstalled { get; init; }
-            public required bool DxvkInstalled { get; init; }
+            public required D3D9Runtime Runtime { get; init; }
         }
 
         private RestoreContext CaptureContext(string gameDirectoryPath)
@@ -203,7 +203,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 FaithfulLumaInstalled = ToneMapperHelper.HasFaithfulLumaFiles(gameDirectoryPath, _fileService),
                 OpenAlSoftInstalled = AudioBackendHelper.ReadDeviceName(tdEngineIniPath) == AudioBackendHelper.OpenAlSoftDeviceName
                     || AudioBackendHelper.IsHrtfInstalled(gameDirectoryPath),
-                DxvkInstalled = DxvkHelper.GetState(binaries) is DxvkState.Supported or DxvkState.Outdated,
+                Runtime = RemixRuntimeHelper.Detect(binaries),
             };
         }
 
@@ -323,8 +323,19 @@ namespace MirrorsEdgeTweaks.ViewModels
                     "the original audio files"))
                 await RemoveAsync(report, "OpenAL Soft", () => AudioBackendHelper.DeleteHrtfFiles(context.GameDirectory));
 
-            if (context.DxvkInstalled)
+            if (context.Runtime is D3D9Runtime.Dxvk or D3D9Runtime.DxvkOutdated)
                 await RemoveAsync(report, "DXVK", () => DxvkHelper.RemoveDxvk(context.Binaries));
+
+            // A path-traced RTX Remix build stays, because Tweaks does not install one.
+            if (context.Runtime is D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated)
+            {
+                await RemixRuntimeHelper.WaitForGameExitAsync();
+                await RemoveAsync(report, "RTX Remix NGX", () =>
+                {
+                    RemixRuntimeHelper.Remove(context.Binaries);
+                    DxvkHelper.DeleteFloatDepthOnlyConf(context.Binaries);
+                });
+            }
         }
 
         // Without the Published folder, the mod replaces stock menu files, which only a download can put back.

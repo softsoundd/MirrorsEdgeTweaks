@@ -180,7 +180,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
-        protected async Task RunDownloadAndExtractAsync(
+        // Returns the validator from IDownloadService.DownloadToFileAsync.
+        protected async Task<string?> RunDownloadAndExtractAsync(
             IDownloadService download,
             IFileService fileService,
             string url,
@@ -201,7 +202,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 var report = new CoalescedProgressReporter(_downloadProgress, Post, Dispatch);
                 bool determinateSet = false;
-                await download.DownloadToFileAsync(url, tempZipPath, p =>
+                string? validator = await download.DownloadToFileAsync(url, tempZipPath, p =>
                 {
                     if (p < 0)
                     {
@@ -233,6 +234,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (afterExtract != null)
                     await afterExtract().ConfigureAwait(false);
+
+                return validator;
             }
             finally
             {

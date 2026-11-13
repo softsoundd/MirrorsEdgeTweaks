@@ -15,7 +15,7 @@ namespace MirrorsEdgeTweaks.Tests
             {
             }
 
-            public Task RunExtractAsync(
+            public Task<string?> RunExtractAsync(
                 IDownloadService download,
                 IFileService fileService,
                 string url,
@@ -74,6 +74,21 @@ namespace MirrorsEdgeTweaks.Tests
                 });
 
             Assert.True(afterExtractCalled);
+        }
+
+        [Fact]
+        public async Task RunDownloadAndExtractAsync_ReturnsTheDownloadsValidator()
+        {
+            using var temp = new TempDirectory();
+            string extractPath = Path.Combine(temp.Path, "extract");
+            Directory.CreateDirectory(extractPath);
+
+            var fileService = new TempDirectoryFileService(Path.Combine(temp.Path, "tmp"));
+            var vm = new TestBusyViewModel(new GameSession(), new GameStatusViewModel(), new DownloadProgressViewModel());
+
+            string? validator = await vm.RunExtractAsync(new FakeDownloadService(), fileService, "https://example.test/asset.zip", extractPath, "test files");
+
+            Assert.Equal(FakeDownloadService.Validator, validator);
         }
 
         [Fact]
@@ -158,25 +173,33 @@ namespace MirrorsEdgeTweaks.Tests
 
         private sealed class FakeDownloadService : IDownloadService
         {
-            public Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
+            public const string Validator = "\"0x8DF41C31BD7C9B8\"";
+
+            public Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
             {
                 onProgress?.Invoke(50);
                 WritePayloadZip(destinationPath);
                 onProgress?.Invoke(100);
-                return Task.CompletedTask;
+                return Task.FromResult<string?>(Validator);
             }
+
+            public Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default) =>
+                Task.FromResult<string?>(Validator);
         }
 
         private sealed class RapidProgressFakeDownloadService : IDownloadService
         {
-            public Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
+            public Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
             {
                 for (int i = 0; i <= 100; i += 5)
                     onProgress?.Invoke(i);
 
                 WritePayloadZip(destinationPath);
-                return Task.CompletedTask;
+                return Task.FromResult<string?>(null);
             }
+
+            public Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default) =>
+                Task.FromResult<string?>(null);
         }
 
         private static void WritePayloadZip(string destinationPath)

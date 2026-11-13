@@ -67,6 +67,7 @@ namespace MirrorsEdgeTweaks.Services
                 HighResFix = _uiScaling.IsUIScalingActive(gameDir) || intent.HasFlag(LegacyIntent.HighResFix),
                 ReversedDepth = ReversedDepthPatcher.GetState(Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe"))
                     == ReversedDepthState.Patched,
+                RemixNgxInstalled = IsRemixNgxInstalled(Path.Combine(gameDir, "Binaries")),
             };
             (snapshot.HasLoadLastCheckpointKeybind, snapshot.HasRestartTimeTrialKeybind) = ReadExecKeybinds(config);
 
@@ -141,9 +142,10 @@ namespace MirrorsEdgeTweaks.Services
             if (scope.HasFlag(TweakScope.Exe))
             {
                 // Below 100%, the view is smaller than the scene buffer, which the render target fix handles.
+                // RTX Remix NGX renders below 100% in every upscaler mode except DLAA, without changing TdEngine.ini.
                 if (snapshot.Fov != null)
                     await Step(result, "FOV patches", () => RenderTargetPatcher.Reconcile(exePath));
-                else if (ReadScreenPercentage(config) < 100)
+                else if (snapshot.RemixNgxInstalled || ReadScreenPercentage(config) < 100)
                     await Step(result, "Render resolution", () => RenderTargetPatcher.Reconcile(exePath));
 
                 if (NeedsSupersampling(config, exePath))
@@ -260,6 +262,18 @@ namespace MirrorsEdgeTweaks.Services
         {
             using var lease = GameFileReadScope.OpenPackage(enginePath);
             return UePackageLocator.ReadFloatDefault(lease.Package, "Camera", "DefaultFOV");
+        }
+
+        private static bool IsRemixNgxInstalled(string binariesDirectory)
+        {
+            try
+            {
+                return RemixRuntimeHelper.Detect(binariesDirectory) is D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
         private static bool NeedsSupersampling(GameConfiguration config, string exePath) =>

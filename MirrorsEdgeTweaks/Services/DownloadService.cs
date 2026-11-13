@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 
@@ -7,7 +8,12 @@ namespace MirrorsEdgeTweaks.Services
     {
         // onProgress receives percentages from 0 to 100.
         // It receives a single -1 when the server reports no content length, so callers can show indeterminate progress.
-        Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default);
+        // Returns the response's ETag, or its Last-Modified date without one, for a later GetValidatorAsync call to compare.
+        Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default);
+
+        // Reads the same validator with a HEAD request.
+        // Returns null when the request fails.
+        Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default);
     }
 
     public class DownloadService : IDownloadService
@@ -20,11 +26,14 @@ namespace MirrorsEdgeTweaks.Services
             Timeout = TimeSpan.FromMinutes(30)
         };
 
-        public async Task DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
+        private static readonly TimeSpan ValidatorTimeout = TimeSpan.FromSeconds(10);
+
+        public async Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default)
         {
             using var response = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
+            string? validator = ValidatorOf(response);
             long? totalBytes = response.Content.Headers.ContentLength;
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -34,7 +43,7 @@ namespace MirrorsEdgeTweaks.Services
             {
                 onProgress?.Invoke(-1);
                 await stream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
-                return;
+                return validator;
             }
 
             long totalRead = 0;
@@ -46,6 +55,31 @@ namespace MirrorsEdgeTweaks.Services
                 totalRead += read;
                 onProgress?.Invoke((double)totalRead / totalBytes.Value * 100);
             }
+            return validator;
         }
+
+        public async Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(ValidatorTimeout);
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Head, url);
+                using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                return response.IsSuccessStatusCode ? ValidatorOf(response) : null;
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+
+        private static string? ValidatorOf(HttpResponseMessage response) =>
+            response.Headers.ETag?.ToString()
+            ?? response.Content.Headers.LastModified?.ToString("R", CultureInfo.InvariantCulture);
     }
 }
