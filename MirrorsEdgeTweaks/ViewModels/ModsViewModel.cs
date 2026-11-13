@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
-using System.IO.Compression;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -22,6 +21,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IDownloadService _download;
         private readonly IAssetUrlProvider _assetUrls;
         private readonly TweaksScriptsViewModel _tweaksScripts;
+
+        private bool _isTweaksScriptsInstalled;
+        private string? _installedTweaksScriptsVersion;
+        private string? _latestTweaksScriptsVersion;
 
         public ModsViewModel(
             IDialogService dialogService,
@@ -62,9 +65,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             var dispatcher = System.Windows.Application.Current.Dispatcher;
+            var gameDir = _session.Config.GameDirectoryPath;
 
-            if (string.IsNullOrEmpty(_session.Config.GameDirectoryPath))
+            if (string.IsNullOrEmpty(gameDir))
             {
+                _isTweaksScriptsInstalled = false;
                 dispatcher.Invoke(() =>
                 {
                     _tweaksScripts.TweaksScriptsStatus = "N/A";
@@ -74,16 +79,72 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            bool tweaksScriptsInstalled = IsTweaksScriptsInstalled();
-            dispatcher.Invoke(() =>
+            _isTweaksScriptsInstalled = IsTweaksScriptsInstalled();
+            _installedTweaksScriptsVersion = _isTweaksScriptsInstalled ? ReadInstalledTweaksScriptsVersion(gameDir) : null;
+            dispatcher.Invoke(ShowTweaksScriptsStatus);
+
+            UpdateTweaksScriptsDependencyUI(_isTweaksScriptsInstalled);
+        }
+
+        private void ShowTweaksScriptsStatus()
+        {
+            bool updateAvailable = _isTweaksScriptsInstalled
+                && TweaksScriptsInstallHelper.IsUpdateAvailable(_installedTweaksScriptsVersion, _latestTweaksScriptsVersion);
+
+            if (updateAvailable)
             {
-                _tweaksScripts.TweaksScriptsStatus = tweaksScriptsInstalled ? "Installed" : "Not Installed";
-                _tweaksScripts.TweaksScriptsStatusForeground = tweaksScriptsInstalled
+                _tweaksScripts.TweaksScriptsStatus = "Update Available";
+                _tweaksScripts.TweaksScriptsStatusForeground = System.Windows.Media.Brushes.Orange;
+            }
+            else
+            {
+                _tweaksScripts.TweaksScriptsStatus = _isTweaksScriptsInstalled ? "Installed" : "Not Installed";
+                _tweaksScripts.TweaksScriptsStatusForeground = _isTweaksScriptsInstalled
                     ? System.Windows.Media.Brushes.Green
                     : System.Windows.Media.Brushes.Gray;
-            });
+            }
+        }
 
-            UpdateTweaksScriptsDependencyUI(tweaksScriptsInstalled);
+        // An unreadable version file counts as missing, so the update is offered.
+        private static string? ReadInstalledTweaksScriptsVersion(string gameDir)
+        {
+            try
+            {
+                return TweaksScriptsInstallHelper.ReadInstalledVersion(gameDir);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        public async Task CheckForTweaksScriptsUpdateAsync()
+        {
+            if (!_isTweaksScriptsInstalled)
+            {
+                return;
+            }
+
+            try
+            {
+                await _assetUrls.EnsureLoadedAsync();
+                string? latest = await _download.GetValidatorAsync(_assetUrls.For(TweaksScriptsInstallHelper.AssetFileName));
+                if (latest == null)
+                {
+                    return;
+                }
+
+                _latestTweaksScriptsVersion = latest;
+
+                // During a game directory load, the status reads "Checking..." until the load refreshes it.
+                if (!_session.IsProcessingGameDirectory)
+                {
+                    ShowTweaksScriptsStatus();
+                }
+            }
+            catch
+            {
+            }
         }
 
         private void UpdateTweaksScriptsDependencyUI(bool isTweaksScriptsInstalled)
@@ -173,7 +234,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 await _assetUrls.EnsureLoadedAsync();
                 string downloadUrl = _assetUrls.For(TweaksScriptsInstallHelper.AssetFileName);
 
-                await RunDownloadAndExtractAsync(
+                string? version = await RunDownloadAndExtractAsync(
                     _download,
                     _fileService,
                     downloadUrl,
@@ -181,16 +242,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     "Tweaks Scripts",
                     customExtract: (tempZipPath, dest) => Task.Run(() =>
                     {
-                        string settingsPath = TweaksScriptsSettingsHelper.GetPath(dest);
-                        string[]? previousSettings = File.Exists(settingsPath) ? File.ReadAllLines(settingsPath) : null;
-
-                        ZipFile.ExtractToDirectory(tempZipPath, dest, true);
-
-                        if (previousSettings != null && File.Exists(settingsPath))
-                        {
-                            File.WriteAllLines(settingsPath,
-                                TweaksScriptsSettingsHelper.MergeValues(File.ReadAllLines(settingsPath), previousSettings));
-                        }
+                        TweaksScriptsInstallHelper.Install(tempZipPath, dest);
 
                         string exePath = Path.Combine(dest, "Binaries", "MirrorsEdge.exe");
                         if (SetCommandPatchHelper.IsDlcVersion(exePath))
@@ -201,6 +253,12 @@ namespace MirrorsEdgeTweaks.ViewModels
                         SetCommandPatchHelper.EnsurePatchedIfApplicable(exePath);
                     }));
 
+                if (version != null)
+                {
+                    TweaksScriptsInstallHelper.WriteInstalledVersion(gameDir, version);
+                }
+
+                _latestTweaksScriptsVersion = version;
                 RefreshTweaksScriptsStatus();
                 await _dialogService.ShowMessageAsync("Success",
                     "Tweaks Scripts downloaded and installed.",

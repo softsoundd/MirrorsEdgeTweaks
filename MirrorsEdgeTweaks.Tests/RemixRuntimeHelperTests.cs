@@ -160,20 +160,6 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(expected, RemixRuntimeHelper.IsFloatDepthOffInRtxConf(temp.Path));
         }
 
-        [Fact]
-        public void InstalledVersion_IsRemovedWithTheRuntime()
-        {
-            using var temp = new TempDirectory();
-            Directory.CreateDirectory(Path.Combine(temp.Path, ".trex"));
-            Assert.Null(RemixRuntimeHelper.ReadInstalledVersion(temp.Path));
-
-            RemixRuntimeHelper.WriteInstalledVersion(temp.Path, "\"0x8DF41C31BD7C9B8\"");
-            Assert.Equal("\"0x8DF41C31BD7C9B8\"", RemixRuntimeHelper.ReadInstalledVersion(temp.Path));
-
-            RemixRuntimeHelper.Remove(temp.Path);
-            Assert.Null(RemixRuntimeHelper.ReadInstalledVersion(temp.Path));
-        }
-
         // Matches the layout of the published asset.
         private static string WriteAssetZip(string directory)
         {

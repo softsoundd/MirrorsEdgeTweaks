@@ -8,7 +8,9 @@ namespace MirrorsEdgeTweaks.Services
     {
         // onProgress receives percentages from 0 to 100.
         // It receives a single -1 when the server reports no content length, so callers can show indeterminate progress.
-        // Returns the response's ETag, or its Last-Modified date without one, for a later GetValidatorAsync call to compare.
+        // Returns the response's ETag for a later GetValidatorAsync call to compare.
+        // Returns its Last-Modified date when it has no ETag.
+        // Returns null when it has neither.
         Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default);
 
         // Reads the same validator with a HEAD request.

@@ -334,6 +334,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             CheckForConfigFiles();
             _gameData.UpdateConsoleStatus();
             Mods.RefreshTweaksScriptsStatus();
+            _ = Mods.CheckForTweaksScriptsUpdateAsync();
             Mods.RefreshTweaksScriptsUIStatus();
             await Patches.RefreshUnlockedConfigsAsync();
             await Graphics.RefreshHighResFixAsync();
@@ -341,7 +342,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             Graphics.RefreshToneMapper();
             await Graphics.RefreshReversedDepthAsync();
             await Graphics.RefreshRuntimeAsync();
-            _ = Graphics.CheckForRuntimeUpdateAsync();
 
             if (Session.PackagesLoaded)
             {

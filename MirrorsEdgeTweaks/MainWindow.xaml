@@ -792,38 +792,14 @@
                                 </Grid>
                             </Border>
 
-                            <Grid Margin="0,20,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Renderer:" VerticalAlignment="Center"
-                                           FontWeight="Bold" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          SelectedIndex="{Binding Graphics.RuntimeIndex, Mode=TwoWay}">
+                            <controls:SettingRow Margin="0,20,0,0" Label="Renderer:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="Renderer">
+                                <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.RuntimeIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Direct3D 9 (default)"/>
                                     <ComboBoxItem Content="DXVK (Vulkan)"/>
                                     <ComboBoxItem Content="RTX Remix NGX (DLSS, FSR, XeSS)"/>
                                     <ComboBoxItem Content="{Binding Graphics.OtherRuntimeName}" IsEnabled="False" Visibility="{Binding Graphics.IsOtherRuntimeVisible, Converter={StaticResource BoolToVis}}"/>
                                 </ComboBox>
-                                <Button Grid.Column="2" Content="Update"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Margin="10,0,0,0"
-                                        VerticalAlignment="Center"
-                                        ToolTip="Download and install the latest version."
-                                        Visibility="{Binding Graphics.IsRuntimeUpdateAvailable, Converter={StaticResource BoolToVis}}"
-                                        Command="{Binding Graphics.UpdateRuntimeCommand}"/>
-                                <Button Grid.Column="3" Style="{StaticResource MaterialDesignIconButton}"
-                                        Margin="5,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Command="{Binding Graphics.ShowInfoCommand}" CommandParameter="Renderer">
-                                    <materialDesign:PackIcon Kind="Information" />
-                                </Button>
-                            </Grid>
+                            </controls:SettingRow>
 
                             <controls:SettingRow Margin="0,15,0,0" Label="Reversed Depth:" InfoCommand="{Binding Graphics.ShowInfoCommand}" InfoParameter="ReversedDepth">
                                 <ComboBox Style="{StaticResource MaterialDesignComboBox}" SelectedIndex="{Binding Graphics.ReversedDepthIndex, Mode=TwoWay}">

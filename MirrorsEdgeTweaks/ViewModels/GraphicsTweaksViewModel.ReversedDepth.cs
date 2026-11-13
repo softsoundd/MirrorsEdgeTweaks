@@ -91,10 +91,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         DialogMessageType.Warning);
                     return;
                 case D3D9Runtime.DxvkOutdated:
-                    await _dialogService.ShowMessageAsync("Reversed Depth",
-                        "Reversed depth applied, but the DXVK in the game's Binaries folder is too old for it.\n\n" +
-                        "Click 'Update' next to the 'Renderer' setting to install the latest version.",
-                        DialogMessageType.Warning);
+                    await OfferDxvkUpdateAsync(binariesDirectory);
                     return;
             }
 
@@ -139,6 +136,13 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (await _dialogService.ShowConfirmationAsync("Reversed Depth",
                     $"Reversed depth applied, but the installed {RemixNgxName} is too old to support it.\n\nUpdate {RemixNgxName} now?"))
                 await InstallRemixCoreAsync(binariesDirectory, "Reversed Depth");
+        }
+
+        private async Task OfferDxvkUpdateAsync(string binariesDirectory)
+        {
+            if (await _dialogService.ShowConfirmationAsync("Reversed Depth",
+                    "Reversed depth applied, but the DXVK in the game's Binaries folder is too old for it.\n\nUpdate DXVK now?"))
+                await InstallDxvkCoreAsync(binariesDirectory, "Reversed Depth");
         }
 
         private async Task EnableFloatDepthAsync(string binariesDirectory, string successMessage)

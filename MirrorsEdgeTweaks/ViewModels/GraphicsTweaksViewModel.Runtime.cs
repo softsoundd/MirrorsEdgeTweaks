@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
@@ -23,11 +22,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         [ObservableProperty] private bool _isOtherRuntimeVisible;
         [ObservableProperty] private string _otherRuntimeName = "";
         [ObservableProperty] private bool _isRemixNgxInstalled;
-        [ObservableProperty] private bool _isRuntimeUpdateAvailable;
-
-        private D3D9Runtime? _runtime;
-        private string? _installedRemixVersion;
-        private string? _latestRemixVersion;
 
         partial void OnRuntimeIndexChanged(int oldValue, int newValue) =>
             EnqueueApply(() => OnRuntimeChangedAsync(oldValue, newValue));
@@ -100,8 +94,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (index == RemixNgxRuntimeIndex)
             {
                 paragraphs.Add($"{RemixNgxName} will be downloaded and installed into the game's Binaries folder.");
-                paragraphs.Add("Tweaks will also patch MirrorsEdge.exe so that the sun haze and first-person shadows stay in the right place " +
-                    "at the lower render resolutions that upscalers use.");
                 paragraphs.Add($"Note: {RemixNgxName} needs a graphics driver with Vulkan 1.3 support, and DLSS needs an NVIDIA RTX graphics card.");
             }
             if (paragraphs.Count == 0)
@@ -111,38 +103,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             return await _dialogService.ShowConfirmationAsync(RuntimeTitle, string.Join("\n\n", paragraphs));
         }
 
-        [RelayCommand]
-        private Task UpdateRuntime() => RunApplyAsync(UpdateRuntimeCoreAsync);
-
-        private async Task UpdateRuntimeCoreAsync()
-        {
-            string? binaries = GetBinariesDirectory();
-            if (binaries == null)
-                return;
-
-            switch (_runtime)
-            {
-                case D3D9Runtime.RemixNgx:
-                case D3D9Runtime.RemixNgxOutdated:
-                    if (await _dialogService.ShowConfirmationAsync(RuntimeTitle, $"Download and install the latest version of {RemixNgxName}?"))
-                        await InstallRemixCoreAsync(binaries, RuntimeTitle);
-                    return;
-                case D3D9Runtime.DxvkOutdated:
-                    await InstallDxvkCoreAsync(binaries, RuntimeTitle);
-                    return;
-            }
-        }
-
         // The caller confirms the download first.
         private Task InstallRemixCoreAsync(string binariesDirectory, string dialogTitle) =>
-            InstallRuntimeAsync(binariesDirectory, dialogTitle, RemixNgxName, isRemix: true, async () =>
-            {
-                string url = _assetUrls.For(RemixRuntimeHelper.AssetFileName);
-                string? version = await RunDownloadAndExtractAsync(_download, _fileService, url, Path.GetDirectoryName(binariesDirectory)!, RemixNgxName,
-                    customExtract: (zip, destination) => Task.Run(() => RemixRuntimeHelper.Install(zip, destination)));
-                if (version != null)
-                    RemixRuntimeHelper.WriteInstalledVersion(binariesDirectory, version);
-            });
+            InstallRuntimeAsync(binariesDirectory, dialogTitle, RemixNgxName, isRemix: true, () =>
+                RunDownloadAndExtractAsync(_download, _fileService, _assetUrls.For(RemixRuntimeHelper.AssetFileName),
+                    Path.GetDirectoryName(binariesDirectory)!, RemixNgxName,
+                    customExtract: (zip, destination) => Task.Run(() => RemixRuntimeHelper.Install(zip, destination))));
 
         private Task InstallDxvkCoreAsync(string binariesDirectory, string dialogTitle) =>
             InstallRuntimeAsync(binariesDirectory, dialogTitle, "DXVK", isRemix: false, () =>
@@ -230,14 +196,14 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (await ApplyRenderTargetFixAsync(binariesDirectory) is { } failure)
                 {
-                    message += "\n\nTweaks could not patch MirrorsEdge.exe to keep the sun haze and first-person shadows in the right place, " +
+                    message += "\n\nTweaks could not patch the executable to keep the sun haze and first-person shadows in the right place, " +
                         $"so they may look out of place in upscaler modes that render below native resolution.\n\n{ErrorMessageHelper.Explain(failure)}";
                     type = DialogMessageType.Warning;
                     details ??= ErrorMessageHelper.Details(failure);
                 }
                 else
                 {
-                    message += "\n\nTweaks also patched MirrorsEdge.exe so that the sun haze and first-person shadows " +
+                    message += "\n\nTweaks also patched the executable so that the sun haze and first-person shadows " +
                         "stay in the right place in every upscaler mode.";
                 }
                 message += "\n\n" + RemixMenuHint;
@@ -337,24 +303,17 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             string? binaries = GetBinariesDirectory();
             D3D9Runtime? runtime = null;
-            string? installedVersion = null;
             if (binaries != null)
             {
                 try
                 {
-                    (runtime, installedVersion) = await Task.Run(() =>
-                    {
-                        D3D9Runtime detected = RemixRuntimeHelper.Detect(binaries);
-                        return (detected, detected == D3D9Runtime.RemixNgx ? RemixRuntimeHelper.ReadInstalledVersion(binaries) : null);
-                    });
+                    runtime = await Task.Run(() => RemixRuntimeHelper.Detect(binaries));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                 }
             }
 
-            _runtime = runtime;
-            _installedRemixVersion = installedVersion;
             SetSilently(() =>
             {
                 OtherRuntimeName = runtime == D3D9Runtime.RemixPathTraced ? "RTX Remix (path-traced)" : "Another mod (e.g. ReShade)";
@@ -362,35 +321,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 RuntimeIndex = runtime is { } detected ? ToRuntimeIndex(detected) : -1;
                 IsRemixNgxInstalled = runtime is D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated;
             });
-            UpdateRuntimeUpdateAvailable();
         }
-
-        // Compares the validator recorded at install with the published asset's.
-        public async Task CheckForRuntimeUpdateAsync()
-        {
-            if (_runtime != D3D9Runtime.RemixNgx || _installedRemixVersion == null)
-                return;
-
-            try
-            {
-                await _assetUrls.EnsureLoadedAsync();
-                string? latest = await _download.GetValidatorAsync(_assetUrls.For(RemixRuntimeHelper.AssetFileName));
-                if (latest == null)
-                    return;
-
-                _latestRemixVersion = latest;
-                UpdateRuntimeUpdateAvailable();
-            }
-            catch
-            {
-            }
-        }
-
-        // An install without a recorded version, such as a build deployed by hand, is never reported as out of date.
-        private void UpdateRuntimeUpdateAvailable() =>
-            IsRuntimeUpdateAvailable = _runtime is D3D9Runtime.DxvkOutdated or D3D9Runtime.RemixNgxOutdated
-                || (_runtime == D3D9Runtime.RemixNgx && _installedRemixVersion != null && _latestRemixVersion != null
-                    && _installedRemixVersion != _latestRemixVersion);
 
         private string? GetBinariesDirectory() =>
             GetGameExePath() is { } exePath ? Path.GetDirectoryName(exePath) : null;

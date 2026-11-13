@@ -31,10 +31,6 @@ namespace MirrorsEdgeTweaks.Helpers
         private const string BridgeProductPrefix = "bridge-remix";
         private const string RuntimeDirectoryName = ".trex";
 
-        // Holds the download's HTTP validator, because the version resources cannot identify a build.
-        // The file is deleted along with .trex, so it always describes the runtime beside it.
-        private const string InstalledVersionFileName = "MirrorsEdgeTweaks-asset.txt";
-
         private static readonly byte[] NgxPassthroughBytes = Encoding.ASCII.GetBytes("rtx.ngxPassthrough");
         private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(10);
 
@@ -126,19 +122,6 @@ namespace MirrorsEdgeTweaks.Helpers
             string conf = Path.Combine(binariesDirectory, "rtx.conf");
             return File.Exists(conf) && DxvkHelper.ReadFloatDepth(File.ReadAllLines(conf)) == false;
         }
-
-        public static string? ReadInstalledVersion(string binariesDirectory)
-        {
-            string path = Path.Combine(binariesDirectory, RuntimeDirectoryName, InstalledVersionFileName);
-            if (!File.Exists(path))
-                return null;
-
-            string version = File.ReadAllText(path).Trim();
-            return version.Length > 0 ? version : null;
-        }
-
-        public static void WriteInstalledVersion(string binariesDirectory, string version) =>
-            File.WriteAllText(Path.Combine(binariesDirectory, RuntimeDirectoryName, InstalledVersionFileName), version);
 
         public static bool IsGameOrBridgeRunning() => IsRunning("MirrorsEdge") || IsRunning("NvRemixBridge");
 
