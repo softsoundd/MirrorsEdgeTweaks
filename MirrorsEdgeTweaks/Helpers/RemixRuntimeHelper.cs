@@ -16,8 +16,6 @@ namespace MirrorsEdgeTweaks.Helpers
         RemixNgx,
         // This NGX passthrough runtime predates its reversed depth support.
         RemixNgxOutdated,
-        // This RTX Remix build path traces, and comes from NVIDIA or the fork's mirrors-edge branch.
-        RemixPathTraced,
         // The d3d9.dll belongs to another mod, such as ReShade.
         OtherWrapper
     }
@@ -47,6 +45,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 return D3D9Runtime.OtherWrapper;
 
             string runtime = Path.Combine(binariesDirectory, RuntimeDirectoryName, "d3d9.dll");
+            // A missing runtime file is passed as an empty buffer, so ClassifyRemix reports another wrapper.
             return ClassifyRemix(File.Exists(runtime) ? File.ReadAllBytes(runtime) : Array.Empty<byte>());
         }
 
@@ -55,11 +54,10 @@ namespace MirrorsEdgeTweaks.Helpers
             productName?.Trim().StartsWith(BridgeProductPrefix, StringComparison.OrdinalIgnoreCase) == true;
 
         // NVIDIA's builds carry the same version resources, so only the runtime's option names identify the NGX passthrough runtime.
-        // A bridge without its runtime counts as path traced, so it is only replaced after a confirmation.
         internal static D3D9Runtime ClassifyRemix(ReadOnlySpan<byte> runtimeDll)
         {
             if (runtimeDll.IndexOf(NgxPassthroughBytes) < 0)
-                return D3D9Runtime.RemixPathTraced;
+                return D3D9Runtime.OtherWrapper;
             return DxvkHelper.HasFloatDepthOption(runtimeDll) ? D3D9Runtime.RemixNgx : D3D9Runtime.RemixNgxOutdated;
         }
 
@@ -102,7 +100,8 @@ namespace MirrorsEdgeTweaks.Helpers
                 case D3D9Runtime.OtherWrapper:
                     throw new UserFacingException(
                         "Another mod's d3d9.dll (for example ReShade) is in the game's Binaries folder. Please remove it and try again.");
-                default:
+                case D3D9Runtime.RemixNgx:
+                case D3D9Runtime.RemixNgxOutdated:
                     Remove(binariesDirectory);
                     return;
             }

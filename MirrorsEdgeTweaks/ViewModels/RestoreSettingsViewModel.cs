@@ -326,7 +326,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (context.Runtime is D3D9Runtime.Dxvk or D3D9Runtime.DxvkOutdated)
                 await RemoveAsync(report, "DXVK", () => DxvkHelper.RemoveDxvk(context.Binaries));
 
-            // A path-traced RTX Remix build stays, because Tweaks does not install one.
             if (context.Runtime is D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated)
             {
                 await RemixRuntimeHelper.WaitForGameExitAsync();

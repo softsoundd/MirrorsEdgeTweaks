@@ -82,7 +82,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                 case D3D9Runtime.RemixNgxOutdated:
                     await OfferRemixUpdateAsync(binariesDirectory);
                     return;
-                case D3D9Runtime.RemixPathTraced:
                 case D3D9Runtime.OtherWrapper:
                     await _dialogService.ShowMessageAsync("Reversed Depth",
                         $"Reversed depth applied, but it needs DXVK or {RemixNgxName}, and another mod's d3d9.dll (for example ReShade) " +

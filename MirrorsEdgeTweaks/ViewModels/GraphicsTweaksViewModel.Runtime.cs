@@ -20,7 +20,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         [ObservableProperty] private int _runtimeIndex = -1;
         [ObservableProperty] private bool _isOtherRuntimeVisible;
-        [ObservableProperty] private string _otherRuntimeName = "";
         [ObservableProperty] private bool _isRemixNgxInstalled;
 
         partial void OnRuntimeIndexChanged(int oldValue, int newValue) =>
@@ -72,7 +71,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         // Another mod's d3d9.dll is never replaced.
-        // A path-traced RTX Remix build is only replaced after a confirmation, because Tweaks did not install it.
         private async Task<bool> ConfirmRuntimeChangeAsync(D3D9Runtime current, int index)
         {
             if (current == D3D9Runtime.OtherWrapper)
@@ -85,12 +83,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
 
             var paragraphs = new List<string>();
-            if (current == D3D9Runtime.RemixPathTraced)
-            {
-                string outcome = index == StockRuntimeIndex ? "removed" : "replaced";
-                paragraphs.Add($"The path-traced version of RTX Remix in the game's Binaries folder will be {outcome}. " +
-                    "Your RTX Remix settings are kept.");
-            }
             if (index == RemixNgxRuntimeIndex)
             {
                 paragraphs.Add($"{RemixNgxName} will be downloaded and installed into the game's Binaries folder.");
@@ -316,8 +308,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             SetSilently(() =>
             {
-                OtherRuntimeName = runtime == D3D9Runtime.RemixPathTraced ? "RTX Remix (path-traced)" : "Another mod (e.g. ReShade)";
-                IsOtherRuntimeVisible = runtime is D3D9Runtime.RemixPathTraced or D3D9Runtime.OtherWrapper;
+                IsOtherRuntimeVisible = runtime == D3D9Runtime.OtherWrapper;
                 RuntimeIndex = runtime is { } detected ? ToRuntimeIndex(detected) : -1;
                 IsRemixNgxInstalled = runtime is D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated;
             });
@@ -338,7 +329,6 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             D3D9Runtime.Dxvk or D3D9Runtime.DxvkOutdated => "DXVK",
             D3D9Runtime.RemixNgx or D3D9Runtime.RemixNgxOutdated => RemixNgxName,
-            D3D9Runtime.RemixPathTraced => "RTX Remix",
             _ => "the renderer",
         };
     }

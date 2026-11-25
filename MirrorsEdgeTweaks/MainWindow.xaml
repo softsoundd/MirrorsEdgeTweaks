@@ -797,7 +797,7 @@
                                     <ComboBoxItem Content="Direct3D 9 (default)"/>
                                     <ComboBoxItem Content="DXVK (Vulkan)"/>
                                     <ComboBoxItem Content="RTX Remix NGX (DLSS, FSR, XeSS)"/>
-                                    <ComboBoxItem Content="{Binding Graphics.OtherRuntimeName}" IsEnabled="False" Visibility="{Binding Graphics.IsOtherRuntimeVisible, Converter={StaticResource BoolToVis}}"/>
+                                    <ComboBoxItem Content="Another mod (e.g. ReShade)" IsEnabled="False" Visibility="{Binding Graphics.IsOtherRuntimeVisible, Converter={StaticResource BoolToVis}}"/>
                                 </ComboBox>
                             </controls:SettingRow>
 

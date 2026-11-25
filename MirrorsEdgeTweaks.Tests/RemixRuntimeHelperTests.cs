@@ -25,8 +25,8 @@ namespace MirrorsEdgeTweaks.Tests
         [Theory]
         [InlineData("\0rtx.ngxPassthrough\0d3d9.useD32forD24\0", D3D9Runtime.RemixNgx)]
         [InlineData("\0rtx.ngxPassthrough\0d3d9.shaderModel\0", D3D9Runtime.RemixNgxOutdated)]
-        [InlineData("\0rtx.pathtracing\0d3d9.useD32forD24\0", D3D9Runtime.RemixPathTraced)]
-        [InlineData("", D3D9Runtime.RemixPathTraced)]
+        [InlineData("\0rtx.pathtracing\0d3d9.useD32forD24\0", D3D9Runtime.OtherWrapper)]
+        [InlineData("", D3D9Runtime.OtherWrapper)]
         public void ClassifyRemix_ReadsTheRuntimesOptionNames(string runtimeStrings, D3D9Runtime expected)
         {
             Assert.Equal(expected, RemixRuntimeHelper.ClassifyRemix(Encoding.ASCII.GetBytes(runtimeStrings)));
