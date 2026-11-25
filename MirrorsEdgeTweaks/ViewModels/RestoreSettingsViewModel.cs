@@ -13,6 +13,9 @@ namespace MirrorsEdgeTweaks.ViewModels
         public List<string> FailureDetails { get; } = new();
         public List<string> Notes { get; } = new();
 
+        // Lists changes that stay on purpose, so the summary does not report them as a partial restore.
+        public List<string> Kept { get; } = new();
+
         // Holds how to verify the game files, when only a verification can finish restoring MirrorsEdge.exe.
         public string? VerifyNote { get; set; }
 
@@ -54,6 +57,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IAssetUrlProvider _assetUrls;
         private readonly IDecompressionService _decompressionService;
         private readonly PendingReapplyStore _pending;
+        private readonly GameLanguageService _gameLanguage;
 
         public RestoreSettingsViewModel(
             IDialogService dialogService,
@@ -62,6 +66,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             IAssetUrlProvider assetUrls,
             IDecompressionService decompressionService,
             PendingReapplyStore pending,
+            GameLanguageService gameLanguage,
             GameSession session,
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress)
@@ -73,6 +78,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _assetUrls = assetUrls;
             _decompressionService = decompressionService;
             _pending = pending;
+            _gameLanguage = gameLanguage;
         }
 
         public Task<bool> ConfirmAsync() => _dialogService.ShowConfirmationAsync("Restore Settings", ConfirmationMessage);
@@ -94,6 +100,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             await _assetUrls.EnsureLoadedAsync();
 
             await RestoreExecutableAsync(context, report);
+            await RestoreLanguagePatchAsync(context, report);
             await RestorePackagesAsync(context, report);
             await RestoreLocalisationAsync(context, report);
             await RemoveInstalledContentAsync(context, report);
@@ -124,6 +131,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                 details.Add($"Removed: {string.Join(", ", report.Removed)}.");
             if (report.Restored.Count > 0)
                 details.Add($"Restored: {string.Join(", ", report.Restored)}.");
+            if (report.Kept.Count > 0)
+                details.Add($"Kept: {string.Join(", ", report.Kept)}.");
             details.AddRange(report.FailureDetails);
 
             return _dialogService.ShowMessageAsync(
@@ -242,6 +251,28 @@ namespace MirrorsEdgeTweaks.ViewModels
                     $"{string.Join(", ", result.Undetermined)}.");
             if (result.Failures.Count > 0 || result.Undetermined.Count > 0)
                 SetVerifyNote(context, report, "To finish restoring MirrorsEdge.exe, verify your game files.");
+        }
+
+        // The game language is kept, so the patch stays while the registry would override that language without it.
+        private async Task RestoreLanguagePatchAsync(RestoreContext context, RestoreSettingsReport report)
+        {
+            if (!File.Exists(context.ExePath))
+                return;
+
+            string languageCode = context.LanguageCode ?? GameLanguageResolver.DefaultLanguageCode;
+            try
+            {
+                bool? removed = await Task.Run(() => _gameLanguage.RemovePatchIfUnneeded(context.ExePath, languageCode));
+                if (removed == true)
+                    report.Removed.Add("the game language patch");
+                else if (removed == false)
+                    report.Kept.Add("the game language patch, which keeps the game in " +
+                        LanguageSettingsViewModel.LanguageNameFor(languageCode));
+            }
+            catch (Exception ex)
+            {
+                report.AddFailure("Could not remove the game language patch.", ex);
+            }
         }
 
         private async Task RestorePackagesAsync(RestoreContext context, RestoreSettingsReport report)

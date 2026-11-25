@@ -9,6 +9,8 @@ namespace MirrorsEdgeTweaks.ViewModels
 {
     public partial class LanguageSettingsViewModel : BusyViewModel
     {
+        private const string CorruptedIniMessage = "TdEngine.ini is corrupted or missing its language setting.";
+
         private static readonly string[] LanguageNames =
         {
             "Čeština (CZE)",
@@ -33,11 +35,16 @@ namespace MirrorsEdgeTweaks.ViewModels
         private readonly IAssetUrlProvider _assetUrls;
         private readonly GraphicsTweaksViewModel _graphics;
         private readonly ISteamService _steamService;
+        private readonly GameLanguageService _gameLanguage;
 
         private bool _isLoading;
         private bool _isApplyingLanguage;
         private bool _isProgrammaticLanguageUpdate;
         private (int FromIndex, int ToIndex)? _failedSelectionEchoGuard;
+
+        // Is false when the registry overrides TdEngine.ini's language and the game language patch could not be applied.
+        // Is null before the first check, and when the last check found no override.
+        private bool? _languagePatchApplied;
 
         protected override bool IsApplySuppressed => base.IsApplySuppressed || _isLoading;
 
@@ -52,7 +59,8 @@ namespace MirrorsEdgeTweaks.ViewModels
             GameStatusViewModel gameStatus,
             DownloadProgressViewModel downloadProgress,
             GraphicsTweaksViewModel graphics,
-            ISteamService steamService)
+            ISteamService steamService,
+            GameLanguageService gameLanguage)
             : base(session, gameStatus, downloadProgress)
         {
             _dialogService = dialogService;
@@ -61,6 +69,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             _assetUrls = assetUrls;
             _graphics = graphics;
             _steamService = steamService;
+            _gameLanguage = gameLanguage;
         }
 
         public void Refresh()
@@ -69,7 +78,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 _isLoading = true;
 
-                int? index = TryGetInstalledLanguageIndex();
+                int? index = TryGetLoadedLanguageIndex();
                 if (index.HasValue)
                 {
                     SelectedLanguageIndex = index.Value;
@@ -87,8 +96,35 @@ namespace MirrorsEdgeTweaks.ViewModels
             TryReapplySteamLanguageFix();
         }
 
-        private int? TryGetInstalledLanguageIndex() =>
-            ReadInstalledLanguageCode(_session.Config) is { } code ? MapTdEngineLanguageCodeToIndex(code) : null;
+        // Applies the patch without asking when the registry overrides TdEngine.ini's language,
+        // such as after a game file verification restores a stock MirrorsEdge.exe.
+        public async Task CheckRegistryOverrideAsync()
+        {
+            _languagePatchApplied = null;
+
+            string? gameDirectory = _session.Config.GameDirectoryPath;
+            if (string.IsNullOrEmpty(gameDirectory))
+                return;
+
+            try
+            {
+                string exePath = GetExePath(gameDirectory);
+                if (ReadInstalledLanguageCode(_session.Config) is not { } languageCode || !File.Exists(exePath))
+                    return;
+
+                _languagePatchApplied = await Task.Run(() => _gameLanguage.ReapplyPatchIfOverridden(exePath, languageCode));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to check the game language patch: {ex.Message}");
+            }
+        }
+
+        private int? TryGetLoadedLanguageIndex() =>
+            ReadInstalledLanguageCode(_session.Config) is { } code
+                ? MapTdEngineLanguageCodeToIndex(
+                    _gameLanguage.ResolveLoadedLanguage(code, registryBypassed: _languagePatchApplied != false))
+                : null;
 
         // Returns the Language= value from TdEngine.ini, such as "int".
         // Returns null when the ini or the entry is missing.
@@ -135,6 +171,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             "chs" => 13,
             _ => null
         };
+
+        internal static string LanguageNameFor(string languageCode) =>
+            MapTdEngineLanguageCodeToIndex(languageCode) is { } index ? LanguageNames[index] : languageCode.ToUpperInvariant();
+
+        private static string GetExePath(string gameDirectory) =>
+            Path.Combine(gameDirectory, "Binaries", "MirrorsEdge.exe");
 
         private void TryReapplySteamLanguageFix()
         {
@@ -227,18 +269,26 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 try
                 {
-                    UpdateRegistryLanguage(languageConfig);
-
                     string tdEnginePath = UserTdGamePathHelper.GetTdEngineIniPath(_session.Config);
 
                     if (!File.Exists(tdEnginePath))
                     {
                         _dialogService.ShowMessage("Error",
-                            $"Cannot switch language, 'TdEngine.ini' file is missing from \"{tdEnginePath}\".\n\n" +
-                            "Launch Mirror's Edge at least once to create the configuration file.",
-                            DialogMessageType.Error);
+                            "TdEngine.ini was not found. Launch Mirror's Edge at least once to create it.",
+                            DialogMessageType.Error,
+                            tdEnginePath);
                         return;
                     }
+
+                    if (ReadInstalledLanguageCode(_session.Config) == null)
+                        throw new UserFacingException(CorruptedIniMessage);
+
+                    ShowProgress("Updating the game language...", isIndeterminate: true);
+
+                    // This runs before TdEngine.ini and the language files change,
+                    // so a declined administrator prompt leaves them as they were.
+                    if (!await EnsureGameUsesIniLanguageAsync(languageConfig.TdEngineLanguage, language))
+                        return;
 
                     await Task.Run(() =>
                     {
@@ -268,7 +318,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                             {
                                 // This throws instead of showing a dialog, because it runs on a background thread
                                 // and a corrupted ini must also stop the language pack download below.
-                                throw new UserFacingException("TdEngine.ini is corrupted or missing its language setting.");
+                                throw new UserFacingException(CorruptedIniMessage);
                             }
 
                             FileAttributes attributes = File.GetAttributes(tdEnginePath);
@@ -313,16 +363,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                     _failedSelectionEchoGuard = null;
                     _dialogService.ShowMessage("Success", $"Game language has been changed to {language}.", DialogMessageType.Success);
                 }
-                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
-                {
-                    _dialogService.ShowMessage("Administrator Access Required",
-                        "Changing the game language requires administrator privileges to modify the Windows Registry.\n\n" +
-                        "To switch languages:\n\n" +
-                        "1. Close Mirror's Edge Tweaks\n" +
-                        "2. Restart it as administrator\n" +
-                        "3. Change the language again",
-                        DialogMessageType.Error);
-                }
                 catch (Exception ex)
                 {
                     _dialogService.ShowError("Could not switch the game language.", ex);
@@ -332,6 +372,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     if (!switched)
                     {
                         SetLanguageIndexSilently(previousIndex);
+                        HideProgress();
                     }
 
                     _gameStatus.IsUiEnabled = true;
@@ -343,11 +384,44 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        // Tells the user and returns false when the registry still makes the game load another language.
+        private async Task<bool> EnsureGameUsesIniLanguageAsync(string languageCode, string languageName)
+        {
+            IniLanguageOutcome outcome = await _gameLanguage.EnsureIniLanguageAsync(
+                GetExePath(_session.Config.GameDirectoryPath!),
+                languageCode,
+                (overridingCode, patchError) => ConfirmRegistryChangeAsync(languageName, overridingCode, patchError));
+
+            if (outcome == IniLanguageOutcome.Patched)
+                _languagePatchApplied = true;
+
+            if (outcome != IniLanguageOutcome.Declined)
+                return true;
+
+            string overridingName = LanguageNameFor(_gameLanguage.FindRegistryOverride(languageCode) ?? languageCode);
+            _dialogService.ShowMessage("Game Language Not Changed",
+                $"The game language was not changed. Mirror's Edge will keep using {overridingName}.",
+                DialogMessageType.Warning);
+            return false;
+        }
+
+        private Task<bool> ConfirmRegistryChangeAsync(string languageName, string overridingCode, Exception patchError) =>
+            _dialogService.ShowConfirmationAsync("Administrator Permission Needed",
+                $"Mirror's Edge Tweaks could not patch MirrorsEdge.exe. {DescribePatchError(patchError)}\n\n" +
+                $"Without this patch, Mirror's Edge will keep using {LanguageNameFor(overridingCode)}. " +
+                $"Instead, Mirror's Edge Tweaks can switch to {languageName} by changing the game's language setting in Windows, " +
+                "which needs administrator permission.\n\n" +
+                "Do you want to continue?");
+
+        // ErrorMessageHelper.Explain's generic text refers to a technical details section, which the confirmation does not have.
+        private static string DescribePatchError(Exception exception) =>
+            exception is UserFacingException or IOException or UnauthorizedAccessException
+                ? ErrorMessageHelper.Explain(exception)
+                : "It may be from an unsupported version of the game, or another tool may have changed it.";
+
         private class LanguageConfig
         {
             public string ZipFileName { get; set; } = "";
-            public string RegistryLanguage { get; set; } = "";
-            public string Locale { get; set; } = "";
             public string TdEngineLanguage { get; set; } = "";
         }
 
@@ -358,128 +432,75 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Čeština (CZE)" => new LanguageConfig
                 {
                     ZipFileName = "CZE.zip",
-                    RegistryLanguage = "Czech",
-                    Locale = "cs",
                     TdEngineLanguage = "cze"
                 },
                 "Deutsch (DEU)" => new LanguageConfig
                 {
                     ZipFileName = "DEU.zip",
-                    RegistryLanguage = "German",
-                    Locale = "de_DE",
                     TdEngineLanguage = "deu"
                 },
                 "English (INT)" => new LanguageConfig
                 {
                     ZipFileName = "INT.zip",
-                    RegistryLanguage = "English",
-                    Locale = "en_UK",
                     TdEngineLanguage = "int"
                 },
                 "Español (ESN)" => new LanguageConfig
                 {
                     ZipFileName = "ESN.zip",
-                    RegistryLanguage = "Spanish",
-                    Locale = "es_ES",
                     TdEngineLanguage = "esn"
                 },
                 "Français (FRA)" => new LanguageConfig
                 {
                     ZipFileName = "FRA.zip",
-                    RegistryLanguage = "French",
-                    Locale = "fr_FR",
                     TdEngineLanguage = "fra"
                 },
                 "Italiano (ITA)" => new LanguageConfig
                 {
                     ZipFileName = "ITA.zip",
-                    RegistryLanguage = "Italian",
-                    Locale = "it_IT",
                     TdEngineLanguage = "ita"
                 },
                 "Magyar (HUN)" => new LanguageConfig
                 {
                     ZipFileName = "HUN.zip",
-                    RegistryLanguage = "Hungarian",
-                    Locale = "hu_HU",
                     TdEngineLanguage = "hun"
                 },
                 "Polski (POL)" => new LanguageConfig
                 {
                     ZipFileName = "POL.zip",
-                    RegistryLanguage = "Polish",
-                    Locale = "pl_PL",
                     TdEngineLanguage = "pol"
                 },
                 "Português (POR)" => new LanguageConfig
                 {
                     ZipFileName = "POR.zip",
-                    RegistryLanguage = "Portuguese Brazil",
-                    Locale = "pt_PT",
                     TdEngineLanguage = "por"
                 },
                 "Русский (RUS)" => new LanguageConfig
                 {
                     ZipFileName = "RUS.zip",
-                    RegistryLanguage = "Russian",
-                    Locale = "ru_RU",
                     TdEngineLanguage = "rus"
                 },
                 "한국어 (KOR)" => new LanguageConfig
                 {
                     ZipFileName = "KOR.zip",
-                    RegistryLanguage = "Korean",
-                    Locale = "ko_KR",
                     TdEngineLanguage = "kor"
                 },
                 "台灣繁體中文 (CHT)" => new LanguageConfig
                 {
                     ZipFileName = "CHT.zip",
-                    RegistryLanguage = "Traditional Chinese Taiwan",
-                    Locale = "zh-TW",
                     TdEngineLanguage = "cht"
                 },
                 "日本語 (JPN)" => new LanguageConfig
                 {
                     ZipFileName = "JPN.zip",
-                    RegistryLanguage = "Japanese",
-                    Locale = "ja_JP",
                     TdEngineLanguage = "jpn"
                 },
                 "简体中文 (CHS)" => new LanguageConfig
                 {
                     ZipFileName = "CHS.zip",
-                    RegistryLanguage = "Simplified Chinese",
-                    Locale = "zh_CN",
                     TdEngineLanguage = "chs"
                 },
                 _ => null
             };
-        }
-
-        private static void UpdateRegistryLanguage(LanguageConfig languageConfig)
-        {
-            const string keyPath = @"SOFTWARE\WOW6432Node\EA Games\Mirror's Edge";
-            UpdateRegistryValue(keyPath, "Language", languageConfig.RegistryLanguage);
-            UpdateRegistryValue(keyPath, "Locale", languageConfig.Locale);
-        }
-
-        private static void UpdateRegistryValue(string keyPath, string valueName, string newValue)
-        {
-            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath, true))
-            {
-                if (key == null)
-                {
-                    using (var createdKey = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(keyPath))
-                    {
-                        createdKey?.SetValue(valueName, newValue, Microsoft.Win32.RegistryValueKind.String);
-                    }
-                }
-                else
-                {
-                    key.SetValue(valueName, newValue, Microsoft.Win32.RegistryValueKind.String);
-                }
-            }
         }
 
         [RelayCommand]
@@ -487,7 +508,8 @@ namespace MirrorsEdgeTweaks.ViewModels
         {
             _dialogService.ShowMessage("Game Language Information",
                 "Change to any of the game's 14 supported languages.\n\n" +
-                "Note: Requires administrator privileges to modify registry values.\n\n" +
+                "Mirror's Edge Tweaks may patch MirrorsEdge.exe so that the game uses the language you choose. " +
+                "If MirrorsEdge.exe cannot be patched, changing the language needs administrator permission instead.\n\n" +
                 "The following languages support UI and subtitles only: Czech, Hungarian, Portuguese (Brazil), Korean, Traditional Chinese (Taiwan), and Simplified Chinese.",
                 DialogMessageType.Information);
         }

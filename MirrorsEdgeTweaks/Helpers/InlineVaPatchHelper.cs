@@ -10,12 +10,15 @@ namespace MirrorsEdgeTweaks.Helpers
         Patched
     }
 
-    // Applies the simple byte patches that each version's address table lists under "inlinePatches",
+    // Applies the simple byte patches that each version's address table lists under "inline_patches",
     // such as the multi-instance and ambiguous-package bypasses.
     public static class InlineVaPatchHelper
     {
         public const string MultiInstanceKey = "multiInstance_bypass";
         public const string AmbiguousPackageKey = "ambiguousPackage_bypass";
+
+        // Makes the game skip the registry Locale value, so it reads its language from TdEngine.ini.
+        public const string LanguageRegistryBypassKey = "languageRegistry_bypass";
 
         private const uint ImageBase = 0x00400000;
 

@@ -10,8 +10,8 @@ namespace MirrorsEdgeTweaks.Services
         public string ExpectedPath { get; }
 
         public OoaLicenseNotFoundException(string expectedPath)
-            : base($"EA license file not found at {expectedPath}. " +
-                   "The game must be activated through the EA App to patch the executable.")
+            : base($"The EA license file for Mirror's Edge was not found at {expectedPath}. " +
+                   "Launch Mirror's Edge from the EA App at least once, then try again.")
         {
             ExpectedPath = expectedPath;
         }

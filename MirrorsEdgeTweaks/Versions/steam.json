@@ -164,6 +164,11 @@
             "va": "0x010EA53A",
             "old": "74 40",
             "new": "90 90"
+        },
+        "languageRegistry_bypass": {
+            "va": "0x010EECAF",
+            "old": "0F 85 84 02 00 00",
+            "new": "90 E9 84 02 00 00"
         }
     }
 }

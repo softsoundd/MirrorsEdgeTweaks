@@ -27,7 +27,7 @@ namespace MirrorsEdgeTweaks.Tests
         [InlineData(@"MirrorsEdgeDLC\MirrorsEdgeDLC.exe")]
         public void Restore_LeavesStockCode_AfterEveryPatchIsApplied(string referenceExe)
         {
-            if (FindReferenceExe(referenceExe) is not { } source)
+            if (ReferenceExecutables.Find(referenceExe) is not { } source)
             {
                 Assert.Skip($"{referenceExe} is not in ref\\Mirrors-Edge-Version-KB.");
                 return;
@@ -78,18 +78,6 @@ namespace MirrorsEdgeTweaks.Tests
                         Assert.Fail($"{section.Name}+0x{i - start:X} differs from the stock executable.");
                 }
             }
-        }
-
-        // Returns null when the ref folder or the executable is missing.
-        private static string? FindReferenceExe(string relativePath)
-        {
-            for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
-            {
-                string candidate = Path.Combine(directory.FullName, "ref", "Mirrors-Edge-Version-KB", relativePath);
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-            return null;
         }
     }
 }

@@ -252,6 +252,9 @@ namespace MirrorsEdgeTweaks.ViewModels
                     }
                 }
 
+                GameStatus.Status = "Checking game language...";
+                await Language.CheckRegistryOverrideAsync();
+
                 GameStatus.Status = "Refreshing status indicators...";
                 CheckForConfigFiles();
                 await Graphics.InitializeResolutionsAsync();
@@ -675,7 +678,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
         [RelayCommand]
-        private void SelectUserFolderPath()
+        private async Task SelectUserFolderPath()
         {
             string currentPath = UserTdGamePathHelper.ResolveTdGamePath(Session.Config);
             string? selectedPath = _folderPicker.PickFolder(
@@ -698,6 +701,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             SaveSettings();
             RefreshUserFolderDependentFeatures();
+
+            // The new folder's TdEngine.ini may name a language that the registry overrides.
+            await Session.ApplyGate.RunAsync(Language.CheckRegistryOverrideAsync);
+            Language.Refresh();
         }
 
         [RelayCommand]
