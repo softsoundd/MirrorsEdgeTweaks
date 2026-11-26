@@ -1,4 +1,5 @@
 using MirrorsEdgeTweaks.Helpers;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -6,6 +7,48 @@ namespace MirrorsEdgeTweaks.Services
 {
     public class GraphicsSettingsService : IGraphicsSettingsService
     {
+        private static readonly string[] GraphicsQualityPresets = { "Lowest", "Low", "Medium", "High", "Highest" };
+
+        // The stock TdEngine.ini uses the High preset's values.
+        private const string StockGraphicsQualityPreset = "High";
+
+        // The graphics quality presets set these keys, which HQ dynamic shadows leaves alone.
+        private static readonly string[] GraphicsQualityKeys =
+        {
+            "DepthOfField",
+            "Bloom",
+            "QualityBloom",
+            "Distortion",
+            "LensFlares",
+            "EnableHighPolyChars",
+            "DetailMode",
+            "TdMotionBlur",
+            "TdSunHaze"
+        };
+
+        // The graphics quality presets also set these keys, which HQ dynamic shadows replaces.
+        private static readonly string[] GraphicsQualityShadowKeys =
+        {
+            "ShadowFilterQualityBias",
+            "MaxShadowResolution",
+            "ShadowTexelsPerPixel"
+        };
+
+        // Only HQ dynamic shadows changes these keys from their stock values.
+        private static readonly Dictionary<string, string> StockHqShadowKeys = new()
+        {
+            // VSM is compiled out of the PC build, but older versions of Tweaks turned this key off for HQ.
+            ["bEnableVSMShadows"] = "bEnableVSMShadows=True",
+            ["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False",
+            ["ShadowFilterRadius"] = "ShadowFilterRadius=2",
+            ["MinShadowResolution"] = "MinShadowResolution=32",
+            ["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2"
+        };
+
+        // HQ dynamic shadows add this to the preset's ShadowFilterQualityBias, which puts every light on the High filter tier.
+        // Turning HQ off subtracts it to recover the bias, the only key that tells the Medium and High presets apart.
+        private const int HqShadowFilterQualityBiasOffset = 3;
+
         private readonly IFileService _fileService;
 
         public GraphicsSettingsService(IFileService fileService)
@@ -219,6 +262,9 @@ namespace MirrorsEdgeTweaks.Services
         public void ApplyTextureDetailPreset(string tdEngineIniPath, string preset)
         {
             var replacements = GetTextureDetailReplacements(preset);
+            foreach (var (key, line) in GetStockShadowReplacements(tdEngineIniPath))
+                replacements[key] = line;
+
             ModifyIniFile(tdEngineIniPath, replacements);
         }
 
@@ -301,28 +347,82 @@ namespace MirrorsEdgeTweaks.Services
 
         public void ApplyHQDynamicShadows(string tdEngineIniPath, bool enabled)
         {
-            var replacements = new Dictionary<string, string>();
-
-            if (enabled)
-            {
-                replacements["bEnableVSMShadows"] = "bEnableVSMShadows=False";
-                replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=True";
-                replacements["ShadowFilterRadius"] = "ShadowFilterRadius=4";
-                replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=0";
-                replacements["ShadowFilterQualityBias"] = "ShadowFilterQualityBias=16";
-                replacements["MaxShadowResolution"] = "MaxShadowResolution=2048";
-            }
-            else
-            {
-                replacements["bEnableVSMShadows"] = "bEnableVSMShadows=True";
-                replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False";
-                replacements["ShadowFilterRadius"] = "ShadowFilterRadius=2";
-                replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2";
-                replacements["ShadowFilterQualityBias"] = "ShadowFilterQualityBias=2";
-                replacements["MaxShadowResolution"] = "MaxShadowResolution=1024";
-            }
+            var replacements = enabled
+                ? GetHqShadowReplacements(tdEngineIniPath)
+                : GetStockShadowReplacements(tdEngineIniPath);
 
             ModifyIniFile(tdEngineIniPath, replacements);
+        }
+
+        private Dictionary<string, string> GetHqShadowReplacements(string tdEngineIniPath)
+        {
+            int bias = int.Parse(ResolveShadowPreset(tdEngineIniPath).Bias, CultureInfo.InvariantCulture)
+                + HqShadowFilterQualityBiasOffset;
+
+            return new Dictionary<string, string>
+            {
+                ["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=True",
+                ["ShadowFilterRadius"] = "ShadowFilterRadius=4",
+                ["ShadowFilterQualityBias"] = $"ShadowFilterQualityBias={bias.ToString(CultureInfo.InvariantCulture)}",
+                ["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2",
+
+                // Doubling these three keeps the stock distance fade, which follows (resolution - minimum) / (maximum - minimum),
+                // because each shadow's resolution is its screen size times ShadowTexelsPerPixel.
+                // The engine caps the shadow buffer at 2048, so a higher maximum adds no resolution.
+                ["MaxShadowResolution"] = "MaxShadowResolution=2048",
+                ["MinShadowResolution"] = "MinShadowResolution=64",
+                ["ShadowTexelsPerPixel"] = "ShadowTexelsPerPixel=4.000000"
+            };
+        }
+
+        // While HQ dynamic shadows are on, the replacements also include the preset's values for its shadow keys.
+        private Dictionary<string, string> GetStockShadowReplacements(string tdEngineIniPath)
+        {
+            var replacements = new Dictionary<string, string>(StockHqShadowKeys);
+            if (!IsHqDynamicShadowsEnabled(tdEngineIniPath))
+                return replacements;
+
+            (string preset, string bias) = ResolveShadowPreset(tdEngineIniPath);
+            var presetValues = GetGraphicsQualityReplacements(preset);
+            replacements["ShadowFilterQualityBias"] = $"ShadowFilterQualityBias={bias}";
+            replacements["MaxShadowResolution"] = presetValues["MaxShadowResolution"];
+            replacements["ShadowTexelsPerPixel"] = presetValues["ShadowTexelsPerPixel"];
+
+            return replacements;
+        }
+
+        private bool IsHqDynamicShadowsEnabled(string tdEngineIniPath) =>
+            string.Equals(ReadIniValue(tdEngineIniPath, "bEnableBranchingPCFShadows"), "True", StringComparison.OrdinalIgnoreCase);
+
+        // Finds the graphics quality preset and ShadowFilterQualityBias that apply with HQ dynamic shadows off.
+        // A file that matches no preset gets the stock preset, with its own bias when a preset uses that bias.
+        private (string Preset, string Bias) ResolveShadowPreset(string tdEngineIniPath)
+        {
+            string? bias = ReadPresetShadowFilterQualityBias(tdEngineIniPath);
+            var shadowValues = new Dictionary<string, string?>();
+            if (bias != null)
+                shadowValues["ShadowFilterQualityBias"] = bias;
+
+            string preset = FindGraphicsQualityPreset(tdEngineIniPath, shadowValues) ?? StockGraphicsQualityPreset;
+            return (preset, bias ?? ValueOf(GetGraphicsQualityReplacements(preset)["ShadowFilterQualityBias"]));
+        }
+
+        // Returns the ShadowFilterQualityBias that applies with HQ dynamic shadows off.
+        // Returns null when the file holds no bias that a preset uses, such as the 16 that older versions of Tweaks wrote for HQ.
+        private string? ReadPresetShadowFilterQualityBias(string tdEngineIniPath)
+        {
+            string? value = ReadIniValue(tdEngineIniPath, "ShadowFilterQualityBias");
+            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int bias))
+                return null;
+
+            if (IsHqDynamicShadowsEnabled(tdEngineIniPath))
+                bias -= HqShadowFilterQualityBiasOffset;
+
+            string presetBias = bias.ToString(CultureInfo.InvariantCulture);
+            return GraphicsQualityPresets.Any(preset =>
+                ValueOf(GetGraphicsQualityReplacements(preset)["ShadowFilterQualityBias"]) == presetBias)
+                ? presetBias
+                : null;
         }
 
         public void ApplyLightmaps(string tdEngineIniPath, bool enabled)
@@ -387,9 +487,6 @@ namespace MirrorsEdgeTweaks.Services
         {
             var replacements = new Dictionary<string, string>();
 
-            replacements["bEnableVSMShadows"] = "bEnableVSMShadows=True";
-            replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False";
-            replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2";
             replacements["PoolSize"] = "PoolSize=250";
             replacements["StaticDecals"] = "StaticDecals=True";
             replacements["DynamicDecals"] = "DynamicDecals=True";
@@ -534,11 +631,8 @@ namespace MirrorsEdgeTweaks.Services
 
         private Dictionary<string, string> GetGraphicsQualityReplacements(string preset)
         {
-            var replacements = new Dictionary<string, string>();
+            var replacements = new Dictionary<string, string>(StockHqShadowKeys);
 
-            replacements["bEnableVSMShadows"] = "bEnableVSMShadows=True";
-            replacements["bEnableBranchingPCFShadows"] = "bEnableBranchingPCFShadows=False";
-            replacements["ModShadowFadeDistanceExponent"] = "ModShadowFadeDistanceExponent=.2";
             replacements["PoolSize"] = "PoolSize=250";
             replacements["StaticDecals"] = "StaticDecals=True";
             replacements["DynamicDecals"] = "DynamicDecals=True";
@@ -698,52 +792,46 @@ namespace MirrorsEdgeTweaks.Services
 
         public string DetectGraphicsQualityPreset(string tdEngineIniPath)
         {
-            string[] qualitySpecificKeys =
+            var shadowValues = new Dictionary<string, string?>();
+            if (IsHqDynamicShadowsEnabled(tdEngineIniPath))
             {
-                "DepthOfField",
-                "Bloom",
-                "QualityBloom",
-                "Distortion",
-                "LensFlares",
-                "EnableHighPolyChars",
-                "DetailMode",
-                "ShadowFilterQualityBias",
-                "MaxShadowResolution",
-                "ShadowTexelsPerPixel",
-                "TdMotionBlur",
-                "TdSunHaze"
-            };
-
-            string[] presets = { "Lowest", "Low", "Medium", "High", "Highest" };
-
-            foreach (string preset in presets)
+                // HQ dynamic shadows replace the preset's resolution values, so only the preset's bias is compared.
+                string? bias = ReadPresetShadowFilterQualityBias(tdEngineIniPath);
+                if (bias != null)
+                    shadowValues["ShadowFilterQualityBias"] = bias;
+            }
+            else
             {
-                var expectedValues = GetGraphicsQualityReplacements(preset);
-                bool matches = true;
+                foreach (string key in GraphicsQualityShadowKeys)
+                    shadowValues[key] = ReadIniValue(tdEngineIniPath, key);
+            }
 
-                foreach (var kvp in expectedValues)
+            return FindGraphicsQualityPreset(tdEngineIniPath, shadowValues) ?? "Custom";
+        }
+
+        // Returns the graphics quality preset whose keys match the file.
+        // Returns null when no preset matches.
+        // Only the shadow keys in shadowValues are compared, against the values given there.
+        // Medium and High differ only in ShadowFilterQualityBias,
+        // so the search runs from Highest down to settle on High when the bias is not compared.
+        private string? FindGraphicsQualityPreset(string tdEngineIniPath, IReadOnlyDictionary<string, string?> shadowValues)
+        {
+            var actualValues = GraphicsQualityKeys.ToDictionary(key => key, key => ReadIniValue(tdEngineIniPath, key));
+
+            for (int i = GraphicsQualityPresets.Length - 1; i >= 0; i--)
+            {
+                var expectedValues = GetGraphicsQualityReplacements(GraphicsQualityPresets[i]);
+                if (actualValues.All(kvp => kvp.Value == ValueOf(expectedValues[kvp.Key]))
+                    && shadowValues.All(kvp => kvp.Value == ValueOf(expectedValues[kvp.Key])))
                 {
-                    if (!qualitySpecificKeys.Contains(kvp.Key))
-                        continue;
-
-                    string? actualValue = ReadIniValue(tdEngineIniPath, kvp.Key);
-                    string expectedValue = kvp.Value.Substring(kvp.Value.IndexOf('=') + 1);
-
-                    if (actualValue != expectedValue)
-                    {
-                        matches = false;
-                        break;
-                    }
-                }
-
-                if (matches)
-                {
-                    return preset;
+                    return GraphicsQualityPresets[i];
                 }
             }
 
-            return "Custom";
+            return null;
         }
+
+        private static string ValueOf(string line) => line.Substring(line.IndexOf('=') + 1);
 
         private void ApplyIniRegex(string filePath, string pattern, string replacement)
         {

@@ -37,6 +37,7 @@ namespace MirrorsEdgeTweaks.Tests
             SetCommandPatchHelper.EnsurePatchedIfApplicable(exe);
             LoggingPatchHelper.ApplyPatch(exe);
             ReversedDepthPatcher.Apply(exe);
+            ShadowFilterPatcher.Apply(exe);
             InlineVaPatchHelper.ApplyPatch(exe, InlineVaPatchHelper.MultiInstanceKey);
             InlineVaPatchHelper.ApplyPatch(exe, InlineVaPatchHelper.AmbiguousPackageKey);
             CommandLineUnlockHelper.Unlock(exe);
@@ -45,7 +46,7 @@ namespace MirrorsEdgeTweaks.Tests
 
             Assert.Empty(result.Failures);
             Assert.Empty(result.Undetermined);
-            Assert.Equal(SetCommandPatchHelper.IsDlcVersion(exe) ? 10 : 9, result.Removed.Count);
+            Assert.Equal(SetCommandPatchHelper.IsDlcVersion(exe) ? 11 : 10, result.Removed.Count);
             AssertStockApartFromCaveHeaders(stock, File.ReadAllBytes(exe));
         }
 

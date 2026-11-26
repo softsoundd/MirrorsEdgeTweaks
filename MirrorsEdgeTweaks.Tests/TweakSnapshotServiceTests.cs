@@ -74,6 +74,18 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
+        public async Task ReapplyAsync_AppliesTheShadowFilterFix_WhenTheSnapshotHasIt()
+        {
+            string exePath = Path.Combine(Directory.CreateDirectory(Path.Combine(_temp.Path, "Binaries")).FullName, "MirrorsEdge.exe");
+            File.WriteAllBytes(exePath, ShadowFilterPatcherTests.BuildImage(siteCount: 5));
+
+            TweakReapplyResult result = await ReapplyExe(new TweakSnapshot { ShadowFilterFix = true });
+
+            Assert.True(ShadowFilterPatcher.IsApplied(exePath));
+            Assert.Contains("Shadow filter fix", result.ReappliedSettings);
+        }
+
+        [Fact]
         public async Task ReapplyAsync_LeavesTheExeAlone_WithoutRtxRemixNgxOrALowerRenderResolution()
         {
             byte[] original = WriteExe(out string exePath);

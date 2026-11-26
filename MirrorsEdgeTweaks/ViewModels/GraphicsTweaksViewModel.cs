@@ -121,7 +121,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             LensFlare = new GraphicsOption((o, v) => ApplyStandard(o, v, "lens flare", () => _graphics.ApplyLensFlare(IniPath!, v == 0)));
             DynamicLights = new GraphicsOption((o, v) => ApplyStandard(o, v, "dynamic lights", () => _graphics.ApplyDynamicLights(IniPath!, v == 0)));
             DynamicShadows = new GraphicsOption((o, v) => ApplyStandard(o, v, "dynamic shadows", () => _graphics.ApplyDynamicShadows(IniPath!, v == 0)));
-            HqDynamicShadows = new GraphicsOption((o, v) => ApplyStandard(o, v, "HQ dynamic shadows", () => _graphics.ApplyHQDynamicShadows(IniPath!, v == 0)));
+            HqDynamicShadows = new GraphicsOption(ApplyHqDynamicShadows);
             Lightmaps = new GraphicsOption((o, v) => ApplyStandard(o, v, "lightmaps", () => _graphics.ApplyLightmaps(IniPath!, v == 0)));
             HqLightmaps = new GraphicsOption((o, v) => ApplyStandard(o, v, "HQ lightmaps", () => _graphics.ApplyHqLightmaps(IniPath!, v == 0)));
             SunHaze = new GraphicsOption((o, v) => ApplyStandard(o, v, "sun haze", () => _graphics.ApplySunHaze(IniPath!, v == 0)));
@@ -233,13 +233,8 @@ namespace MirrorsEdgeTweaks.ViewModels
                         DynamicShadows.Index = dynamicShadows.Equals("True", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
                     string? hqShadows = _graphics.ReadIniValue(IniPath, "bEnableBranchingPCFShadows");
-                    string? vsmShadows = _graphics.ReadIniValue(IniPath, "bEnableVSMShadows");
-                    if (hqShadows != null && vsmShadows != null)
-                    {
-                        bool isHQEnabled = hqShadows.Equals("True", StringComparison.OrdinalIgnoreCase) &&
-                                           vsmShadows.Equals("False", StringComparison.OrdinalIgnoreCase);
-                        HqDynamicShadows.Index = isHQEnabled ? 0 : 1;
-                    }
+                    if (hqShadows != null)
+                        HqDynamicShadows.Index = hqShadows.Equals("True", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
                     string? lightmaps = _graphics.ReadIniValue(IniPath, "DirectionalLightmaps");
                     if (lightmaps != null)
@@ -341,22 +336,67 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (IsApplySuppressed || index < 0)
                 return;
 
-            EnqueueApply(() =>
-            {
-                if (!EnsureIniExists(() => option.Index = -1))
-                    return;
+            EnqueueApply(() => TryApplyToIni(option, failureLabel, apply));
+        }
 
-                try
-                {
-                    apply();
-                    RefreshPresetIndicators();
-                }
-                catch (Exception ex)
-                {
-                    _dialogService.ShowError($"Could not apply {failureLabel}.", ex);
-                    SetSilently(() => option.Index = -1);
-                }
+        private void ApplyHqDynamicShadows(GraphicsOption option, int index)
+        {
+            if (IsApplySuppressed || index < 0)
+                return;
+
+            bool enabled = index == 0;
+            EnqueueApply(async () =>
+            {
+                if (TryApplyToIni(option, "HQ dynamic shadows", () => _graphics.ApplyHQDynamicShadows(IniPath!, enabled)))
+                    await ApplyShadowFilterFixAsync(enabled);
             });
+        }
+
+        // Returns false when TdEngine.ini is missing or the change fails, after telling the user and resetting the option.
+        private bool TryApplyToIni(GraphicsOption option, string failureLabel, Action apply)
+        {
+            if (!EnsureIniExists(() => option.Index = -1))
+                return false;
+
+            try
+            {
+                apply();
+                RefreshPresetIndicators();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowError($"Could not apply {failureLabel}.", ex);
+                SetSilently(() => option.Index = -1);
+                return false;
+            }
+        }
+
+        // The game's standard shadow filter runs whenever HQ dynamic shadows are off, so its fix is applied with either choice.
+        private async Task ApplyShadowFilterFixAsync(bool hqEnabled)
+        {
+            if (GetGameExePath() is not { } exePath)
+                return;
+
+            ShowProgress("Patching MirrorsEdge.exe...", isIndeterminate: true);
+            try
+            {
+                await Task.Run(() => ShadowFilterPatcher.Apply(exePath));
+            }
+            catch (OoaLicenseNotFoundException ooaEx)
+            {
+                _dialogService.ShowMessage("EA App License Required", ooaEx.Message, DialogMessageType.Warning);
+            }
+            catch (Exception ex)
+            {
+                _dialogService.ShowError(
+                    $"HQ dynamic shadows {(hqEnabled ? "enabled" : "disabled")}, but Tweaks could not fix the game's standard shadow filter in MirrorsEdge.exe.",
+                    ex);
+            }
+            finally
+            {
+                HideProgress();
+            }
         }
 
         partial void OnAntiAliasingIndexChanged(int oldValue, int newValue) => _ = OnAntiAliasingChangedAsync(oldValue, newValue);

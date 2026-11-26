@@ -247,5 +247,171 @@ namespace MirrorsEdgeTweaks.Tests
 
             Assert.Equal("False", _service.ReadIniValue(ini.Path, "UseVsync"));
         }
+
+        // Older versions of Tweaks wrote these values for HQ dynamic shadows.
+        private static readonly (string Key, string Value)[] OlderHqShadowValues =
+        {
+            ("bEnableVSMShadows", "False"),
+            ("bEnableBranchingPCFShadows", "True"),
+            ("ShadowFilterRadius", "4"),
+            ("ModShadowFadeDistanceExponent", "0"),
+            ("ShadowFilterQualityBias", "16"),
+            ("MaxShadowResolution", "2048")
+        };
+
+        [Theory]
+        [InlineData("Lowest", "2")]
+        [InlineData("Low", "3")]
+        [InlineData("Medium", "3")]
+        [InlineData("High", "4")]
+        [InlineData("Highest", "5")]
+        public void ApplyHQDynamicShadows_Enabled_WritesHqValues_AndKeepsThePreset(string preset, string expectedBias)
+        {
+            using var ini = PresetIni(preset);
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+
+            Assert.Equal("True", _service.ReadIniValue(ini.Path, "bEnableBranchingPCFShadows"));
+            Assert.Equal("4", _service.ReadIniValue(ini.Path, "ShadowFilterRadius"));
+            Assert.Equal(expectedBias, _service.ReadIniValue(ini.Path, "ShadowFilterQualityBias"));
+            Assert.Equal("2048", _service.ReadIniValue(ini.Path, "MaxShadowResolution"));
+            Assert.Equal("64", _service.ReadIniValue(ini.Path, "MinShadowResolution"));
+            Assert.Equal("4.000000", _service.ReadIniValue(ini.Path, "ShadowTexelsPerPixel"));
+            Assert.Equal(".2", _service.ReadIniValue(ini.Path, "ModShadowFadeDistanceExponent"));
+            Assert.Equal("True", _service.ReadIniValue(ini.Path, "bEnableVSMShadows"));
+            Assert.Equal(preset, _service.DetectGraphicsQualityPreset(ini.Path));
+        }
+
+        [Theory]
+        [InlineData("Lowest")]
+        [InlineData("Low")]
+        [InlineData("Medium")]
+        [InlineData("High")]
+        [InlineData("Highest")]
+        public void ApplyHQDynamicShadows_DisabledAfterEnabled_RestoresThePreset(string preset)
+        {
+            using var ini = PresetIni(preset);
+            string[] before = ini.ReadLines();
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: false);
+
+            Assert.Equal(before, ini.ReadLines());
+            Assert.Equal(preset, _service.DetectGraphicsQualityPreset(ini.Path));
+        }
+
+        [Fact]
+        public void ApplyHQDynamicShadows_EnabledTwice_KeepsThePresetsBias()
+        {
+            using var ini = PresetIni("Medium");
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+
+            Assert.Equal("3", _service.ReadIniValue(ini.Path, "ShadowFilterQualityBias"));
+            Assert.Equal("Medium", _service.DetectGraphicsQualityPreset(ini.Path));
+        }
+
+        // Medium and High differ only in the bias that the older HQ values overwrote, so both come back as High.
+        [Theory]
+        [InlineData("Lowest", "Lowest")]
+        [InlineData("Low", "Low")]
+        [InlineData("Medium", "High")]
+        [InlineData("High", "High")]
+        [InlineData("Highest", "Highest")]
+        public void ApplyHQDynamicShadows_Disabled_RestoresAPreset_FromOlderHqValues(string preset, string expectedPreset)
+        {
+            using var source = PresetIni(preset);
+            using var ini = new TempIniFile(WithValues(source.ReadLines(), OlderHqShadowValues));
+            using var expected = PresetIni(expectedPreset);
+
+            Assert.Equal(expectedPreset, _service.DetectGraphicsQualityPreset(ini.Path));
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: false);
+
+            Assert.Equal(expected.ReadLines(), ini.ReadLines());
+        }
+
+        [Fact]
+        public void ApplyHQDynamicShadows_Disabled_RestoresThePreset_AfterBranchingPcfWasTurnedOnElsewhere()
+        {
+            using var source = PresetIni("High");
+            using var ini = new TempIniFile(WithValues(source.ReadLines(), ("bEnableBranchingPCFShadows", "True")));
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: false);
+
+            Assert.Equal(source.ReadLines(), ini.ReadLines());
+        }
+
+        [Fact]
+        public void ApplyHQDynamicShadows_DisabledAfterEnabled_KeepsACustomBias_AndRestoresStockResolution()
+        {
+            using var source = PresetIni("High");
+            using var ini = new TempIniFile(WithValues(source.ReadLines(),
+                ("DetailMode", "1"), ("ShadowFilterQualityBias", "0"), ("MaxShadowResolution", "512")));
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+            Assert.Equal("Custom", _service.DetectGraphicsQualityPreset(ini.Path));
+
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: false);
+
+            Assert.Equal("0", _service.ReadIniValue(ini.Path, "ShadowFilterQualityBias"));
+            Assert.Equal("1024", _service.ReadIniValue(ini.Path, "MaxShadowResolution"));
+            Assert.Equal("2.000000", _service.ReadIniValue(ini.Path, "ShadowTexelsPerPixel"));
+        }
+
+        [Fact]
+        public void ApplyGraphicsQualityPreset_TurnsHqDynamicShadowsOff()
+        {
+            using var ini = PresetIni("Highest");
+            using var expected = PresetIni("Medium");
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+
+            _service.ApplyGraphicsQualityPreset(ini.Path, "Medium");
+
+            Assert.Equal(expected.ReadLines(), ini.ReadLines());
+        }
+
+        [Fact]
+        public void ApplyTextureDetailPreset_TurnsHqDynamicShadowsOff_AndKeepsTheGraphicsQualityPreset()
+        {
+            using var ini = PresetIni("Highest");
+            _service.ApplyHQDynamicShadows(ini.Path, enabled: true);
+
+            _service.ApplyTextureDetailPreset(ini.Path, "High");
+
+            Assert.Equal("False", _service.ReadIniValue(ini.Path, "bEnableBranchingPCFShadows"));
+            Assert.Equal("2", _service.ReadIniValue(ini.Path, "ShadowFilterRadius"));
+            Assert.Equal("32", _service.ReadIniValue(ini.Path, "MinShadowResolution"));
+            Assert.Equal(".2", _service.ReadIniValue(ini.Path, "ModShadowFadeDistanceExponent"));
+            Assert.Equal("Highest", _service.DetectGraphicsQualityPreset(ini.Path));
+            Assert.Equal("High", _service.DetectTextureDetailPreset(ini.Path));
+        }
+
+        // Applies the preset to the stock shadow keys, as the Graphics Quality option does.
+        private TempIniFile PresetIni(string preset)
+        {
+            var ini = new TempIniFile(
+                "[Engine.Engine]",
+                "bEnableVSMShadows=True",
+                "bEnableBranchingPCFShadows=False",
+                "ShadowFilterRadius=2",
+                "ModShadowFadeDistanceExponent=.2",
+                "[SystemSettings]",
+                "MinShadowResolution=32");
+            _service.ApplyGraphicsQualityPreset(ini.Path, preset);
+            return ini;
+        }
+
+        private static string[] WithValues(string[] lines, params (string Key, string Value)[] values) =>
+            lines.Select(line =>
+            {
+                foreach (var (key, value) in values)
+                {
+                    if (line.StartsWith(key + "=", StringComparison.Ordinal))
+                        return $"{key}={value}";
+                }
+                return line;
+            }).ToArray();
     }
 }

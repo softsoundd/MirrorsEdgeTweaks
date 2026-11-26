@@ -120,9 +120,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 "Dynamic shadows are the modulated shadows cast onto the environment from characters. This also includes self-shadowing of characters."),
 
             ["HqDynamicShadows"] = ("HQ Dynamic Shadows Information",
-                "High-quality dynamic shadows double the resolution available from the \"Highest\" graphics quality preset, " +
-                "force the maximum shadow resolution to always be shown, increase filtering quality, and disable VSM shadowing in favour of higher-quality PCF shadowing.\n\n" +
-                "Note: High-quality dynamic shadows have no effect if dynamic shadows are disabled."),
+                "High-quality dynamic shadows replaces the game's standard shadow filter with a wider Branching PCF filter for softer edges, " +
+                "doubles the maximum shadow resolution and shadow detail at every distance, and uses the highest filter quality.\n\n" +
+                "Choosing either option also patches the game to fix a pre-existing bug in the standard shadow filter which offsets shadows slightly and blurs their edges unevenly.\n\n" +
+                "Note: This setting has no effect if dynamic shadows are disabled."),
 
             ["Lightmaps"] = ("Lightmaps Information",
                 "Lightmaps are the pre-baked lighting used to globally illuminate the environment. They can be disabled for most objects, " +

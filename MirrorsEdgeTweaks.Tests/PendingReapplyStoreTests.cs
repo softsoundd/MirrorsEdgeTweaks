@@ -29,6 +29,7 @@ namespace MirrorsEdgeTweaks.Tests
                 ConsoleInstalled = true,
                 HighResFix = true,
                 ReversedDepth = true,
+                ShadowFilterFix = true,
             };
 
             new PendingReapplyStore(path).Save(GameDir, snapshot);

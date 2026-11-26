@@ -38,6 +38,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 exe => StateOf(MultiFontScalePatcher.DetectState(exe), MultiFontScaleState.Patched, MultiFontScaleState.Unpatched),
                 MultiFontScalePatcher.Remove),
             new("the FOV and render resolution fixes", RenderTargetPatcher.IsApplied, RenderTargetPatcher.Remove),
+            new("the shadow filter fix", ShadowFilterPatcher.IsApplied, ShadowFilterPatcher.Remove),
             new("the developer console patch", SetCommandPatchHelper.IsPatched, SetCommandPatchHelper.Remove),
             new("the Multi-instance patch",
                 exe => StateOf(InlineVaPatchHelper.GetPatchState(exe, InlineVaPatchHelper.MultiInstanceKey),

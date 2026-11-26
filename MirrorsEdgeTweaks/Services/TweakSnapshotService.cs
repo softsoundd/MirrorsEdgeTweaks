@@ -67,6 +67,7 @@ namespace MirrorsEdgeTweaks.Services
                 HighResFix = _uiScaling.IsUIScalingActive(gameDir) || intent.HasFlag(LegacyIntent.HighResFix),
                 ReversedDepth = ReversedDepthPatcher.GetState(Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe"))
                     == ReversedDepthState.Patched,
+                ShadowFilterFix = ReadShadowFilterFix(Path.Combine(gameDir, "Binaries", "MirrorsEdge.exe")),
                 RemixNgxInstalled = IsRemixNgxInstalled(Path.Combine(gameDir, "Binaries")),
             };
             (snapshot.HasLoadLastCheckpointKeybind, snapshot.HasRestartTimeTrialKeybind) = ReadExecKeybinds(config);
@@ -153,6 +154,9 @@ namespace MirrorsEdgeTweaks.Services
 
                 if (snapshot.ReversedDepth)
                     await Step(result, "Reversed depth", () => ReversedDepthPatcher.Apply(exePath));
+
+                if (snapshot.ShadowFilterFix)
+                    await Step(result, "Shadow filter fix", () => ShadowFilterPatcher.Apply(exePath));
 
                 // The 1.1.0.0 exe disables the console's set commands.
                 if (snapshot.ConsoleInstalled && SetCommandPatchHelper.IsDlcVersion(exePath))
@@ -262,6 +266,19 @@ namespace MirrorsEdgeTweaks.Services
         {
             using var lease = GameFileReadScope.OpenPackage(enginePath);
             return UePackageLocator.ReadFloatDefault(lease.Package, "Camera", "DefaultFOV");
+        }
+
+        // An exe that cannot be read, such as an EA exe without its licence, counts as not fixed.
+        private static bool ReadShadowFilterFix(string exePath)
+        {
+            try
+            {
+                return ShadowFilterPatcher.IsApplied(exePath) == true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool IsRemixNgxInstalled(string binariesDirectory)
