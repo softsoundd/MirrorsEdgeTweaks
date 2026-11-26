@@ -4,8 +4,7 @@ using MirrorsEdgeTweaks.Tests.TestSupport;
 
 namespace MirrorsEdgeTweaks.Tests
 {
-    // These tests patch copies of the stock executables from the gitignored ref folder.
-    // They take about a minute, so they only run when requested, and they are skipped when the folder is missing.
+    // These tests take about a minute.
     [Collection("BackupRoot")]
     public sealed class ExeStockRestorerTests : IDisposable
     {
@@ -20,23 +19,14 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Theory(Explicit = true)]
-        [InlineData(@"MirrorsEdgeSteam\MirrorsEdgeSteam.exe")]
-        [InlineData(@"MirrorsEdgeGOG\MirrorsEdgeGOG.exe")]
-        [InlineData(@"MirrorsEdgeRetail\MirrorsEdgeRetail.exe")]
-        [InlineData(@"MirrorsEdgeRetailOld\MirrorsEdgeRetailOld.exe")]
-        [InlineData(@"MirrorsEdgeDLC\MirrorsEdgeDLC.exe")]
-        public void Restore_LeavesStockCode_AfterEveryPatchIsApplied(string referenceExe)
+        [InlineData("steam")]
+        [InlineData("gog")]
+        [InlineData("retail")]
+        [InlineData("retold")]
+        [InlineData("dlc")]
+        public void Restore_LeavesStockCode_AfterEveryPatchIsApplied(string version)
         {
-            if (ReferenceExecutables.Find(referenceExe) is not { } source)
-            {
-                Assert.Skip($"{referenceExe} is not in ref\\Mirrors-Edge-Version-KB.");
-                return;
-            }
-
-            string binaries = Path.Combine(_temp.Path, "Binaries");
-            Directory.CreateDirectory(binaries);
-            string exe = Path.Combine(binaries, "MirrorsEdge.exe");
-            File.Copy(source, exe);
+            string exe = StockExecutables.CopyTo(version, _temp.Path);
             byte[] stock = File.ReadAllBytes(exe);
 
             // The patches go on in a different order from their removal, so the cave reset has blocks to empty.

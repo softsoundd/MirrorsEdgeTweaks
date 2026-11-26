@@ -76,6 +76,13 @@ dotnet test --configuration Release
 # The executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/
 ```
 
+Note that a few tests need the game's executables, though these are optional. To run them, point `METWEAKS_GAME_EXES` at a folder of unmodified `MirrorsEdge.exe` files from any supported version.
+
+```powershell
+$env:METWEAKS_GAME_EXES = "D:\Mirror's Edge executables"
+dotnet test --configuration Release --explicit only
+```
+
 ## Acknowledgments
 
 ### Third party software / libraries

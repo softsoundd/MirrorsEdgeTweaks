@@ -1,5 +1,6 @@
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 using System.Buffers.Binary;
 using static MirrorsEdgeTweaks.Tests.TestSupport.SyntheticPe;
 
@@ -182,21 +183,17 @@ namespace MirrorsEdgeTweaks.Tests
                 BinaryPrimitives.ReadUInt32LittleEndian(block.AsSpan(e.SetRasterizerStateImmediate + 1)));
         }
 
-        // Real executables live in the git-ignored reference folder, so these tests skip without it.
         // The SecuROM builds have no header room for a .cave section, so the block goes into the .rdata tail.
-        [Theory]
-        [InlineData("MirrorsEdgeGOG", "gog", 0x01DBEC20u, 0x01FFCBD0u, 0x01FFD9F4u, ".cave")]
-        [InlineData("MirrorsEdgeSteam", "steam", 0x01DBEC20u, 0x01FFCBD0u, 0x01FFD9F4u, ".cave")]
-        [InlineData("MirrorsEdgeRetail", "retail", 0x01DC0CE0u, 0x02015C90u, 0x02016AB4u, ".rdata")]
-        [InlineData("MirrorsEdgeRetailOld", "retold", 0x01DC0CD0u, 0x02015C90u, 0x02016AB4u, ".rdata")]
-        [InlineData("MirrorsEdgeDLC", "dlc", 0x01DC7370u, 0x0201CD58u, 0x0201DB80u, ".rdata")]
+        [Theory(Explicit = true)]
+        [InlineData("gog", 0x01DBEC20u, 0x01FFCBD0u, 0x01FFD9F4u, ".cave")]
+        [InlineData("steam", 0x01DBEC20u, 0x01FFCBD0u, 0x01FFD9F4u, ".cave")]
+        [InlineData("retail", 0x01DC0CE0u, 0x02015C90u, 0x02016AB4u, ".rdata")]
+        [InlineData("retold", 0x01DC0CD0u, 0x02015C90u, 0x02016AB4u, ".rdata")]
+        [InlineData("dlc", 0x01DC7370u, 0x0201CD58u, 0x0201DB80u, ".rdata")]
         public void KnownExecutables_PatchAndUnpatch(
-            string name, string tag, uint vtable, uint forceNoDepth, uint depthBiasOffset, string blockSection)
+            string tag, uint vtable, uint forceNoDepth, uint depthBiasOffset, string blockSection)
         {
-            string? path = FindKbExecutable(name);
-            Assert.SkipWhen(path == null, $"{name}.exe is not in ref/Mirrors-Edge-Version-KB.");
-
-            byte[] stock = File.ReadAllBytes(path!);
+            byte[] stock = File.ReadAllBytes(StockExecutables.Require(tag));
             var sites = ReversedDepthPatcher.FindSites(stock, PeImageLayout.Parse(stock));
             Assert.Equal(vtable, sites.Vtable);
             Assert.Equal(forceNoDepth, sites.ForceNoDepthFlag);
@@ -217,16 +214,13 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         // Logging's restorations leave room for reversed depth, so both fit on every SecuROM build in either order.
-        [Theory]
-        [InlineData("MirrorsEdgeRetail", "retail")]
-        [InlineData("MirrorsEdgeRetailOld", "retold")]
-        [InlineData("MirrorsEdgeDLC", "dlc")]
-        public void KnownSecuRomExecutables_HoldReversedDepthAndFullLogging_InTheRdataTail(string name, string tag)
+        [Theory(Explicit = true)]
+        [InlineData("retail")]
+        [InlineData("retold")]
+        [InlineData("dlc")]
+        public void KnownSecuRomExecutables_HoldReversedDepthAndFullLogging_InTheRdataTail(string tag)
         {
-            string? path = FindKbExecutable(name);
-            Assert.SkipWhen(path == null, $"{name}.exe is not in ref/Mirrors-Edge-Version-KB.");
-
-            byte[] stock = File.ReadAllBytes(path!);
+            byte[] stock = File.ReadAllBytes(StockExecutables.Require(tag));
             var table = VersionAddressTable.Load(tag);
             byte[] depthFirst = LoggingPatchHelper.ApplyToImage(
                 ReversedDepthPatcher.ApplyToImage((byte[])stock.Clone(), tag)!, tag, table)!;
@@ -245,16 +239,13 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         // The .rdata cave makes .rdata executable, which must not hide the UI vtables from the high-res UI fix.
-        [Theory]
-        [InlineData("MirrorsEdgeRetail", "retail")]
-        [InlineData("MirrorsEdgeRetailOld", "retold")]
-        [InlineData("MirrorsEdgeDLC", "dlc")]
-        public void KnownSecuRomExecutables_KeepEveryHighResHook_BesideTheRdataCave(string name, string tag)
+        [Theory(Explicit = true)]
+        [InlineData("retail")]
+        [InlineData("retold")]
+        [InlineData("dlc")]
+        public void KnownSecuRomExecutables_KeepEveryHighResHook_BesideTheRdataCave(string tag)
         {
-            string? path = FindKbExecutable(name);
-            Assert.SkipWhen(path == null, $"{name}.exe is not in ref/Mirrors-Edge-Version-KB.");
-
-            byte[] stock = File.ReadAllBytes(path!);
+            byte[] stock = File.ReadAllBytes(StockExecutables.Require(tag));
             int alone = CaveSection.Open(MultiFontScalePatcher.ApplyToImage((byte[])stock.Clone(), tag)).CurrentWatermark;
             byte[] withDepth = ReversedDepthPatcher.ApplyToImage((byte[])stock.Clone(), tag)!;
 
@@ -291,17 +282,6 @@ namespace MirrorsEdgeTweaks.Tests
                 WriteSlot(image, Slots[i], Va(Sites[i]));
             WriteSlot(image, StencilSlot, Va(StencilSite));
             return image;
-        }
-
-        private static string? FindKbExecutable(string name)
-        {
-            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
-            {
-                string candidate = Path.Combine(dir.FullName, "ref", "Mirrors-Edge-Version-KB", name, name + ".exe");
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-            return null;
         }
 
         private static uint Va(int offset) => ImageBase + (uint)offset;

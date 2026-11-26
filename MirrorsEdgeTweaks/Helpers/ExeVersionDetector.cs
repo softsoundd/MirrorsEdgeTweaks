@@ -9,7 +9,7 @@ namespace MirrorsEdgeTweaks.Helpers
 {
     public static class ExeVersionDetector
     {
-        private static readonly Dictionary<string, string> Sha256ToVersion = new()
+        internal static readonly Dictionary<string, string> Sha256ToVersion = new()
         {
             ["58de3df21f40e9953e00be92f7749097832bad02e5b657d8485cdb61f360a3dd"] = "gog",
             ["a0f653b63b299d5d3899b8b4fa6e4d47eeb390bf26b1f020710482eabfe297f0"] = "steam",
