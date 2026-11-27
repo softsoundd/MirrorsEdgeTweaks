@@ -31,7 +31,7 @@ namespace MirrorsEdgeTweaks.Tests
             string zip = WriteAssetZip(temp.Path);
             string binaries = Directory.CreateDirectory(Path.Combine(temp.Path, "Binaries")).FullName;
 
-            DxvkHelper.ExtractAssetDll(zip, binaries);
+            DxvkHelper.ExtractAssetDll(zip, Path.Combine(binaries, "d3d9.dll"));
 
             Assert.Equal(new[] { Path.Combine(binaries, "d3d9.dll") }, Directory.GetFiles(binaries));
             Assert.Equal(new byte[] { 0x4D, 0x5A }, File.ReadAllBytes(Path.Combine(binaries, "d3d9.dll")));
@@ -46,7 +46,7 @@ namespace MirrorsEdgeTweaks.Tests
             string dll = Path.Combine(binaries, "d3d9.dll");
             File.WriteAllBytes(dll, new byte[] { 0x01 });
 
-            Assert.Throws<IOException>(() => DxvkHelper.ExtractAssetDll(zip, binaries));
+            Assert.Throws<IOException>(() => DxvkHelper.ExtractAssetDll(zip, dll));
             Assert.Equal(new byte[] { 0x01 }, File.ReadAllBytes(dll));
         }
 

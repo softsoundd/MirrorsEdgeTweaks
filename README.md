@@ -63,8 +63,8 @@ For further information and guides, refer to the [wiki](https://github.com/softs
 ## Building from Source
 
 ### Prerequisites
-- Visual Studio 2022 or later
 - .NET 10.0 SDK
+- Visual Studio 2026 or later (optional)
 - Windows 10/11
 
 ### Build Steps
@@ -83,6 +83,11 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 
 # The executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/
+
+# Publish the single-file release executable, Mirror's Edge Tweaks.exe
+dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj -p:PublishProfile=FolderProfile
+
+# The published executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/publish/win-x64/
 ```
 
 Note that a few tests need the game's executables, though these are optional. To run them, point `METWEAKS_GAME_EXES` at a folder of unmodified `MirrorsEdge.exe` files from any supported version.
@@ -101,6 +106,7 @@ dotnet test --configuration Release --explicit only
 - **[DXVK](https://github.com/doitsujin/dxvk)** by Philip Rebohle (doitsujin) - Provides the 32-bit float depth for the Z-fighting fix
 - **[RTX Remix](https://github.com/NVIDIAGameWorks/dxvk-remix)** by NVIDIA, through the [dxvk-remix-mirrorsedge](https://github.com/softsoundd/dxvk-remix-mirrorsedge) fork - Passes the game's rendering through to DLSS, frame generation, XeSS and AMD FSR
 - **[CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet)** by the .NET Foundation - MVVM framework
+- **[Microsoft.Extensions.DependencyInjection](https://github.com/dotnet/runtime)** by Microsoft - Dependency injection container
 - **[Microsoft.Xaml.Behaviors.Wpf](https://github.com/microsoft/XamlBehaviorsWpf)** by Microsoft - XAML behaviors for WPF
 - **[MaterialDesignThemes](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit)** by James Willock - UI theming and controls
 

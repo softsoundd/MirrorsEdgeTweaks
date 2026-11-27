@@ -4,6 +4,7 @@ using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Models;
 using MirrorsEdgeTweaks.Services;
 using System.IO;
+using System.Windows.Threading;
 
 namespace MirrorsEdgeTweaks.ViewModels
 {
@@ -139,7 +140,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 string trimmedLine = line.Trim();
 
-                if (trimmedLine.StartsWith("Language="))
+                if (trimmedLine.StartsWith("Language=", StringComparison.Ordinal))
                     return trimmedLine.Substring("Language=".Length).Trim();
             }
 
@@ -153,7 +154,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 ? GetLanguageConfig(LanguageNames[index])?.ZipFileName
                 : null;
 
-        private static int? MapTdEngineLanguageCodeToIndex(string value) => value.ToLower() switch
+        private static int? MapTdEngineLanguageCodeToIndex(string value) => value.ToLowerInvariant() switch
         {
             "cze" => 0,
             "deu" => 1,
@@ -237,6 +238,16 @@ namespace MirrorsEdgeTweaks.ViewModels
             return false;
         }
 
+        // The guard also blocks a retry of the failed language, so it ends once the combo box's echo of the revert has passed.
+        private void ClearFailedSelectionEchoGuardWhenIdle()
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null)
+                _failedSelectionEchoGuard = null;
+            else
+                dispatcher.InvokeAsync(() => _failedSelectionEchoGuard = null, DispatcherPriority.ApplicationIdle);
+        }
+
         private async Task OnLanguageChangedAsync(int previousIndex, int value)
         {
             bool switched = false;
@@ -290,6 +301,17 @@ namespace MirrorsEdgeTweaks.ViewModels
                     if (!await EnsureGameUsesIniLanguageAsync(languageConfig.TdEngineLanguage, language))
                         return;
 
+                    // The language files are installed before TdEngine.ini names the language,
+                    // so a failed download leaves the game on its current language.
+                    await _assetUrls.EnsureLoadedAsync();
+                    await RunDownloadAndExtractAsync(
+                        _download,
+                        _fileService,
+                        _assetUrls.For(languageConfig.ZipFileName),
+                        _session.Config.GameDirectoryPath!,
+                        "language files",
+                        afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
+
                     await Task.Run(() =>
                     {
                         try
@@ -304,7 +326,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                             for (int i = 0; i < lines.Length; i++)
                             {
-                                if (lines[i].TrimStart().StartsWith("Language="))
+                                if (lines[i].TrimStart().StartsWith("Language=", StringComparison.Ordinal))
                                 {
                                     int indentLength = lines[i].Length - lines[i].TrimStart().Length;
                                     string indent = lines[i].Substring(0, indentLength);
@@ -316,8 +338,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                             if (!modified)
                             {
-                                // This throws instead of showing a dialog, because it runs on a background thread
-                                // and a corrupted ini must also stop the language pack download below.
+                                // This throws instead of showing a dialog, because it runs on a background thread.
                                 throw new UserFacingException(CorruptedIniMessage);
                             }
 
@@ -337,15 +358,6 @@ namespace MirrorsEdgeTweaks.ViewModels
                             throw new IOException($"Failed to access TdEngine.ini: {ex.Message}", ex);
                         }
                     });
-
-                    await _assetUrls.EnsureLoadedAsync();
-                    await RunDownloadAndExtractAsync(
-                        _download,
-                        _fileService,
-                        _assetUrls.For(languageConfig.ZipFileName),
-                        _session.Config.GameDirectoryPath!,
-                        "language files",
-                        afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
 
                     SteamInstallScriptFixResult steamFixResult = await Task.Run(() =>
                         _steamService.ApplyLanguageFix(_session.Config.GameDirectoryPath!));
@@ -373,6 +385,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     {
                         SetLanguageIndexSilently(previousIndex);
                         HideProgress();
+                        ClearFailedSelectionEchoGuardWhenIdle();
                     }
 
                     _gameStatus.IsUiEnabled = true;

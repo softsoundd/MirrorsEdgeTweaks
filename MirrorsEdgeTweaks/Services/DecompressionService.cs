@@ -1,3 +1,4 @@
+using MirrorsEdgeTweaks.Helpers;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -51,17 +52,9 @@ namespace MirrorsEdgeTweaks.Services
         private void DecompressPackageInPlace(string packagePath)
         {
             string temporaryPath = $"{packagePath}.metweaks.tmp";
-            var fileInfo = new FileInfo(packagePath);
-            bool wasReadOnly = fileInfo.IsReadOnly;
-            bool fileReplaced = false;
 
             try
             {
-                if (wasReadOnly)
-                {
-                    fileInfo.IsReadOnly = false;
-                }
-
                 bool shouldReplaceFile = false;
                 using (var source = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
@@ -117,19 +110,13 @@ namespace MirrorsEdgeTweaks.Services
                     return;
                 }
 
-                File.Copy(temporaryPath, packagePath, overwrite: true);
-                fileReplaced = true;
+                PatchUtility.ReplacePreservingAttributes(packagePath, temporaryPath);
             }
             finally
             {
                 if (_fileService.FileExists(temporaryPath))
                 {
                     _fileService.DeleteFile(temporaryPath);
-                }
-
-                if (wasReadOnly && (_fileService.FileExists(packagePath) || fileReplaced))
-                {
-                    new FileInfo(packagePath).IsReadOnly = true;
                 }
             }
         }

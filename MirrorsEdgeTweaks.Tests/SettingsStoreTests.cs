@@ -1,17 +1,19 @@
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Tests.Fakes;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 
 namespace MirrorsEdgeTweaks.Tests
 {
     public class SettingsStoreTests
     {
         private const string IniFileName = "metweaksconfig.ini";
+        private const string WorkingDirectoryIni = @"C:\Shortcut Start Folder\metweaksconfig.ini";
 
         [Fact]
         public void Save_WritesKeyValueLinesInExpectedFormat()
         {
             var fileService = new InMemoryFileService();
-            var store = new SettingsStore(fileService);
+            var store = new SettingsStore(fileService, IniFileName);
 
             store.Save(new AppSettings
             {
@@ -37,7 +39,7 @@ namespace MirrorsEdgeTweaks.Tests
         public void Load_MissingFile_ReturnsAllNullSettings()
         {
             var fileService = new InMemoryFileService();
-            var store = new SettingsStore(fileService);
+            var store = new SettingsStore(fileService, IniFileName);
 
             var settings = store.Load();
 
@@ -60,7 +62,7 @@ namespace MirrorsEdgeTweaks.Tests
                 "DPI=1600",
                 "Cm360=20",
                 "LaunchArguments=-nomovies");
-            var store = new SettingsStore(fileService);
+            var store = new SettingsStore(fileService, IniFileName);
 
             var settings = store.Load();
 
@@ -79,7 +81,7 @@ namespace MirrorsEdgeTweaks.Tests
             fileService.Seed(IniFileName,
                 "path =  C:\\Trim  ",
                 "fov= 110 ");
-            var store = new SettingsStore(fileService);
+            var store = new SettingsStore(fileService, IniFileName);
 
             var settings = store.Load();
 
@@ -88,10 +90,78 @@ namespace MirrorsEdgeTweaks.Tests
         }
 
         [Fact]
-        public void SaveThenLoad_RoundTripsValues()
+        public void Load_RepeatedKey_TakesTheLastValue()
+        {
+            var fileService = new InMemoryFileService();
+            fileService.Seed(IniFileName,
+                @"Path=C:\Old",
+                "FOV=90",
+                "not a setting",
+                @"path=C:\New");
+            var store = new SettingsStore(fileService, IniFileName);
+
+            var settings = store.Load();
+
+            Assert.Equal(@"C:\New", settings.GameDirectoryPath);
+            Assert.Equal("90", settings.Fov);
+        }
+
+        [Fact]
+        public void Load_WithoutAnExecutableFolderCopy_ReadsTheWorkingDirectoryCopy()
+        {
+            var fileService = new InMemoryFileService();
+            fileService.Seed(WorkingDirectoryIni, @"Path=D:\Edge");
+            var store = new SettingsStore(fileService, IniFileName, WorkingDirectoryIni);
+
+            Assert.Equal(@"D:\Edge", store.Load().GameDirectoryPath);
+        }
+
+        [Fact]
+        public void Load_PrefersTheExecutableFolderCopy_AndSaveWritesOnlyThere()
+        {
+            var fileService = new InMemoryFileService();
+            fileService.Seed(IniFileName, @"Path=C:\Current");
+            fileService.Seed(WorkingDirectoryIni, @"Path=D:\Stale");
+            var store = new SettingsStore(fileService, IniFileName, WorkingDirectoryIni);
+
+            Assert.Equal(@"C:\Current", store.Load().GameDirectoryPath);
+
+            store.Save(new AppSettings { GameDirectoryPath = @"E:\Saved" });
+
+            Assert.Contains(@"Path=E:\Saved", fileService.ReadAllLines(IniFileName));
+            Assert.Contains(@"Path=D:\Stale", fileService.ReadAllLines(WorkingDirectoryIni));
+        }
+
+        [Fact]
+        public void PublicConstructor_KeepsTheFileNextToTheExecutable()
         {
             var fileService = new InMemoryFileService();
             var store = new SettingsStore(fileService);
+
+            store.Save(new AppSettings { GameDirectoryPath = @"C:\ME" });
+
+            Assert.True(fileService.FileExists(Path.Combine(AppContext.BaseDirectory, IniFileName)));
+        }
+
+        [Fact]
+        public void Save_OnDisk_ReplacesTheFileWithoutLeavingATemporaryCopy()
+        {
+            using var temp = new TempDirectory();
+            string path = Path.Combine(temp.Path, IniFileName);
+            File.WriteAllLines(path, [@"Path=C:\Old", "FOV=90"]);
+            var store = new SettingsStore(new FileService(), path);
+
+            store.Save(new AppSettings { GameDirectoryPath = @"C:\New" });
+
+            Assert.Equal(@"C:\New", store.Load().GameDirectoryPath);
+            Assert.Equal(IniFileName, Path.GetFileName(Assert.Single(Directory.GetFiles(temp.Path))));
+        }
+
+        [Fact]
+        public void SaveThenLoad_RoundTripsValues()
+        {
+            var fileService = new InMemoryFileService();
+            var store = new SettingsStore(fileService, IniFileName);
             var original = new AppSettings
             {
                 GameDirectoryPath = @"F:\Game",

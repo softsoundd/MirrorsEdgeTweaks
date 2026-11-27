@@ -313,27 +313,12 @@ namespace MirrorsEdgeTweaks.Services
 
         private bool SetupConsoleEditor(UnrealPackage package)
         {
-            var offsets = _session.Offsets;
-
-            Dispatch(() =>
-            {
-                _console.IsInstallConsoleEnabled = false;
-                _console.IsUninstallConsoleEnabled = false;
-            });
-
             FindConsoleHeightOffset(package);
 
             UpdateConsoleStatus();
 
-            if (offsets.ConsoleHeightOffset != -1)
-            {
-                Dispatch(() =>
-                {
-                    _console.IsInstallConsoleEnabled = true;
-                    _console.IsUninstallConsoleEnabled = true;
-                });
+            if (_session.Offsets.ConsoleHeightOffset != -1)
                 return true;
-            }
 
             Dispatch(() => _console.ConsoleStatus = "(Status: Offset not found)");
             return false;

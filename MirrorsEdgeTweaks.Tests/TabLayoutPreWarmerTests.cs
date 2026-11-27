@@ -9,23 +9,23 @@ namespace MirrorsEdgeTweaks.Tests
     public class TabLayoutPreWarmerTests
     {
         [Fact]
-        public void PreWarmBeforeShow_restores_original_tab_selection()
+        public void PreWarm_restores_original_tab_selection()
         {
             StaWpfTestRunner.Run(() =>
             {
                 var tabControl = CreateThreeTabControl();
-                tabControl.SelectedIndex = 0;
+                tabControl.SelectedIndex = 1;
 
                 var window = CreateHostWindow(tabControl);
 
-                TabLayoutPreWarmer.PreWarmBeforeShow(window, tabControl);
+                TabLayoutPreWarmer.PreWarm(tabControl, window);
 
-                Assert.Equal(0, tabControl.SelectedIndex);
+                Assert.Equal(1, tabControl.SelectedIndex);
             });
         }
 
         [Fact]
-        public void PreWarmBeforeShow_does_not_throw_for_single_tab()
+        public void PreWarm_does_not_throw_for_single_tab()
         {
             StaWpfTestRunner.Run(() =>
             {
@@ -34,7 +34,7 @@ namespace MirrorsEdgeTweaks.Tests
 
                 var window = CreateHostWindow(tabControl);
 
-                TabLayoutPreWarmer.PreWarmBeforeShow(window, tabControl);
+                TabLayoutPreWarmer.PreWarm(tabControl, window);
             });
         }
 

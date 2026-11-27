@@ -1,4 +1,6 @@
+using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.ViewModels;
+using System.IO;
 
 namespace MirrorsEdgeTweaks.Services
 {
@@ -14,11 +16,14 @@ namespace MirrorsEdgeTweaks.Services
     {
         private readonly ISettingsStore _store;
         private readonly GameSession _session;
+        private readonly IDialogService _dialogService;
+        private bool _saveFailureShown;
 
-        public AppSettingsService(ISettingsStore store, GameSession session)
+        public AppSettingsService(ISettingsStore store, GameSession session, IDialogService dialogService)
         {
             _store = store;
             _session = session;
+            _dialogService = dialogService;
         }
 
         public void Load()
@@ -42,18 +47,35 @@ namespace MirrorsEdgeTweaks.Services
             config.LaunchArguments = settings.LaunchArguments ?? string.Empty;
         }
 
+        // Tweaks works without its settings file, so a failed save is reported once rather than on every change.
         public void Save()
         {
             var config = _session.Config;
-            _store.Save(new AppSettings
+            try
             {
-                GameDirectoryPath = config.GameDirectoryPath,
-                UserFolderPath = config.UserFolderPath,
-                Fov = config.Fov,
-                Dpi = config.Dpi,
-                Cm360 = config.Cm360,
-                LaunchArguments = config.LaunchArguments
-            });
+                _store.Save(new AppSettings
+                {
+                    GameDirectoryPath = config.GameDirectoryPath,
+                    UserFolderPath = config.UserFolderPath,
+                    Fov = config.Fov,
+                    Dpi = config.Dpi,
+                    Cm360 = config.Cm360,
+                    LaunchArguments = config.LaunchArguments
+                });
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (_saveFailureShown)
+                    return;
+
+                _saveFailureShown = true;
+                _dialogService.ShowMessage("Settings Not Saved",
+                    "Mirror's Edge Tweaks could not save its settings to metweaksconfig.ini next to its executable, " +
+                    "so it will not remember your game directory and other entries the next time it starts.\n\n" +
+                    "Move Mirror's Edge Tweaks to a folder you can write to, such as your Desktop or Documents.",
+                    DialogMessageType.Warning,
+                    ErrorMessageHelper.Details(ex));
+            }
         }
     }
 }

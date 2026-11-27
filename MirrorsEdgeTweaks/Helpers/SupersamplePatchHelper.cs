@@ -170,19 +170,17 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] data = File.ReadAllBytes(exePath);
 
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
-            if (version == null) return;
+            if (version == null)
+                throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
 
             bool isOoa = version == "ea";
-            PatchUtility.OoaSession? ooa = null;
-            if (isOoa)
-            {
-                try { ooa = PatchUtility.BeginOoa(data); }
-                catch { return; }
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
             var addrs = VersionAddressTable.Load(version);
             var state = GetPatchStateFromData(data, addrs);
-            if (state != SupersamplePatchState.Patched) return;
+            if (state == SupersamplePatchState.Unpatched) return;
+            if (state != SupersamplePatchState.Patched)
+                throw new InvalidOperationException("MirrorsEdge.exe holds only part of the supersampling patch, so it cannot be removed safely.");
 
             // Each hook overwrites Size bytes, so only a pattern of that length can put them all back.
             foreach (string hookName in HookNames)
@@ -211,7 +209,14 @@ namespace MirrorsEdgeTweaks.Helpers
             {
                 var hdef = addrs.Hooks[hookName];
                 int foff = FindHookSite(data, hdef);
-                if (foff < 0 || foff + hdef.Size > data.Length || data[foff] != 0xE9)
+
+                // A hook that cannot be found may still detour into the cave that is reclaimed below.
+                // The exe is only written after every hook is handled, so throwing leaves it unchanged.
+                if (foff < 0 || foff + hdef.Size > data.Length)
+                    throw new InvalidOperationException($"Cannot find the {hookName} hook in MirrorsEdge.exe.");
+
+                // The hook still holds its original code.
+                if (data[foff] != 0xE9)
                     continue;
 
                 // scaleViewport detours to the lowest cave block, so its target is the cave base.
@@ -226,8 +231,8 @@ namespace MirrorsEdgeTweaks.Helpers
             if (caveBase != null)
                 data = CaveSection.ReclaimIfTopmost(data, caveBase.Value, CaveFootprint);
 
-            if (isOoa && ooa != null)
-                data = PatchUtility.FinishOoa(data, ooa);
+            if (isOoa)
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             WritePreservingAttributes(exePath, data);
         }

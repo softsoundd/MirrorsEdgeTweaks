@@ -122,7 +122,7 @@ namespace MirrorsEdgeTweaks.Helpers
             }
             else if (keyString.Length == 1 && char.IsLetter(keyString[0]))
             {
-                ue3Key = keyString.ToUpper();
+                ue3Key = keyString.ToUpperInvariant();
             }
             else
             {

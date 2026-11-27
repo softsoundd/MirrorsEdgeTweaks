@@ -37,7 +37,7 @@ namespace MirrorsEdgeTweaks.Helpers
             foreach (string tsLocFilePath in tsLocFiles)
             {
                 string fileName = Path.GetFileName(tsLocFilePath);
-                string countryCode = fileName.Split('_').Last().Substring(0, 3).ToUpper();
+                string countryCode = fileName.Split('_').Last().Substring(0, 3).ToUpperInvariant();
 
                 byte[]? replacement = GetGamepadReplacement(countryCode, buttonType);
                 byte[]? otherVariant = GetGamepadReplacement(countryCode, buttonType == "ps3" ? "xbox" : "ps3");

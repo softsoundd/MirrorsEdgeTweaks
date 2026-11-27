@@ -1,6 +1,8 @@
 using MirrorsEdgeTweaks.Services;
 using MirrorsEdgeTweaks.Tests.Fakes;
+using MirrorsEdgeTweaks.Tests.TestSupport;
 using MirrorsEdgeTweaks.ViewModels;
+using System.Net.Http;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -73,6 +75,43 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal("Patch Error", Assert.Single(dialogs.Messages).Title);
         }
 
+        [Fact]
+        public async Task InstallConsole_FailedDownload_LeavesTheIniFilesUnchanged()
+        {
+            using var temp = new TempDirectory();
+            string tdEngineIni = Path.Combine(temp.Path, "TdEngine.ini");
+            string tdInputIni = Path.Combine(temp.Path, "TdInput.ini");
+            string[] engineLines = ["[Engine.Engine]", "ConsoleClassName=TdGame.TdConsole"];
+            string[] inputLines = ["[Engine.Console]", "TypeKey=None"];
+            File.WriteAllLines(tdEngineIni, engineLines);
+            File.WriteAllLines(tdInputIni, inputLines);
+
+            var session = new GameSession();
+            session.Config.GameDirectoryPath = temp.Path;
+            session.Config.EnginePackagePath = Path.Combine(temp.Path, "Engine.u");
+            session.Config.TdEngineIniPath = tdEngineIni;
+            session.Config.TdInputIniPath = tdInputIni;
+            session.Offsets.ConsoleHeightOffset = 100;
+
+            var dialogs = new RecordingDialogService();
+            var viewModel = new ModsViewModel(
+                dialogs,
+                new TempDirectoryFileService(Path.Combine(temp.Path, "tmp")),
+                new FakeGameDataService(_ => { }),
+                new FailingDownloadService(),
+                new FixedAssetUrlProvider(),
+                session,
+                new GameStatusViewModel(),
+                new DownloadProgressViewModel(),
+                new TweaksScriptsViewModel());
+
+            await viewModel.InstallConsoleCommand.ExecuteAsync(null);
+
+            Assert.Equal("Installation Failed", Assert.Single(dialogs.Messages).Title);
+            Assert.Equal(engineLines, File.ReadAllLines(tdEngineIni));
+            Assert.Equal(inputLines, File.ReadAllLines(tdInputIni));
+        }
+
         private static async Task RunConsoleCommandAsync(ModsViewModel viewModel, bool install)
         {
             if (install)
@@ -122,6 +161,24 @@ namespace MirrorsEdgeTweaks.Tests
 
             public Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default) =>
                 throw new NotSupportedException();
+        }
+
+        private sealed class FailingDownloadService : IDownloadService
+        {
+            public Task<string?> DownloadToFileAsync(string url, string destinationPath, Action<double>? onProgress = null, CancellationToken cancellationToken = default) =>
+                throw new HttpRequestException("No internet connection.");
+
+            public Task<string?> GetValidatorAsync(string url, CancellationToken cancellationToken = default) =>
+                Task.FromResult<string?>(null);
+        }
+
+        private sealed class FixedAssetUrlProvider : IAssetUrlProvider
+        {
+            public string AssetBase => "https://example.test/";
+
+            public string For(string fileName) => AssetBase + fileName;
+
+            public Task EnsureLoadedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         }
 
         private sealed class UnusedAssetUrlProvider : IAssetUrlProvider

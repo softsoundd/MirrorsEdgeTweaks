@@ -48,9 +48,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
 
-        partial void OnMouseSmoothingIndexChanged(int value) => EnqueueApply(() => ApplyMouseSmoothingChange(value));
+        partial void OnMouseSmoothingIndexChanged(int oldValue, int newValue) =>
+            EnqueueApply(() => ApplyMouseSmoothingChange(oldValue, newValue));
 
-        private void ApplyMouseSmoothingChange(int value)
+        private void ApplyMouseSmoothingChange(int previousIndex, int value)
         {
             if (_isLoading || value < 0)
                 return;
@@ -63,6 +64,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     $"Cannot edit mouse smoothing, 'TdInput.ini' file is missing from \"{tdInputIniPath}\".\n\n" +
                     "Launch Mirror's Edge at least once to create the configuration file.",
                     DialogMessageType.Error);
+                SetSilently(() => MouseSmoothingIndex = previousIndex);
                 return;
             }
 
@@ -73,6 +75,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError("Could not apply mouse smoothing.", ex);
+                RefreshMouseSmoothing();
             }
         }
 
@@ -98,7 +101,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                         string key = lines[i].Split('=')[0].Trim();
                         if (key == "bEnableMouseSmoothing")
                         {
-                            lines[i] = $"bEnableMouseSmoothing={enabled.ToString().ToLower()}";
+                            lines[i] = $"bEnableMouseSmoothing={(enabled ? "true" : "false")}";
                         }
                     }
                 }
@@ -130,7 +133,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                         if (key == "bEnableMouseSmoothing")
                         {
-                            SetSilently(() => MouseSmoothingIndex = value.ToLower() == "true" ? 0 : 1);
+                            SetSilently(() => MouseSmoothingIndex = value.Equals("true", StringComparison.OrdinalIgnoreCase) ? 0 : 1);
                             break;
                         }
                     }
@@ -150,9 +153,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
 
-        partial void OnUniformSensitivityIndexChanged(int value) => _ = OnUniformSensitivityChangedAsync(value);
+        partial void OnUniformSensitivityIndexChanged(int oldValue, int newValue) =>
+            _ = OnUniformSensitivityChangedAsync(oldValue, newValue);
 
-        private async Task OnUniformSensitivityChangedAsync(int value)
+        private async Task OnUniformSensitivityChangedAsync(int previousIndex, int value)
         {
             if (_isLoading || value < 0)
                 return;
@@ -161,12 +165,14 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (string.IsNullOrEmpty(path))
             {
                 _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
+                SetSilently(() => UniformSensitivityIndex = previousIndex);
                 return;
             }
 
             if (!File.Exists(path))
             {
                 _dialogService.ShowMessage("Error", $"TdGame.u package not found at: {path}", DialogMessageType.Error);
+                SetSilently(() => UniformSensitivityIndex = previousIndex);
                 return;
             }
 
@@ -182,7 +188,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (!result)
                 {
-                    SetSilently(() => UniformSensitivityIndex = 1);
+                    SetSilently(() => UniformSensitivityIndex = previousIndex);
                     return;
                 }
             }
@@ -209,6 +215,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     HideProgress();
                     _dialogService.ShowError("Could not apply uniform sensitivity.", ex);
+                    await RefreshUniformSensitivityAsync();
                 }
             });
         }
@@ -440,7 +447,7 @@ namespace MirrorsEdgeTweaks.ViewModels
                     return;
                 }
 
-                ShowProgress($"Applying {buttonType.ToUpper()} gamepad buttons...", true);
+                ShowProgress($"Applying {buttonType.ToUpperInvariant()} gamepad buttons...", true);
 
                 await Task.Run(() =>
                 {
@@ -479,6 +486,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 HideProgress();
                 _dialogService.ShowError("Could not apply the gamepad buttons.", ex);
+                await RefreshGamepadButtonsAsync();
             }
         }
 

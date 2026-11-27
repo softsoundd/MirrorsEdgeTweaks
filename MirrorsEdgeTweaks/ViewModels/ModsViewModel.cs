@@ -486,12 +486,6 @@ namespace MirrorsEdgeTweaks.ViewModels
 
             try
             {
-                await Task.Run(() =>
-                {
-                    ConfigFileHelper.ModifyIniFile(tdEngineIni, "Engine.Engine", "ConsoleClassName", "MirrorsEdgeConsole.MirrorsEdgeConsole");
-                    ConfigFileHelper.ModifyIniFile(tdInputIni, "Engine.Console", "TypeKey", "Tab");
-                });
-
                 await _assetUrls.EnsureLoadedAsync();
                 string downloadUrl = _assetUrls.For("MirrorsEdgeConsole.zip");
 
@@ -504,6 +498,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 await Task.Run(() =>
                 {
+                    // TdEngine.ini names the console's class, so the ini files change only once its package is installed.
+                    ConfigFileHelper.ModifyIniFile(tdEngineIni, "Engine.Engine", "ConsoleClassName", "MirrorsEdgeConsole.MirrorsEdgeConsole");
+                    ConfigFileHelper.ModifyIniFile(tdInputIni, "Engine.Console", "TypeKey", "Tab");
+
                     Post(() => _gameStatus.Status = "Patching Engine.u...");
 
                     PatchUtility.PatchPreservingAttributes(enginePackagePath, [(consoleHeightOffset, BitConverter.GetBytes(0.4f))]);

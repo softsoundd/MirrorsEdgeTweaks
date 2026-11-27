@@ -35,13 +35,27 @@ jobs:
           }
           exit 0
 
+      # A beta tag such as 4.5.0-beta3 publishes the version it leads up to.
+      - name: Stop if the tag does not match the app version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj
+          $version = @($project.Project.PropertyGroup | Where-Object { $_.Version } | ForEach-Object { $_.Version })[0]
+          $tagVersion = $env:GITHUB_REF_NAME -replace '-.*$', ''
+          if ($tagVersion -ne $version) {
+            throw "Tag $env:GITHUB_REF_NAME does not match version $version in MirrorsEdgeTweaks.csproj."
+          }
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
+      - name: Build (Release, warnings as errors)
+        run: dotnet build MirrorsEdgeTweaks.slnx --configuration Release -warnaserror
+
       - name: Test
-        run: dotnet test --solution MirrorsEdgeTweaks.slnx --configuration Release
+        run: dotnet test --solution MirrorsEdgeTweaks.slnx --configuration Release --no-build
 
       - name: Publish
         run: dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj --configuration Release -p:PublishProfile=FolderProfile --output publish

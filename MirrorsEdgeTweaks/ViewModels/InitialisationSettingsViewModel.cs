@@ -136,6 +136,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError("Could not change the intro video setting.", ex);
+                RefreshIntroVideo();
             }
         }
 
@@ -263,6 +264,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError("Could not change the main menu delay setting.", ex);
+                RefreshMainMenuDelay();
             }
         }
 
@@ -398,6 +400,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError("Could not change the time trial countdown setting.", ex);
+                RefreshTimeTrialCountdown();
             }
         }
 
@@ -491,6 +494,9 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError("Could not apply the skip online check patch.", ex);
+
+                // The index sets _session.OnlineSkipEnabled, which a later FOV apply passes to TdGamePatcher.
+                await RefreshSkipOnlineCheckAsync();
             }
         }
 

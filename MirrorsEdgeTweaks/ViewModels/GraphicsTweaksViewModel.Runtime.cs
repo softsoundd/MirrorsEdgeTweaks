@@ -105,14 +105,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         private Task InstallDxvkCoreAsync(string binariesDirectory, string dialogTitle) =>
             InstallRuntimeAsync(binariesDirectory, dialogTitle, "DXVK", isRemix: false, () =>
                 RunDownloadAndExtractAsync(_download, _fileService, _assetUrls.For(DxvkHelper.AssetFileName), binariesDirectory, "DXVK",
-                    customExtract: (zip, destination) => Task.Run(() =>
-                    {
-                        RemixRuntimeHelper.RemoveCurrentRuntime(destination);
-                        DxvkHelper.ExtractAssetDll(zip, destination);
-                    })));
+                    customExtract: (zip, destination) => Task.Run(() => RemixRuntimeHelper.InstallDxvk(zip, destination))));
 
         // Runs while the caller holds the apply gate, which is not reentrant.
-        // The download finishes before the current runtime is removed, so a failed download leaves it in place.
+        // The current runtime is only removed after the download and extraction succeed, so a failure leaves it in place.
         private async Task InstallRuntimeAsync(string binariesDirectory, string dialogTitle, string name, bool isRemix, Func<Task> install)
         {
             if (!await EnsureGameClosedAsync(dialogTitle))

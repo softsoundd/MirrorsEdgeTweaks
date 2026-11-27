@@ -23,10 +23,6 @@ namespace MirrorsEdgeTweaks.Tests.Fakes
 
         public void DeleteFile(string path) => _files.Remove(path);
 
-        public Task<string> ReadAllTextAsync(string path) => throw new NotSupportedException();
-        public Task WriteAllTextAsync(string path, string content) => throw new NotSupportedException();
-        public Task<byte[]> ReadAllBytesAsync(string path) => throw new NotSupportedException();
-        public Task WriteAllBytesAsync(string path, byte[] bytes) => throw new NotSupportedException();
         public bool DirectoryExists(string path) => throw new NotSupportedException();
         public void CreateDirectory(string path) => throw new NotSupportedException();
         public byte[] ReadAllBytes(string path) => throw new NotSupportedException();

@@ -9,6 +9,7 @@ namespace MirrorsEdgeTweaks.Tests
     {
         private static readonly byte[] BridgeBytes = { 0x4D, 0x5A, 0x01 };
         private static readonly byte[] NgxRuntimeBytes = "MZ\0rtx.ngxPassthrough\0d3d9.useD32forD24\0"u8.ToArray();
+        private static readonly byte[] DxvkDllBytes = { 0x4D, 0x5A, 0x02 };
 
         [Theory]
         [InlineData("bridge-remix (remix-main+d0b1a59f)", true)]
@@ -119,6 +120,77 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Throws<UserFacingException>(() => RemixRuntimeHelper.Install(zip, game));
             Assert.Equal(new byte[] { 0x4D, 0x5A }, File.ReadAllBytes(dll));
             Assert.False(Directory.Exists(Path.Combine(binaries, ".trex")));
+            Assert.Equal([binaries], Directory.GetDirectories(game));
+        }
+
+        [Fact]
+        public void Install_KeepsTheCurrentRuntime_WhenExtractionFails()
+        {
+            using var temp = new TempDirectory();
+            string zip = Path.Combine(temp.Path, RemixRuntimeHelper.AssetFileName);
+            using (ZipArchive archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+            {
+                WriteEntry(archive, "Binaries/.trex/d3d9.dll", NgxRuntimeBytes);
+                WriteEntry(archive, "Binaries/d3d9.dll", BridgeBytes);
+
+                // A file and a folder of the same name stop the extraction after the files above.
+                WriteEntry(archive, "Binaries/conflict", new byte[] { 0x01 });
+                WriteEntry(archive, "Binaries/conflict/file", new byte[] { 0x02 });
+            }
+
+            string game = Path.Combine(temp.Path, "game");
+            string binaries = Directory.CreateDirectory(Path.Combine(game, "Binaries")).FullName;
+            string dll = Path.Combine(binaries, "d3d9.dll");
+            string log = Path.Combine(binaries, "MirrorsEdge_d3d9.log");
+            File.WriteAllBytes(dll, new byte[] { 0x01 });
+            File.WriteAllText(log, "info:  DXVK: v3.1.1");
+
+            Assert.ThrowsAny<IOException>(() => RemixRuntimeHelper.Install(zip, game, D3D9Runtime.Dxvk));
+
+            Assert.Equal(new byte[] { 0x01 }, File.ReadAllBytes(dll));
+            Assert.True(File.Exists(log));
+            Assert.False(Directory.Exists(Path.Combine(binaries, ".trex")));
+            Assert.Equal([binaries], Directory.GetDirectories(game));
+        }
+
+        [Fact]
+        public void InstallDxvk_InstallsOnlyTheDll_BesideTheStockRenderer()
+        {
+            using var temp = new TempDirectory();
+            string zip = WriteDxvkZip(temp.Path, includeDll: true);
+            string binaries = Directory.CreateDirectory(Path.Combine(temp.Path, "Binaries")).FullName;
+
+            RemixRuntimeHelper.InstallDxvk(zip, binaries);
+
+            Assert.Equal([Path.Combine(binaries, "d3d9.dll")], Directory.GetFiles(binaries));
+            Assert.Equal(DxvkDllBytes, File.ReadAllBytes(Path.Combine(binaries, "d3d9.dll")));
+        }
+
+        [Fact]
+        public void InstallDxvk_KeepsAnotherModsD3D9Dll()
+        {
+            using var temp = new TempDirectory();
+            string zip = WriteDxvkZip(temp.Path, includeDll: true);
+            string binaries = Directory.CreateDirectory(Path.Combine(temp.Path, "Binaries")).FullName;
+            string dll = Path.Combine(binaries, "d3d9.dll");
+            File.WriteAllBytes(dll, new byte[] { 0x4D, 0x5A });
+
+            Assert.Throws<UserFacingException>(() => RemixRuntimeHelper.InstallDxvk(zip, binaries));
+
+            Assert.Equal([dll], Directory.GetFiles(binaries));
+            Assert.Equal(new byte[] { 0x4D, 0x5A }, File.ReadAllBytes(dll));
+        }
+
+        [Fact]
+        public void InstallDxvk_ChangesNothing_WhenTheDownloadHasNoDll()
+        {
+            using var temp = new TempDirectory();
+            string zip = WriteDxvkZip(temp.Path, includeDll: false);
+            string binaries = Directory.CreateDirectory(Path.Combine(temp.Path, "Binaries")).FullName;
+
+            Assert.Throws<UserFacingException>(() => RemixRuntimeHelper.InstallDxvk(zip, binaries));
+
+            Assert.Empty(Directory.GetFiles(binaries));
         }
 
         [Fact]
@@ -171,6 +243,18 @@ namespace MirrorsEdgeTweaks.Tests
             WriteEntry(archive, "Binaries/.trex/NvRemixBridge.exe", new byte[] { 0x4D, 0x5A });
             WriteEntry(archive, "Binaries/d3d9.dll", BridgeBytes);
             WriteEntry(archive, "Binaries/NvRemixLauncher32.exe", new byte[] { 0x4D, 0x5A });
+            return zip;
+        }
+
+        // Matches the layout of the published DXVK asset.
+        private static string WriteDxvkZip(string directory, bool includeDll)
+        {
+            string zip = Path.Combine(directory, DxvkHelper.AssetFileName);
+            using ZipArchive archive = ZipFile.Open(zip, ZipArchiveMode.Create);
+            archive.CreateEntry("Binaries/");
+            if (includeDll)
+                WriteEntry(archive, "Binaries/d3d9.dll", DxvkDllBytes);
+            WriteEntry(archive, "Binaries/DXVK-LICENSE.txt", "zlib/libpng license"u8.ToArray());
             return zip;
         }
 

@@ -4,10 +4,6 @@ namespace MirrorsEdgeTweaks.Services
 {
     public interface IFileService
     {
-        Task<string> ReadAllTextAsync(string path);
-        Task WriteAllTextAsync(string path, string content);
-        Task<byte[]> ReadAllBytesAsync(string path);
-        Task WriteAllBytesAsync(string path, byte[] bytes);
         bool FileExists(string path);
         bool DirectoryExists(string path);
         void CreateDirectory(string path);
@@ -31,26 +27,6 @@ namespace MirrorsEdgeTweaks.Services
 
     public class FileService : IFileService
     {
-        public async Task<string> ReadAllTextAsync(string path)
-        {
-            return await File.ReadAllTextAsync(path);
-        }
-
-        public async Task WriteAllTextAsync(string path, string content)
-        {
-            await File.WriteAllTextAsync(path, content);
-        }
-
-        public async Task<byte[]> ReadAllBytesAsync(string path)
-        {
-            return await File.ReadAllBytesAsync(path);
-        }
-
-        public async Task WriteAllBytesAsync(string path, byte[] bytes)
-        {
-            await File.WriteAllBytesAsync(path, bytes);
-        }
-
         public bool FileExists(string path)
         {
             return File.Exists(path);
@@ -106,9 +82,22 @@ namespace MirrorsEdgeTweaks.Services
             return File.ReadAllText(path);
         }
 
+        // Writes a temporary file and renames it over the target, so a crash cannot leave a half-written file.
+        // A target that refuses the rename, such as one that another program holds open, is written in place.
         public void WriteAllLines(string path, IEnumerable<string> lines)
         {
-            File.WriteAllLines(path, lines);
+            string[] content = lines.ToArray();
+            string tempPath = path + ".tmp";
+            try
+            {
+                File.WriteAllLines(tempPath, content);
+                File.Move(tempPath, path, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                try { File.Delete(tempPath); } catch { }
+                File.WriteAllLines(path, content);
+            }
         }
 
         public void WriteAllTextAndLock(string path, string content) =>

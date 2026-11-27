@@ -131,6 +131,20 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.False(Directory.Exists(PatchUtility.GetBackupDirectoryForPath(path)));
         }
 
+        [Fact]
+        public void WriteMethods_RefuseACompressedPackage_WithoutWriting()
+        {
+            var (compressed, _) = SyntheticPackage.Build(new byte[256]);
+            string path = CreateFile(compressed);
+
+            Assert.Throws<UserFacingException>(() => PatchUtility.WritePreservingAttributes(path, [1, 2, 3]));
+            Assert.Throws<UserFacingException>(() => PatchUtility.PatchPreservingAttributes(path, [(0, new byte[] { 9 })]));
+            Assert.Throws<UserFacingException>(() => PatchUtility.SplicePreservingAttributes(path, [(0, 1, new byte[] { 9 })]));
+
+            Assert.Equal(compressed, File.ReadAllBytes(path));
+            Assert.False(Directory.Exists(PatchUtility.GetBackupDirectoryForPath(path)));
+        }
+
         private string CreateFile(byte[] content)
         {
             string path = Path.Combine(_temp.Path, "Engine.u");

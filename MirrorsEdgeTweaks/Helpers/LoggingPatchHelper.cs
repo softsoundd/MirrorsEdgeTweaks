@@ -155,26 +155,20 @@ namespace MirrorsEdgeTweaks.Helpers
             byte[] data = File.ReadAllBytes(exePath);
 
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
-            if (version == null) return;
+            if (version == null)
+                throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
 
             bool isOoa = version == "ea";
-            PatchUtility.OoaSession? ooa = null;
-            if (isOoa)
-            {
-                try { ooa = PatchUtility.BeginOoa(data); }
-                catch { return; }
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
-            VersionAddressTable addrs;
-            try { addrs = VersionAddressTable.Load(version); }
-            catch { return; }
+            VersionAddressTable addrs = VersionAddressTable.Load(version);
 
             data = RemoveFromImage(data, addrs, out bool changed);
             if (!changed)
                 return;
 
-            if (isOoa && ooa != null)
-                data = PatchUtility.FinishOoa(data, ooa);
+            if (isOoa)
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             WritePreservingAttributes(exePath, data);
         }

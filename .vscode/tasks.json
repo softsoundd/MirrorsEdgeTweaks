@@ -19,7 +19,8 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/MirrorsEdgeTweaks.slnx",
+                "${workspaceFolder}/MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj",
+                "/property:PublishProfile=FolderProfile",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -33,7 +34,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/MirrorsEdgeTweaks.slnx"
+                "${workspaceFolder}/MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj"
             ],
             "problemMatcher": "$msCompile"
         },
@@ -44,8 +45,7 @@
             "args": [
                 "test",
                 "${workspaceFolder}/MirrorsEdgeTweaks.slnx",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+                "/property:GenerateFullPaths=true"
             ],
             "group": "test",
             "problemMatcher": "$msCompile"

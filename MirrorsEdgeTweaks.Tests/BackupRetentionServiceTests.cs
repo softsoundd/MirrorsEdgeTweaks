@@ -107,6 +107,68 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal([5], File.ReadAllBytes(Path.Combine(backupDir, "TdGame.u.last.bak")));
         }
 
+        [Fact]
+        public void BackupOperationScope_KeepsTheBackupFromBeforeTheOperation_WhenAFileIsWrittenTwice()
+        {
+            string sourceFile = CreateSourceFile("twice", "MirrorsEdge.exe", [5]);
+
+            using (PatchUtility.BeginBackupOperation())
+            {
+                PatchUtility.WritePreservingAttributes(sourceFile, [6]);
+                PatchUtility.WritePreservingAttributes(sourceFile, [7]);
+            }
+
+            Assert.Equal([7], File.ReadAllBytes(sourceFile));
+            Assert.Equal([5], File.ReadAllBytes(Path.Combine(PatchUtility.GetBackupDirectoryForPath(sourceFile), "MirrorsEdge.exe.last.bak")));
+        }
+
+        [Fact]
+        public void BackupOperationScope_StagesTheBackupAgain_AfterItIsPrunedDuringTheOperation()
+        {
+            string sourceFile = CreateSourceFile("pruned", "Engine.u", [5]);
+
+            using (PatchUtility.BeginBackupOperation())
+            {
+                PatchUtility.WritePreservingAttributes(sourceFile, [6]);
+                BackupRetentionService.PruneBackupForPath(sourceFile);
+                PatchUtility.WritePreservingAttributes(sourceFile, [7]);
+            }
+
+            Assert.Equal([6], File.ReadAllBytes(Path.Combine(PatchUtility.GetBackupDirectoryForPath(sourceFile), "Engine.u.last.bak")));
+        }
+
+        [Fact]
+        public void BackupOperationScope_KeepsTheOuterOperationsBackup_WhenANestedOperationCompletes()
+        {
+            string sourceFile = CreateSourceFile("nested", "TdGame.u", [5]);
+            string backup = Path.Combine(PatchUtility.GetBackupDirectoryForPath(sourceFile), "TdGame.u.last.bak");
+
+            using (var outer = PatchUtility.BeginBackupOperation())
+            {
+                PatchUtility.WritePreservingAttributes(sourceFile, [6]);
+                using (var inner = PatchUtility.BeginBackupOperation())
+                {
+                    PatchUtility.WritePreservingAttributes(sourceFile, [7]);
+                    inner.Complete();
+                }
+
+                Assert.Equal([5], File.ReadAllBytes(backup));
+
+                outer.Complete();
+            }
+
+            Assert.False(Directory.Exists(PatchUtility.GetBackupDirectoryForPath(sourceFile)));
+        }
+
+        private string CreateSourceFile(string folder, string fileName, byte[] content)
+        {
+            string directory = Path.Combine(_tempRoot, folder);
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(directory, fileName);
+            File.WriteAllBytes(path, content);
+            return path;
+        }
+
         private static string CreateBackupFolder(string sourcePath, byte[] content)
         {
             string backupDir = PatchUtility.GetBackupDirectoryForPath(sourcePath);

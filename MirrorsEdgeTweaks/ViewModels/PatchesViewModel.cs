@@ -191,77 +191,89 @@ namespace MirrorsEdgeTweaks.ViewModels
         }
 
 
-        [RelayCommand]
-        private Task PatchLogging() => RunApplyAsync(PatchLoggingCore);
+        // Name completes sentences such as "Could not apply the {Name}."
+        // IsApplied returns null when the patch's state cannot be read, such as in an exe of an unknown version.
+        private sealed record ExePatch(string Name, Func<string, bool?> IsApplied, Action<string> Apply, Action<string> Remove);
 
-        private async Task PatchLoggingCore()
+        private static readonly ExePatch LoggingPatch = new("logging patch",
+            exe => LoggingPatchHelper.GetPatchState(exe) switch
+            {
+                LoggingPatchState.Patched => true,
+                LoggingPatchState.Unpatched => false,
+                _ => null,
+            },
+            LoggingPatchHelper.ApplyPatch,
+            LoggingPatchHelper.RemovePatch);
+
+        private static readonly ExePatch MultiInstancePatch = InlinePatch("multi-instance patch", InlineVaPatchHelper.MultiInstanceKey);
+
+        private static readonly ExePatch AmbiguousBypassPatch = InlinePatch("ambiguous bypass patch", InlineVaPatchHelper.AmbiguousPackageKey);
+
+        private static ExePatch InlinePatch(string name, string patchKey) => new(name,
+            exe => InlineVaPatchHelper.GetPatchState(exe, patchKey) switch
+            {
+                InlinePatchState.Patched => true,
+                InlinePatchState.Unpatched => false,
+                _ => null,
+            },
+            exe => InlineVaPatchHelper.ApplyPatch(exe, patchKey),
+            exe => InlineVaPatchHelper.RemovePatch(exe, patchKey));
+
+        // The status is read back from MirrorsEdge.exe afterwards, so it shows what the file holds even when the change fails.
+        private async Task ChangeExePatchAsync(ExePatch patch, bool apply, Func<Task> refreshStatusAsync)
         {
             string? exePath = RequireExePath();
             if (exePath == null) return;
 
             try
             {
-                bool alreadyPatched = false;
-                bool ran = await RunBusyAsync("Applying logging patch...", () =>
+                bool changed = false;
+                bool ran = await RunBusyAsync(apply ? $"Applying {patch.Name}..." : $"Removing {patch.Name}...", () =>
                 {
-                    if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Patched)
-                    {
-                        alreadyPatched = true;
+                    bool? applied = patch.IsApplied(exePath);
+                    if (applied == apply)
                         return;
-                    }
 
-                    LoggingPatchHelper.ApplyPatch(exePath);
+                    // Removing a patch that cannot be recognised would overwrite bytes that something else put there.
+                    if (applied == null && !apply)
+                        throw new UserFacingException(
+                            "MirrorsEdge.exe is not a version that Mirror's Edge Tweaks recognises, or another tool has changed it, " +
+                            $"so Tweaks cannot tell whether the {patch.Name} is applied and has left the file unchanged. " +
+                            "Verifying your game files restores a stock MirrorsEdge.exe.");
+
+                    if (apply)
+                        patch.Apply(exePath);
+                    else
+                        patch.Remove(exePath);
+
+                    if (patch.IsApplied(exePath) != apply)
+                        throw new InvalidOperationException(apply
+                            ? $"MirrorsEdge.exe did not hold the {patch.Name} after it was applied."
+                            : $"MirrorsEdge.exe still held the {patch.Name} after it was removed.");
+                    changed = true;
                 });
-                if (!ran) return;
 
-                LoggingPatchStatus = "Patched";
-                LoggingPatchStatusForeground = PatchedBrush();
-                if (!alreadyPatched)
+                if (ran && changed)
                 {
-                    _dialogService.ShowMessage("Success", "Logging patch applied.", DialogMessageType.Information);
+                    string name = char.ToUpperInvariant(patch.Name[0]) + patch.Name[1..];
+                    _dialogService.ShowMessage("Success", $"{name} {(apply ? "applied" : "removed")}.", DialogMessageType.Information);
                 }
             }
             catch (Exception ex)
             {
-                _dialogService.ShowError("Could not apply the logging patch.", ex);
+                _dialogService.ShowError($"Could not {(apply ? "apply" : "remove")} the {patch.Name}.", ex);
+            }
+            finally
+            {
+                await refreshStatusAsync();
             }
         }
 
         [RelayCommand]
-        private Task UnpatchLogging() => RunApplyAsync(UnpatchLoggingCore);
+        private Task PatchLogging() => RunApplyAsync(() => ChangeExePatchAsync(LoggingPatch, apply: true, RefreshLoggingStatusAsync));
 
-        private async Task UnpatchLoggingCore()
-        {
-            string? exePath = RequireExePath();
-            if (exePath == null) return;
-
-            try
-            {
-                bool alreadyUnpatched = false;
-                bool ran = await RunBusyAsync("Removing logging patch...", () =>
-                {
-                    if (LoggingPatchHelper.GetPatchState(exePath) == LoggingPatchState.Unpatched)
-                    {
-                        alreadyUnpatched = true;
-                        return;
-                    }
-
-                    LoggingPatchHelper.RemovePatch(exePath);
-                });
-                if (!ran) return;
-
-                LoggingPatchStatus = "Unpatched";
-                if (!alreadyUnpatched)
-                {
-                    LoggingPatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Logging patch removed.", DialogMessageType.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowError("Could not remove the logging patch.", ex);
-            }
-        }
+        [RelayCommand]
+        private Task UnpatchLogging() => RunApplyAsync(() => ChangeExePatchAsync(LoggingPatch, apply: false, RefreshLoggingStatusAsync));
 
         [RelayCommand]
         private void ShowLoggingInfo()
@@ -279,76 +291,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 
 
         [RelayCommand]
-        private Task PatchMultiInstance() => RunApplyAsync(PatchMultiInstanceCore);
-
-        private async Task PatchMultiInstanceCore()
-        {
-            string? exePath = RequireExePath();
-            if (exePath == null) return;
-
-            try
-            {
-                bool alreadyPatched = false;
-                bool ran = await RunBusyAsync("Applying multi-instance patch...", () =>
-                {
-                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey) == InlinePatchState.Patched)
-                    {
-                        alreadyPatched = true;
-                        return;
-                    }
-
-                    InlineVaPatchHelper.ApplyPatch(exePath, InlineVaPatchHelper.MultiInstanceKey);
-                });
-                if (!ran) return;
-
-                MultiInstancePatchStatus = "Patched";
-                MultiInstancePatchStatusForeground = PatchedBrush();
-                if (!alreadyPatched)
-                {
-                    _dialogService.ShowMessage("Success", "Multi-instance patch applied.", DialogMessageType.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowError("Could not apply the multi-instance patch.", ex);
-            }
-        }
+        private Task PatchMultiInstance() =>
+            RunApplyAsync(() => ChangeExePatchAsync(MultiInstancePatch, apply: true, RefreshMultiInstanceStatusAsync));
 
         [RelayCommand]
-        private Task UnpatchMultiInstance() => RunApplyAsync(UnpatchMultiInstanceCore);
-
-        private async Task UnpatchMultiInstanceCore()
-        {
-            string? exePath = RequireExePath();
-            if (exePath == null) return;
-
-            try
-            {
-                bool alreadyUnpatched = false;
-                bool ran = await RunBusyAsync("Removing multi-instance patch...", () =>
-                {
-                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.MultiInstanceKey) == InlinePatchState.Unpatched)
-                    {
-                        alreadyUnpatched = true;
-                        return;
-                    }
-
-                    InlineVaPatchHelper.RemovePatch(exePath, InlineVaPatchHelper.MultiInstanceKey);
-                });
-                if (!ran) return;
-
-                MultiInstancePatchStatus = "Unpatched";
-                if (!alreadyUnpatched)
-                {
-                    MultiInstancePatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Multi-instance patch removed.", DialogMessageType.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowError("Could not remove the multi-instance patch.", ex);
-            }
-        }
+        private Task UnpatchMultiInstance() =>
+            RunApplyAsync(() => ChangeExePatchAsync(MultiInstancePatch, apply: false, RefreshMultiInstanceStatusAsync));
 
         [RelayCommand]
         private void ShowMultiInstanceInfo()
@@ -361,76 +309,12 @@ namespace MirrorsEdgeTweaks.ViewModels
 
 
         [RelayCommand]
-        private Task PatchAmbiguousBypass() => RunApplyAsync(PatchAmbiguousBypassCore);
-
-        private async Task PatchAmbiguousBypassCore()
-        {
-            string? exePath = RequireExePath();
-            if (exePath == null) return;
-
-            try
-            {
-                bool alreadyPatched = false;
-                bool ran = await RunBusyAsync("Applying ambiguous bypass patch...", () =>
-                {
-                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey) == InlinePatchState.Patched)
-                    {
-                        alreadyPatched = true;
-                        return;
-                    }
-
-                    InlineVaPatchHelper.ApplyPatch(exePath, InlineVaPatchHelper.AmbiguousPackageKey);
-                });
-                if (!ran) return;
-
-                AmbiguousBypassPatchStatus = "Patched";
-                AmbiguousBypassPatchStatusForeground = PatchedBrush();
-                if (!alreadyPatched)
-                {
-                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch applied.", DialogMessageType.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowError("Could not apply the ambiguous bypass patch.", ex);
-            }
-        }
+        private Task PatchAmbiguousBypass() =>
+            RunApplyAsync(() => ChangeExePatchAsync(AmbiguousBypassPatch, apply: true, RefreshAmbiguousBypassStatusAsync));
 
         [RelayCommand]
-        private Task UnpatchAmbiguousBypass() => RunApplyAsync(UnpatchAmbiguousBypassCore);
-
-        private async Task UnpatchAmbiguousBypassCore()
-        {
-            string? exePath = RequireExePath();
-            if (exePath == null) return;
-
-            try
-            {
-                bool alreadyUnpatched = false;
-                bool ran = await RunBusyAsync("Removing ambiguous bypass patch...", () =>
-                {
-                    if (InlineVaPatchHelper.GetPatchState(exePath, InlineVaPatchHelper.AmbiguousPackageKey) == InlinePatchState.Unpatched)
-                    {
-                        alreadyUnpatched = true;
-                        return;
-                    }
-
-                    InlineVaPatchHelper.RemovePatch(exePath, InlineVaPatchHelper.AmbiguousPackageKey);
-                });
-                if (!ran) return;
-
-                AmbiguousBypassPatchStatus = "Unpatched";
-                if (!alreadyUnpatched)
-                {
-                    AmbiguousBypassPatchStatusForeground = BodyLightBrush();
-                    _dialogService.ShowMessage("Success", "Ambiguous bypass patch removed.", DialogMessageType.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                _dialogService.ShowError("Could not remove the ambiguous bypass patch.", ex);
-            }
-        }
+        private Task UnpatchAmbiguousBypass() =>
+            RunApplyAsync(() => ChangeExePatchAsync(AmbiguousBypassPatch, apply: false, RefreshAmbiguousBypassStatusAsync));
 
         [RelayCommand]
         private void ShowAmbiguousBypassInfo()

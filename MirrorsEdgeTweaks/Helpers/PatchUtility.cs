@@ -10,6 +10,10 @@ namespace MirrorsEdgeTweaks.Helpers
         private static BackupOperationScope? CurrentBackupOperation =>
             BackupOperationStack.Value is { Count: > 0 } stack ? stack.Peek() : null;
 
+        // The stack enumerates from the newest operation, so its last item is the outermost.
+        private static BackupOperationScope? OutermostBackupOperation =>
+            BackupOperationStack.Value is { Count: > 0 } stack ? stack.Last() : null;
+
         internal static string? BackupRootOverrideForTests { get; set; }
 
         internal static string BackupRoot =>
@@ -37,20 +41,46 @@ namespace MirrorsEdgeTweaks.Helpers
                 stack.Pop();
         }
 
+        // Returns the operation that scope runs inside.
+        // Returns null when scope is the outermost operation.
+        internal static BackupOperationScope? FindEnclosingBackupOperation(BackupOperationScope scope)
+        {
+            bool found = false;
+            foreach (BackupOperationScope candidate in BackupOperationStack.Value ?? Enumerable.Empty<BackupOperationScope>())
+            {
+                if (found)
+                    return candidate;
+                found = ReferenceEquals(candidate, scope);
+            }
+            return null;
+        }
+
         // Every patch to a binary game file, such as the exe, .u and .upk files, is written through this,
-        // PatchPreservingAttributes or SplicePreservingAttributes.
+        // PatchPreservingAttributes, SplicePreservingAttributes or ReplacePreservingAttributes.
         // A read-only attribute is cleared for the write and restored afterwards.
         // The pre-write backup is deleted on success, unless a BackupOperationScope is active.
         // The content goes to a temporary file that is renamed over the target, so a crash cannot leave a half-written file.
-        public static void WritePreservingAttributes(string path, byte[] content) =>
+        // An Unreal package that is still compressed is refused, because the patchers find their offsets in the decompressed layout.
+        public static void WritePreservingAttributes(string path, byte[] content)
+        {
+            EnsureNotCompressedPackage(path);
             WriteWithBackup(path, () => WriteAtomically(path,
                 tempPath => File.WriteAllBytes(tempPath, content),
                 _ => File.WriteAllBytes(path, content)));
+        }
+
+        // Moves the finished file at replacementPath over path in the same way as WritePreservingAttributes.
+        // It skips the compressed package check, because decompression uses it to replace a compressed package.
+        internal static void ReplacePreservingAttributes(string path, string replacementPath) =>
+            WriteWithBackup(path, () => WriteAtomically(path,
+                tempPath => File.Move(replacementPath, tempPath, overwrite: true),
+                tempPath => CopyContent(tempPath, path)));
 
         // Writes each patch at its offset in the same way as WritePreservingAttributes, without holding the file in memory.
         // Throws without writing anything when a patch runs past the end of the file.
         public static void PatchPreservingAttributes(string path, IReadOnlyList<(long Offset, byte[] Bytes)> patches)
         {
+            EnsureNotCompressedPackage(path);
             long length = new FileInfo(path).Length;
             foreach (var (offset, bytes) in patches)
             {
@@ -73,6 +103,7 @@ namespace MirrorsEdgeTweaks.Helpers
         // Throws without writing anything when the ranges are out of file order, overlap or run past the end of the file.
         public static void SplicePreservingAttributes(string path, IReadOnlyList<(long Offset, int Length, byte[] Bytes)> splices)
         {
+            EnsureNotCompressedPackage(path);
             long fileLength = new FileInfo(path).Length;
             long previousEnd = 0;
             foreach (var (offset, length, _) in splices)
@@ -86,6 +117,19 @@ namespace MirrorsEdgeTweaks.Helpers
             WriteWithBackup(path, () => WriteAtomically(path,
                 tempPath => WriteSpliced(path, tempPath, splices),
                 tempPath => CopyContent(tempPath, path)));
+        }
+
+        private static void EnsureNotCompressedPackage(string path)
+        {
+            string extension = Path.GetExtension(path);
+            bool isPackage = extension.Equals(".u", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".upk", StringComparison.OrdinalIgnoreCase);
+            if (isPackage && DecompressionService.IsCompressed(path))
+            {
+                throw new UserFacingException(
+                    $"{Path.GetFileName(path)} is still compressed, so Mirror's Edge Tweaks cannot change it. " +
+                    "Select your game directory again so that Tweaks can decompress it. If that does not help, verify your game files.");
+            }
         }
 
         private static void WriteWithBackup(string path, Action write)
@@ -112,13 +156,17 @@ namespace MirrorsEdgeTweaks.Helpers
 
         private static void StageBackup(string path)
         {
+            string backupDir = GetBackupDirectoryForPath(path);
+            string lastBackup = Path.Combine(backupDir, Path.GetFileName(path) + ".last.bak");
+
+            // An operation keeps each file's first backup, which holds the file from before the operation.
+            // A backup that was pruned during the operation is staged again.
+            if (OutermostBackupOperation is { } operation && !operation.TryClaimBackup(path) && File.Exists(lastBackup))
+                return;
+
             try
             {
-                string fileName = Path.GetFileName(path);
-                string backupDir = GetBackupDirectoryForPath(path);
                 Directory.CreateDirectory(backupDir);
-
-                string lastBackup = Path.Combine(backupDir, fileName + ".last.bak");
                 File.Copy(path, lastBackup, overwrite: true);
                 File.WriteAllText(Path.Combine(backupDir, "source.txt"), path);
                 File.SetAttributes(lastBackup, FileAttributes.Normal);

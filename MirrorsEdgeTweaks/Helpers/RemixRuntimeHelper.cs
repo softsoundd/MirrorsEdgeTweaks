@@ -20,14 +20,17 @@ namespace MirrorsEdgeTweaks.Helpers
         OtherWrapper
     }
 
-    // Detects the runtime beside MirrorsEdge.exe, and installs and removes RTX Remix NGX.
-    // Its d3d9.dll is a 32-bit bridge client that runs the 64-bit runtime in .trex through NvRemixBridge.exe.
+    // Detects the runtime beside MirrorsEdge.exe, installs RTX Remix NGX or DXVK in its place, and removes it.
+    // RTX Remix NGX's d3d9.dll is a 32-bit bridge client that runs the 64-bit runtime in .trex through NvRemixBridge.exe.
+    // Each install extracts the new runtime before it removes the current one, so a failed extraction leaves the current one in place.
     public static class RemixRuntimeHelper
     {
         public const string AssetFileName = "dxvk-remix-d3d9.zip";
 
         private const string BridgeProductPrefix = "bridge-remix";
         private const string RuntimeDirectoryName = ".trex";
+        private const string StagingDirectoryName = ".metweaks-staging";
+        private const string StagedFileSuffix = ".metweaks.tmp";
 
         private static readonly byte[] NgxPassthroughBytes = Encoding.ASCII.GetBytes("rtx.ngxPassthrough");
         private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(10);
@@ -74,13 +77,51 @@ namespace MirrorsEdgeTweaks.Helpers
                     throw new UserFacingException("The RTX Remix NGX download is incomplete. Please try again later.");
             }
 
-            string binaries = Path.Combine(gameDirectory, "Binaries");
-            RemoveRuntime(binaries, current);
+            if (current == D3D9Runtime.OtherWrapper)
+                throw OtherWrapperException();
 
-            // A .trex folder can outlast its bridge client, and files from another Remix build must not linger.
-            DeleteRuntimeDirectory(binaries);
+            // The staging folder sits in the game directory, so moving its files into Binaries renames them rather than copying them.
+            string staging = Path.Combine(gameDirectory, StagingDirectoryName);
+            DeleteDirectory(staging);
 
-            ZipExtractHelper.ExtractOverwritingReadOnly(zipPath, gameDirectory);
+            try
+            {
+                ZipFile.ExtractToDirectory(zipPath, staging);
+
+                string binaries = Path.Combine(gameDirectory, "Binaries");
+                RemoveRuntime(binaries, current);
+
+                // A .trex folder can outlast its bridge client, and files from another Remix build must not linger.
+                DeleteRuntimeDirectory(binaries);
+
+                MoveContents(staging, gameDirectory);
+            }
+            finally
+            {
+                // A failed cleanup must not hide the install's own error, and the next install removes the folder.
+                try { DeleteDirectory(staging); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+        }
+
+        // Installs only DXVK's d3d9.dll.
+        public static void InstallDxvk(string zipPath, string binariesDirectory)
+        {
+            string dll = Path.Combine(binariesDirectory, "d3d9.dll");
+            string staged = dll + StagedFileSuffix;
+            try
+            {
+                File.Delete(staged);
+                DxvkHelper.ExtractAssetDll(zipPath, staged);
+                RemoveCurrentRuntime(binariesDirectory);
+                File.Move(staged, dll);
+            }
+            finally
+            {
+                // A failed cleanup must not hide the install's own error, and the next install removes the file.
+                try { File.Delete(staged); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
         }
 
         public static void RemoveCurrentRuntime(string binariesDirectory) =>
@@ -98,8 +139,7 @@ namespace MirrorsEdgeTweaks.Helpers
                     DxvkHelper.RemoveDll(binariesDirectory);
                     return;
                 case D3D9Runtime.OtherWrapper:
-                    throw new UserFacingException(
-                        "Another mod's d3d9.dll (for example ReShade) is in the game's Binaries folder. Please remove it and try again.");
+                    throw OtherWrapperException();
                 case D3D9Runtime.RemixNgx:
                 case D3D9Runtime.RemixNgxOutdated:
                     Remove(binariesDirectory);
@@ -165,10 +205,16 @@ namespace MirrorsEdgeTweaks.Helpers
             file.Delete();
         }
 
+        private static UserFacingException OtherWrapperException() => new(
+            "Another mod's d3d9.dll (for example ReShade) is in the game's Binaries folder. Please remove it and try again.");
+
+        private static void DeleteRuntimeDirectory(string binariesDirectory) =>
+            DeleteDirectory(Path.Combine(binariesDirectory, RuntimeDirectoryName));
+
         // Directory.Delete cannot delete a read-only file or folder.
-        private static void DeleteRuntimeDirectory(string binariesDirectory)
+        private static void DeleteDirectory(string path)
         {
-            var directory = new DirectoryInfo(Path.Combine(binariesDirectory, RuntimeDirectoryName));
+            var directory = new DirectoryInfo(path);
             if (!directory.Exists)
                 return;
 
@@ -178,6 +224,28 @@ namespace MirrorsEdgeTweaks.Helpers
                     entry.Attributes &= ~FileAttributes.ReadOnly;
             }
             directory.Delete(recursive: true);
+        }
+
+        // Merges source into destination, replacing the files that destination already holds, even read-only ones.
+        private static void MoveContents(string source, string destination)
+        {
+            Directory.CreateDirectory(destination);
+            foreach (string file in Directory.GetFiles(source))
+            {
+                var target = new FileInfo(Path.Combine(destination, Path.GetFileName(file)));
+                if (target.Exists && target.IsReadOnly)
+                    target.IsReadOnly = false;
+                File.Move(file, target.FullName, overwrite: true);
+            }
+
+            foreach (string directory in Directory.GetDirectories(source))
+            {
+                string target = Path.Combine(destination, Path.GetFileName(directory));
+                if (Directory.Exists(target))
+                    MoveContents(directory, target);
+                else
+                    Directory.Move(directory, target);
+            }
         }
     }
 }

@@ -30,7 +30,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 {
                     bool success = await UpdateResolutionInConfigAsync(selectedResolution.Width, selectedResolution.Height);
                     if (!success)
+                    {
+                        ShowResolutionFromConfig();
                         return;
+                    }
 
                     if (_uiScaling.ShouldOfferUIScaling(selectedResolution.Width))
                     {
@@ -362,6 +365,17 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 UpdateHighResFixStatus(selected.Width, isCurrentlyActive);
             }
+        }
+
+        // Selects the resolution that TdEngine.ini holds.
+        // Selects nothing when the list lacks it or TdEngine.ini holds none.
+        private void ShowResolutionFromConfig()
+        {
+            var current = GetCurrentResolutionFromConfig();
+            var match = current == null
+                ? null
+                : Resolutions.FirstOrDefault(r => r.Width == current.Width && r.Height == current.Height);
+            SetSilently(() => SelectedResolution = match);
         }
 
         private ResolutionHelper.Resolution? GetCurrentResolutionFromConfig()

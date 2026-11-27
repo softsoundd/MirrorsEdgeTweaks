@@ -21,13 +21,13 @@ namespace MirrorsEdgeTweaks.Helpers
         // DXVK reports the version of Windows' d3d9.dll, so a DXVK with d3d9.useD32forD24 is recognised by the option's name in the DLL.
         internal static bool HasFloatDepthOption(ReadOnlySpan<byte> dll) => dll.IndexOf(FloatDepthKeyBytes) >= 0;
 
-        // Installs only the asset's d3d9.dll, and throws rather than replace an existing one.
-        public static void ExtractAssetDll(string zipPath, string binariesDirectory)
+        // Extracts only the asset's d3d9.dll to destinationPath, and throws rather than replace an existing file.
+        public static void ExtractAssetDll(string zipPath, string destinationPath)
         {
             using ZipArchive archive = ZipFile.OpenRead(zipPath);
             ZipArchiveEntry entry = archive.Entries.FirstOrDefault(e => e.Name.Equals("d3d9.dll", StringComparison.OrdinalIgnoreCase))
                 ?? throw new UserFacingException("The DXVK download is missing d3d9.dll. Please try again later.");
-            entry.ExtractToFile(Path.Combine(binariesDirectory, "d3d9.dll"), overwrite: false);
+            entry.ExtractToFile(destinationPath, overwrite: false);
         }
 
         public static void RemoveDxvk(string binariesDirectory)

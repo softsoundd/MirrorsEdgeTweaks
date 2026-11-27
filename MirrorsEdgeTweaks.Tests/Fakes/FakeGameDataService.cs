@@ -9,7 +9,7 @@ namespace MirrorsEdgeTweaks.Tests.Fakes
 
         public void LoadPackages() => throw new NotSupportedException();
 
-        public Task ReloadPackagesAsync() => throw new NotSupportedException();
+        public Task ReloadPackagesAsync() => Task.CompletedTask;
 
         public void FindEngineOffsets(string enginePath) => findEngineOffsets(enginePath);
 

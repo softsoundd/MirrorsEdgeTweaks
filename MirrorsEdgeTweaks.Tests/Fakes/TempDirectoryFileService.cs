@@ -23,10 +23,6 @@ namespace MirrorsEdgeTweaks.Tests.Fakes
                 File.Delete(path);
         }
 
-        public Task<string> ReadAllTextAsync(string path) => _inner.ReadAllTextAsync(path);
-        public Task WriteAllTextAsync(string path, string content) => _inner.WriteAllTextAsync(path, content);
-        public Task<byte[]> ReadAllBytesAsync(string path) => _inner.ReadAllBytesAsync(path);
-        public Task WriteAllBytesAsync(string path, byte[] bytes) => _inner.WriteAllBytesAsync(path, bytes);
         public bool DirectoryExists(string path) => _inner.DirectoryExists(path);
         public void CreateDirectory(string path) => _inner.CreateDirectory(path);
         public byte[] ReadAllBytes(string path) => _inner.ReadAllBytes(path);

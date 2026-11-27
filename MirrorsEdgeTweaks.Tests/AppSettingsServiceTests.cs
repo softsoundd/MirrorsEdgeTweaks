@@ -18,7 +18,7 @@ namespace MirrorsEdgeTweaks.Tests
             session.Config.LaunchArguments = "-windowed";
 
             var store = new FakeSettingsStore();
-            var service = new AppSettingsService(store, session);
+            var service = new AppSettingsService(store, session, new RecordingDialogService());
 
             service.Save();
 
@@ -48,7 +48,7 @@ namespace MirrorsEdgeTweaks.Tests
                     LaunchArguments = "-nointro"
                 }
             };
-            var service = new AppSettingsService(store, session);
+            var service = new AppSettingsService(store, session, new RecordingDialogService());
 
             service.Load();
 
@@ -68,7 +68,7 @@ namespace MirrorsEdgeTweaks.Tests
             {
                 ToLoad = new AppSettings { LaunchArguments = null, Fov = null, Dpi = null, Cm360 = null }
             };
-            var service = new AppSettingsService(store, session);
+            var service = new AppSettingsService(store, session, new RecordingDialogService());
 
             service.Load();
 
@@ -84,7 +84,7 @@ namespace MirrorsEdgeTweaks.Tests
             var session = new GameSession();
             session.Config.GameDirectoryPath = @"C:\Existing";
             var store = new FakeSettingsStore { ToLoad = new AppSettings { GameDirectoryPath = null } };
-            var service = new AppSettingsService(store, session);
+            var service = new AppSettingsService(store, session, new RecordingDialogService());
 
             service.Load();
 
@@ -104,10 +104,10 @@ namespace MirrorsEdgeTweaks.Tests
             writer.Config.Dpi = "400";
             writer.Config.Cm360 = "45";
             writer.Config.LaunchArguments = "-foo -bar";
-            new AppSettingsService(store, writer).Save();
+            new AppSettingsService(store, writer, new RecordingDialogService()).Save();
 
             var reader = new GameSession();
-            new AppSettingsService(store, reader).Load();
+            new AppSettingsService(store, reader, new RecordingDialogService()).Load();
 
             Assert.Equal(writer.Config.GameDirectoryPath, reader.Config.GameDirectoryPath);
             Assert.Equal(writer.Config.UserFolderPath, reader.Config.UserFolderPath);
@@ -115,6 +115,28 @@ namespace MirrorsEdgeTweaks.Tests
             Assert.Equal(writer.Config.Dpi, reader.Config.Dpi);
             Assert.Equal(writer.Config.Cm360, reader.Config.Cm360);
             Assert.Equal(writer.Config.LaunchArguments, reader.Config.LaunchArguments);
+        }
+
+        [Fact]
+        public void Save_WhenTheFileCannotBeWritten_WarnsOnceAndDoesNotThrow()
+        {
+            var dialogs = new RecordingDialogService();
+            var service = new AppSettingsService(new UnwritableSettingsStore(), new GameSession(), dialogs);
+
+            service.Save();
+            service.Save();
+
+            var message = Assert.Single(dialogs.Messages);
+            Assert.Equal("Settings Not Saved", message.Title);
+            Assert.Equal(DialogMessageType.Warning, message.Type);
+        }
+
+        private sealed class UnwritableSettingsStore : ISettingsStore
+        {
+            public AppSettings Load() => new();
+
+            public void Save(AppSettings settings) =>
+                throw new UnauthorizedAccessException("Access to the path 'metweaksconfig.ini' is denied.");
         }
     }
 }

@@ -29,7 +29,8 @@ namespace MirrorsEdgeTweaks
             EventManager.RegisterClassHandler(typeof(ComboBoxItem), System.Windows.Input.Mouse.PreviewMouseUpEvent, new System.Windows.Input.MouseButtonEventHandler(OnComboBoxItemMouseUp), true);
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e) => _ = RunStartupAsync();
+        // Startup exceptions reach App's DispatcherUnhandledException handler, which logs them and tells the user.
+        private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunStartupAsync();
 
         private async Task RunStartupAsync()
         {

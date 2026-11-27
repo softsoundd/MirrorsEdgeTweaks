@@ -43,7 +43,7 @@ namespace MirrorsEdgeTweaks.Helpers
                 return InlinePatchState.Unknown;
 
             int offset = (int)(patch.Va - ImageBase);
-            if (offset < 0 || offset + patch.OldBytes.Length > data.Length)
+            if (!FitsInImage(data, offset, patch))
                 return InlinePatchState.Unknown;
 
             if (data.AsSpan(offset, patch.OldBytes.Length).SequenceEqual(patch.OldBytes))
@@ -67,12 +67,9 @@ namespace MirrorsEdgeTweaks.Helpers
             bool isOoa = version == "ea";
             PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
-            var addrs = VersionAddressTable.Load(version);
-            if (!addrs.InlinePatches.TryGetValue(patchKey, out var patch))
-                throw new InvalidOperationException($"No {patchKey} patch defined for version '{version}'.");
-
+            InlinePatchDef patch = LoadPatch(version, patchKey);
             int offset = (int)(patch.Va - ImageBase);
-            if (offset < 0 || offset + patch.OldBytes.Length > data.Length)
+            if (!FitsInImage(data, offset, patch))
                 throw new InvalidOperationException("Patch offset is out of bounds.");
 
             var site = data.AsSpan(offset, patch.OldBytes.Length);
@@ -90,41 +87,43 @@ namespace MirrorsEdgeTweaks.Helpers
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
 
+        // Only restores a site that holds the patch, so bytes that another tool or a different version put there are never overwritten.
         public static void RemovePatch(string exePath, string patchKey)
         {
             byte[] data = File.ReadAllBytes(exePath);
 
             string? version = ExeVersionDetector.DetectVersion(data, exePath);
-            if (version == null) return;
+            if (version == null)
+                throw new UserFacingException("This version of MirrorsEdge.exe is not supported.");
 
             bool isOoa = version == "ea";
-            PatchUtility.OoaSession? ooa = null;
-            if (isOoa)
-            {
-                try { ooa = PatchUtility.BeginOoa(data); }
-                catch { return; }
-            }
+            PatchUtility.OoaSession? ooa = isOoa ? PatchUtility.BeginOoa(data) : null;
 
-            VersionAddressTable addrs;
-            try { addrs = VersionAddressTable.Load(version); }
-            catch { return; }
-
-            if (!addrs.InlinePatches.TryGetValue(patchKey, out var patch))
-                return;
-
+            InlinePatchDef patch = LoadPatch(version, patchKey);
             int offset = (int)(patch.Va - ImageBase);
-            if (offset < 0 || offset + patch.NewBytes.Length > data.Length)
-                return;
+            if (!FitsInImage(data, offset, patch))
+                throw new InvalidOperationException("Patch offset is out of bounds.");
 
             if (data.AsSpan(offset, patch.OldBytes.Length).SequenceEqual(patch.OldBytes))
                 return;
+            if (patch.NewBytes.Length == 0 || !data.AsSpan(offset, patch.NewBytes.Length).SequenceEqual(patch.NewBytes))
+                throw new InvalidOperationException(
+                    $"Unexpected bytes at patch site 0x{patch.Va:X8} - executable may be modified.");
 
             Buffer.BlockCopy(patch.OldBytes, 0, data, offset, patch.OldBytes.Length);
 
-            if (isOoa && ooa != null)
-                data = PatchUtility.FinishOoa(data, ooa);
+            if (isOoa)
+                data = PatchUtility.FinishOoa(data, ooa!);
 
             PatchUtility.WritePreservingAttributes(exePath, data);
         }
+
+        private static InlinePatchDef LoadPatch(string version, string patchKey) =>
+            VersionAddressTable.Load(version).InlinePatches.TryGetValue(patchKey, out var patch)
+                ? patch
+                : throw new InvalidOperationException($"No {patchKey} patch defined for version '{version}'.");
+
+        private static bool FitsInImage(byte[] data, int offset, InlinePatchDef patch) =>
+            offset >= 0 && offset + Math.Max(patch.OldBytes.Length, patch.NewBytes.Length) <= data.Length;
     }
 }

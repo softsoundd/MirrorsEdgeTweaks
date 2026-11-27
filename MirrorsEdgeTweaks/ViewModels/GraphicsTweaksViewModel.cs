@@ -352,7 +352,7 @@ namespace MirrorsEdgeTweaks.ViewModels
             });
         }
 
-        // Returns false when TdEngine.ini is missing or the change fails, after telling the user and resetting the option.
+        // Returns false when TdEngine.ini is missing or the change fails, after telling the user and showing what TdEngine.ini holds.
         private bool TryApplyToIni(GraphicsOption option, string failureLabel, Action apply)
         {
             if (!EnsureIniExists(() => option.Index = -1))
@@ -367,7 +367,11 @@ namespace MirrorsEdgeTweaks.ViewModels
             catch (Exception ex)
             {
                 _dialogService.ShowError($"Could not apply {failureLabel}.", ex);
+
+                // The option stays blank when TdEngine.ini holds no value for it.
                 SetSilently(() => option.Index = -1);
+                LoadFromIni();
+
                 return false;
             }
         }
@@ -637,14 +641,14 @@ namespace MirrorsEdgeTweaks.ViewModels
                             _dialogService.ShowMessage("Error",
                                 "Render resolutions above 100% could not be enabled. This version of MirrorsEdge.exe may not be supported.",
                                 DialogMessageType.Error);
-                            SetSilently(() => RenderResolutionPercent = 100);
+                            RevertRenderResolution();
                             return;
                         }
                     }
                     catch (Exception ex)
                     {
                         _dialogService.ShowError("Could not enable render resolutions above 100%.", ex);
-                        SetSilently(() => RenderResolutionPercent = 100);
+                        RevertRenderResolution();
                         return;
                     }
                 }
@@ -673,10 +677,20 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
         }
 
+        // Shows the render resolution that TdEngine.ini holds.
+        // Shows 100% when it holds none.
         private void RevertRenderResolution()
         {
-            if (RenderResolutionPercent != 100)
-                SetSilently(() => RenderResolutionPercent = 100);
+            double percent = 100;
+            if (!string.IsNullOrEmpty(IniPath)
+                && _graphics.ReadIniValue(IniPath, "ScreenPercentage") is { } value
+                && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
+            {
+                percent = Math.Round(parsed);
+            }
+
+            if (RenderResolutionPercent != percent)
+                SetSilently(() => RenderResolutionPercent = percent);
         }
 
 

@@ -246,18 +246,7 @@ namespace MirrorsEdgeTweaks.Services
             int totalP2 = blobA.Length + blobB.Length;
 
             int funcEnd = fcPos + fillCache.Length + 20;
-            for (int pos = bcStart; pos < funcEnd; pos++)
-            {
-                byte opcode = data[pos];
-                if (opcode == BytecodeBuilder.OP_JUMP_IF_NOT ||
-                    opcode == BytecodeBuilder.OP_JUMP ||
-                    opcode == BytecodeBuilder.OP_CASE)
-                {
-                    ushort target = BitConverter.ToUInt16(data, pos + 1);
-                    if (target >= pointABc && target < bss && target != 0xFFFF)
-                        BitConverter.GetBytes((ushort)(target + blobA.Length)).CopyTo(data, pos + 1);
-                }
-            }
+            ShiftPhase2JumpTargets(data, bcStart, funcEnd, pointABc, pointBBc, (int)bss, blobA.Length, blobB.Length);
 
             PackageSplicer.WriteBSS(data, exportStart, (uint)(bss + totalP2));
 
@@ -278,6 +267,27 @@ namespace MirrorsEdgeTweaks.Services
             ApplyPhase3(data, hdr);
 
             Helpers.PatchUtility.WritePreservingAttributes(enginePath, data);
+        }
+
+        // pointA and pointB are where blobs A and B go, as bytecode offsets from before either blob is inserted.
+        // A target at pointB moves to the start of blob B, so blob B runs on every path to the FillCameraCache call.
+        // A target after pointB moves past both blobs, where Remove expects it.
+        internal static void ShiftPhase2JumpTargets(byte[] data, int scanStart, int scanEnd, int pointA, int pointB, int bss,
+            int blobALength, int blobBLength)
+        {
+            for (int pos = scanStart; pos < scanEnd; pos++)
+            {
+                byte opcode = data[pos];
+                if (opcode != BytecodeBuilder.OP_JUMP_IF_NOT && opcode != BytecodeBuilder.OP_JUMP && opcode != BytecodeBuilder.OP_CASE)
+                    continue;
+
+                ushort target = BitConverter.ToUInt16(data, pos + 1);
+                if (target < pointA || target >= bss || target == 0xFFFF)
+                    continue;
+
+                int shift = target > pointB ? blobALength + blobBLength : blobALength;
+                BitConverter.GetBytes((ushort)(target + shift)).CopyTo(data, pos + 1);
+            }
         }
 
         public static void Remove(string enginePath)

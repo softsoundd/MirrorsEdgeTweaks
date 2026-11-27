@@ -184,7 +184,6 @@ namespace MirrorsEdgeTweaks.ViewModels
             Session.Config.GameDirectoryPath = path;
             GameStatus.GameDirectoryPath = path;
 
-            SaveSettings();
             SetTopStatusLoadingState();
 
             GameStatus.IsUiEnabled = false;
@@ -192,25 +191,39 @@ namespace MirrorsEdgeTweaks.ViewModels
             DownloadProgress.IsDownloadProgressIndeterminate = true;
             DownloadProgress.IsDownloadProgressVisible = true;
             bool loadSucceeded = false;
+            string readyStatus = "Ready.";
             IDisposable? readScope = null;
 
             try
             {
-                await Task.Run(() =>
-                {
-                    string enginePath = Path.Combine(Session.Config.GameDirectoryPath!, "TdGame", "CookedPC", "Engine.u");
-                    string tdGamePath = Path.Combine(Session.Config.GameDirectoryPath!, "TdGame", "CookedPC", "TdGame.u");
+                SaveSettings();
 
-                    try
+                var decompressionFailures = await Task.Run(() =>
+                {
+                    var failures = new List<(string Package, Exception Error)>();
+                    foreach (string package in new[] { "Engine.u", "TdGame.u" })
                     {
-                        _decompressionService.RunDecompressor(enginePath);
-                        _decompressionService.RunDecompressor(tdGamePath);
+                        try
+                        {
+                            _decompressionService.RunDecompressor(Path.Combine(path, "TdGame", "CookedPC", package));
+                        }
+                        catch (Exception ex)
+                        {
+                            failures.Add((package, ex));
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        Dispatch(() => GameStatus.Status = $"Decompression error: {ex.Message}");
-                    }
+                    return failures;
                 });
+
+                if (decompressionFailures.Count > 0)
+                {
+                    readyStatus = "Could not decompress the game packages.";
+                    string packages = string.Join(" and ", decompressionFailures.Select(failure => failure.Package));
+                    string pronoun = decompressionFailures.Count == 1 ? "it" : "them";
+                    _dialogService.ShowError(
+                        $"Mirror's Edge Tweaks could not decompress {packages}, so it cannot apply the tweaks that change {pronoun}.",
+                        decompressionFailures[0].Error, "Package Decompression", DialogMessageType.Warning);
+                }
 
                 if (checkLegacyChanges)
                 {
@@ -235,6 +248,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 GameStatus.Status = "Loading package data...";
                 await Task.Run(() => _gameData.LoadPackages());
+
+                // LoadPackages has already explained the failure in a dialog.
+                if (!Session.PackagesLoaded)
+                    readyStatus = "Failed to load packages.";
 
                 if (_steamService.IsSteamGameDirectory(path))
                 {
@@ -293,7 +310,7 @@ namespace MirrorsEdgeTweaks.ViewModels
 
                 if (loadSucceeded)
                 {
-                    GameStatus.Status = "Ready.";
+                    GameStatus.Status = readyStatus;
                 }
 
                 GameStatus.IsUiEnabled = true;
@@ -466,6 +483,7 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void RefreshUserFolderDependentFeatures()
         {
             CheckForConfigFiles();
+            Graphics.InitializeResolutions();
             Graphics.LoadFromIni();
             Input.RefreshMouseSmoothing();
             Keybinds.LoadCustomKeybinds();

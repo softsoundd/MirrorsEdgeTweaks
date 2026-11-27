@@ -16,19 +16,6 @@ namespace MirrorsEdgeTweaks.Services
             PreWarmCore(tabControl);
         }
 
-        public static void PreWarmBeforeShow(Window window, System.Windows.Controls.TabControl tabControl)
-        {
-            if (tabControl.Items.Count <= 1)
-                return;
-
-            window.ApplyTemplate();
-            window.Measure(new System.Windows.Size(window.Width, window.Height));
-            window.Arrange(new Rect(0, 0, window.Width, window.Height));
-            window.UpdateLayout();
-
-            PreWarmCore(tabControl);
-        }
-
         private static void PreWarmCore(System.Windows.Controls.TabControl tabControl)
         {
             int originalIndex = tabControl.SelectedIndex;

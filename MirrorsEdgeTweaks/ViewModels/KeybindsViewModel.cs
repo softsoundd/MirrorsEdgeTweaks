@@ -362,9 +362,12 @@ namespace MirrorsEdgeTweaks.ViewModels
             }
             catch (Exception ex)
             {
-                _dialogService.ShowError("Could not update the keybind.", ex);
+                _dialogService.ShowError(
+                    "The keybind was saved, but Mirror's Edge Tweaks could not update TdGame.u to let keys run this command, " +
+                    "so the key does nothing in game yet. Set the keybind again to retry.", ex);
             }
 
+            // TdInput.ini holds the key even when the exec flag could not be added, so the field shows it.
             return true;
         }
 
