@@ -16,21 +16,30 @@ A tool for modding, tweaking settings and providing game fixes for Mirror's Edge
 If you like what I do and would like to support my work, please consider visiting my Ko-fi page.
 
 ## Features
+
+**Game Tweaks**
+
 - Developer console unlocker
 - Command line argument unlocker
 - Unlocked configs patch (a persistent alternative to [MEMLA](https://github.com/btbd/memla))
 - TdGame version selector
 - Tweaks Scripts installer (custom UnrealScript package including cheats and trainer functions, Softimer, etc.)
+- Game language switcher
+- OpenAL Soft audio upgrader + bespoke UE3 HRTF support
+
+**Graphics Tweaks**
+
 - Persistent FOV with additional viewmodel and input fixes
 - Unlocked aspect ratios with HOR+/VERT+ scaling
 - High-res UI fix for resolutions greater than 1080p
 - Highly configurable graphics settings
 - Adjustable PhysX cloth simulation rates
+
+**Other Tweaks**
+
 - Custom keybind manager + speedrun macros
 - Xbox/PS3 gamepad button prompt swapper
 - Uniform mouse sensitivity, cm/360° converter
-- Game language switcher
-- OpenAL Soft audio upgrader + bespoke UE3 HRTF support
 - Various other QoL
 
 For further information and guides, refer to the [wiki](https://github.com/softsoundd/MirrorsEdgeTweaks/wiki).
