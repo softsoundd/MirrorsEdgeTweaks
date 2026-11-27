@@ -243,6 +243,10 @@ namespace MirrorsEdgeTweaks.Helpers
             if (changes.HasFlag(LegacyTdGameChanges.UnzoomDelay))
                 found.Add(new(LegacyFile.TdGame, TdGameName, "Unzoom patch from 4.4.1"));
 
+            // DetectState still reports the old skip as applied, so the tweak snapshot re-enables it.
+            if (changes.HasFlag(LegacyTdGameChanges.OnlineSkipBlock))
+                found.Add(new(LegacyFile.TdGame, TdGameName, "Skip online check patch from 4.4.0 to the 4.5.0 betas"));
+
             // The core patch replaces the vertigo's use of ZoomFOV, but nothing replaces the cutscene NewFOV.
             bool cutsceneChanged = Check(() =>
                 UePackageLocator.ReadFloatDefault(pkg, "SeqAct_TdCameraFOV", "NewFOV") is { } fov

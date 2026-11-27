@@ -110,8 +110,15 @@ namespace MirrorsEdgeTweaks.ViewModels
             if (report.Affects(LegacyFile.Localisation))
             {
                 if (languageCode != null && LanguageSettingsViewModel.LanguagePackFor(languageCode) is { } pack)
+                {
                     assets.Add(new RestoreAsset(_assetUrls.For(pack), "language files", TweakScope.Localisation,
                         LegacyChangeDetector.LocalisationPackages(cookedPc, languageCode).ToArray(), Decompress: false));
+
+                    // The overlay replaces packages that the language pack already lists.
+                    if (GameVersionHelper.GetLanguageOverlayUrl(gameVersion, pack, _assetUrls) is { } overlayUrl)
+                        assets.Add(new RestoreAsset(overlayUrl, "DLC language files", TweakScope.Localisation,
+                            Array.Empty<string>(), Decompress: false));
+                }
                 else
                 {
                     notes.Add("The language packages cannot be restored automatically, because the game language was not recognised.");

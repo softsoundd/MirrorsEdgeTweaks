@@ -10,6 +10,10 @@ namespace MirrorsEdgeTweaks.Services
         public bool SensApplied { get; set; }
         public bool ClipApplied { get; set; }
         public bool OnlineSkipApplied { get; set; }
+
+        // Apply adds the offline fallback with the core patches whenever it is available.
+        public bool OfflineFallbackAvailable { get; set; }
+        public bool OfflineFallbackApplied { get; set; }
     }
 
     // Each flag marks a TdGame.u edit from an older release that this patcher cannot recognise or undo.
@@ -22,6 +26,7 @@ namespace MirrorsEdgeTweaks.Services
         StaticNearClip = 4,
         StaticFovScale = 8,
         StaticUnzoomRate = 16,
+        OnlineSkipBlock = 32,
     }
 
     public static class TdGamePatcher
@@ -91,8 +96,46 @@ namespace MirrorsEdgeTweaks.Services
             if (!state.ClipApplied && r.ClipResult != null && !r.ClipHasStockValue)
                 found |= LegacyTdGameChanges.StaticNearClip;
 
+            // Releases up to the 4.5.0 betas wrote a shorter online skip, which Remove would cut at the current length.
+            if (state.OnlineSkipApplied && !MatchesOnlineSkipBlob(data, r))
+                found |= LegacyTdGameChanges.OnlineSkipBlock;
+
             return found;
         }
+
+        static bool MatchesOnlineSkipBlob(byte[] data, ResolvedIndices r)
+        {
+            int blobStart = FindOnlineSkipBlob(data, r);
+            if (blobStart < 0)
+                return false;
+
+            byte[] expected;
+            try { expected = BuildOnlineSkipBlob(blobStart - r.ScSerialOffset - BytecodeBuilder.SCRIPT_HDR, r); }
+            catch (InvalidOperationException) { return false; }
+
+            return blobStart + expected.Length <= data.Length
+                && data.AsSpan(blobStart, expected.Length).SequenceEqual(expected);
+        }
+
+        // Returns the blob's file offset.
+        // Returns -1 when StartConnection holds no online skip.
+        static int FindOnlineSkipBlob(byte[] data, ResolvedIndices r)
+        {
+            int scBcStart = r.ScSerialOffset + BytecodeBuilder.SCRIPT_HDR;
+            int scBss = (int)PackageSplicer.ReadBSS(data, r.ScSerialOffset);
+            int sigPos = BytecodeBuilder.FindPattern(data, BytecodeBuilder.OnlineSkipSignature, scBcStart, scBcStart + scBss);
+
+            // The blob opens with a JumpIfNot and its 2-byte target, so it starts 3 bytes before the signature.
+            return sigPos < scBcStart + 3 ? -1 : sigPos - 3;
+        }
+
+        // Throws when TdGame.u lacks a reference that the blob needs.
+        static byte[] BuildOnlineSkipBlob(int insertBc, ResolvedIndices r) =>
+            BytecodeBuilder.BuildOnlineSkipBlob(insertBc,
+                r.ConnReqBoolvar ?? throw new InvalidOperationException("Cannot find ConnectionRequired BoolVar in StartConnection"),
+                r.OnPlayOfflinePropI32, r.OnPlayOfflineFnameBytes,
+                r.ShowNoConnectionFuncI32 ?? throw new InvalidOperationException("Cannot find TdOnlineLoginHandler.ShowNoConnection"),
+                r.SetEntitledFuncI32);
 
         static bool MatchesSensBlob(byte[] data, int piBcStart,
             (int letEnd, byte[] fovscaleLocal, byte[] outerVar, byte[] getfovVf) fov,
@@ -121,8 +164,9 @@ namespace MirrorsEdgeTweaks.Services
             var state = DetectState(tdGamePath);
             bool desiredCore = true;
             bool anyPatched = state.CoreApplied || state.SensApplied || state.ClipApplied
-                              || state.OnlineSkipApplied;
+                              || state.OnlineSkipApplied || state.OfflineFallbackApplied;
             bool stateMatches = state.CoreApplied == desiredCore
+                                && (!state.OfflineFallbackAvailable || state.OfflineFallbackApplied)
                                 && state.SensApplied == enableSens
                                 && state.ClipApplied == enableClip
                                 && state.OnlineSkipApplied == enableOnlineSkip;
@@ -143,6 +187,9 @@ namespace MirrorsEdgeTweaks.Services
             {
                 resolved = ResolveIndices(pkg, data);
             }
+
+            // The flip runs before the splices, which can move OnShowBadVersion_Response away from its resolved offset.
+            SetOfflineFallback(data, resolved, applied: true);
 
             // ToggleZoomState's SetNearClippingPlane call becomes the clip blob.
             int clipNet = 0;
@@ -276,12 +323,13 @@ namespace MirrorsEdgeTweaks.Services
             PackageSplicer.UpdateBSS(data, sfSoAdj, setfovNet);
             data = PackageSplicer.InsertBytes(data, sfInsertFile, setfovBlob);
 
-            // StartConnection skips the online login when no connection is required.
+            // StartConnection skips every online login, ahead of its check for an existing login.
             int scSo = resolved.ScSerialOffset;
             int onlineSkipNet = 0;
             if (enableOnlineSkip && scSo > 0
                 && resolved.OnPlayOfflinePropI32.Length == 4
-                && resolved.OnPlayOfflineFnameBytes.Length == 8)
+                && resolved.OnPlayOfflineFnameBytes.Length == 8
+                && resolved.ShowNoConnectionFuncI32 != null)
             {
                 int scShift = 0;
                 if (scSo > tzsSo) scShift += clipNet;
@@ -293,26 +341,15 @@ namespace MirrorsEdgeTweaks.Services
                 int scBcStart = scSoAdj + BytecodeBuilder.SCRIPT_HDR;
                 int scBss = (int)PackageSplicer.ReadBSS(data, scSoAdj);
 
-                var connReq = resolved.ConnReqBoolvar;
-                if (connReq == null)
-                    throw new InvalidOperationException("Cannot find ConnectionRequired BoolVar in StartConnection");
-
-                var branch = resolved.ElseBranch;
-                if (branch == null)
-                    throw new InvalidOperationException("Cannot find if(Connection.IsLoggedIn()) branch in StartConnection");
-
-                int elseTarget = branch.Value.elseTarget;
-                byte[] onlineSkipBlob = BytecodeBuilder.BuildOnlineSkipBlob(
-                    elseTarget, connReq,
-                    resolved.OnPlayOfflinePropI32, resolved.OnPlayOfflineFnameBytes);
+                int loginCheck = resolved.LoginCheckOff
+                    ?? throw new InvalidOperationException("Cannot find the if (Connection.IsLoggedIn()) check in StartConnection");
+                byte[] onlineSkipBlob = BuildOnlineSkipBlob(loginCheck, resolved);
                 onlineSkipNet = onlineSkipBlob.Length;
 
-                int scInsertFile = scBcStart + elseTarget;
-
-                // Jumps to elseTarget keep their target, so the JumpIfNot that skips to the else branch lands on the blob.
-                PackageSplicer.FixJumpTargets(data, scBcStart, scBss, elseTarget + 1, onlineSkipNet);
+                // Jumps to the login check keep their target, so they land on the blob.
+                PackageSplicer.FixJumpTargets(data, scBcStart, scBss, loginCheck + 1, onlineSkipNet);
                 PackageSplicer.UpdateBSS(data, scSoAdj, onlineSkipNet);
-                data = PackageSplicer.InsertBytes(data, scInsertFile, onlineSkipBlob);
+                data = PackageSplicer.InsertBytes(data, scBcStart + loginCheck, onlineSkipBlob);
             }
 
             var modifications = new List<(int, int, int)>();
@@ -344,8 +381,9 @@ namespace MirrorsEdgeTweaks.Services
             }
 
             if (!state.CoreApplied && !state.SensApplied && !state.ClipApplied
-                && !state.OnlineSkipApplied) return;
-            if ((legacy & (LegacyTdGameChanges.NearClipBlock | LegacyTdGameChanges.UnzoomDelay)) != 0)
+                && !state.OnlineSkipApplied && !state.OfflineFallbackApplied) return;
+            if ((legacy & (LegacyTdGameChanges.NearClipBlock | LegacyTdGameChanges.UnzoomDelay
+                    | LegacyTdGameChanges.OnlineSkipBlock)) != 0)
                 throw Helpers.LegacyChangeDetector.PackageRestoreRequired("TdGame.u");
 
             var ops = new List<RemovalOp>();
@@ -357,7 +395,10 @@ namespace MirrorsEdgeTweaks.Services
             AnalyzePlayerInputRemoval(data, resolved, state, ops);
             AnalyzeToggleZoomStateRemoval(data, resolved, state, ops);
 
-            if (ops.Count == 0) return;
+            // The flip runs before the removals, which can move OnShowBadVersion_Response away from its resolved offset.
+            bool fallbackReverted = SetOfflineFallback(data, resolved, applied: false);
+
+            if (ops.Count == 0 && !fallbackReverted) return;
 
             // The removals run from the highest file offset to the lowest, so none shifts the offsets of those still to run.
             ops.Sort((a, b) => b.FilePos.CompareTo(a.FilePos));
@@ -417,23 +458,30 @@ namespace MirrorsEdgeTweaks.Services
             public int JumpFixThresholdBc;
         }
 
+        // Returns whether it changed the opcode that opens OnShowBadVersion_Response.
+        static bool SetOfflineFallback(byte[] data, ResolvedIndices r, bool applied)
+        {
+            if (r.BvSerialOffset <= 0) return false;
+
+            int bcStart = r.BvSerialOffset + BytecodeBuilder.SCRIPT_HDR;
+            int bss = (int)PackageSplicer.ReadBSS(data, r.BvSerialOffset);
+            if (bss <= 0 || bcStart + bss > data.Length) return false;
+
+            bool? current = BytecodeBuilder.ReadOfflineFallback(data.AsSpan(bcStart, bss), r.OnFailureIndex);
+            if (current == null || current == applied) return false;
+
+            data[bcStart] = applied ? BytecodeBuilder.OP_JUMP : BytecodeBuilder.OP_JUMP_IF_NOT;
+            return true;
+        }
+
         static void AnalyzeOnlineSkipRemoval(byte[] data, ResolvedIndices r, TdGamePatchState state, List<RemovalOp> ops)
         {
             if (!state.OnlineSkipApplied || r.ScExportIndex == 0) return;
 
-            int scSo = r.ScSerialOffset;
-            int scBcStart = scSo + BytecodeBuilder.SCRIPT_HDR;
-            int scBss = (int)PackageSplicer.ReadBSS(data, scSo);
-
-            int sigPos = BytecodeBuilder.FindPattern(data, BytecodeBuilder.OnlineSkipSignature,
-                scBcStart, scBcStart + scBss);
-            if (sigPos == -1) return;
-
-            // The blob opens with a JumpIfNot and its 2-byte target, so it starts 3 bytes before the signature.
-            int blobStart = sigPos - 3;
-            if (blobStart < scBcStart) return;
-            int blobSize = 30;
-            int elseTargetBc = blobStart - scBcStart;
+            int blobStart = FindOnlineSkipBlob(data, r);
+            if (blobStart < 0) return;
+            int blobStartBc = blobStart - r.ScSerialOffset - BytecodeBuilder.SCRIPT_HDR;
+            int blobSize = BuildOnlineSkipBlob(blobStartBc, r).Length;
 
             ops.Add(new RemovalOp
             {
@@ -441,13 +489,13 @@ namespace MirrorsEdgeTweaks.Services
                 RemoveCount = blobSize,
                 ReplacementBytes = null,
                 BssDelta = -blobSize,
-                ExportSerialOffset = scSo,
+                ExportSerialOffset = r.ScSerialOffset,
                 OriginalSerialOffset = r.ScSerialOffset,
                 ExportIndex = r.ScExportIndex,
                 SkipSizeFixPos = -1,
 
                 // Jumps to the blob's start keep their target, as they did when Apply inserted the blob.
-                JumpFixThresholdBc = elseTargetBc + 1,
+                JumpFixThresholdBc = blobStartBc + 1,
             });
         }
 
@@ -646,6 +694,7 @@ namespace MirrorsEdgeTweaks.Services
             public int UzSerialOffset, UzExportIndex;
             public int SfSerialOffset, SfExportIndex;
             public int ScSerialOffset, ScExportIndex;  // StartConnection
+            public int BvSerialOffset, OnFailureIndex;  // OnShowBadVersion_Response and the OnFailure it calls
 
             public int SizexImp, SizeyImp, MyhudImp;
 
@@ -664,6 +713,9 @@ namespace MirrorsEdgeTweaks.Services
             public byte[] OnPlayOfflinePropI32 = Array.Empty<byte>();
             public byte[] OnPlayOfflineFnameBytes = Array.Empty<byte>();
 
+            public byte[]? SetEntitledFuncI32;  // Only the 1.1.0.0 TdGame.u has SetEntitled.
+            public byte[]? ShowNoConnectionFuncI32;
+
             // The patch points are found in UELib's token stream up front, so the splice logic never rescans raw bytecode.
             public (int ctxOff, int ctxLen, byte[] dcast, byte[] powner, byte[] vfunc)? ClipResult;
             public bool ClipHasStockValue;
@@ -672,7 +724,7 @@ namespace MirrorsEdgeTweaks.Services
             public (byte[] instDefaultfov, int elseFloatOff)? UnzoomResult;
             public (int insertOff, byte[] localNewfov, byte[] localRate, byte[] dcast, byte[] controllerVar)? SetFovResult;
             public byte[]? ConnReqBoolvar;
-            public (int jnotOff, int elseTarget)? ElseBranch;
+            public int? LoginCheckOff;
         }
 
         static ResolvedIndices ResolveIndices(UnrealPackage pkg, byte[] data)
@@ -751,7 +803,7 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] scBc = Body(data, sc.SerialOffset);
 
                 r.ConnReqBoolvar = FindConnectionRequiredBoolvar(sc.Tokens, scBc);
-                r.ElseBranch = FindElseBranch(sc.Tokens);
+                r.LoginCheckOff = FindLoginCheck(sc.Tokens);
 
                 int opoIdx = UePackageLocator.FindExportIndex(pkg, "__OnPlayOffline__Delegate", "TdOnlineLoginHandler");
                 if (opoIdx != 0)
@@ -761,7 +813,18 @@ namespace MirrorsEdgeTweaks.Services
                 if (opoNameIdx >= 0)
                     r.OnPlayOfflineFnameBytes = BytecodeBuilder.Concat(
                         BytecodeBuilder.I32(opoNameIdx), BytecodeBuilder.I32(0));
+
+                int setEntitledIdx = UePackageLocator.FindExportIndex(pkg, "SetEntitled", "TdOnlineLoginHandler");
+                if (setEntitledIdx != 0)
+                    r.SetEntitledFuncI32 = BytecodeBuilder.I32(setEntitledIdx);
+
+                int showNoConnectionIdx = UePackageLocator.FindExportIndex(pkg, "ShowNoConnection", "TdOnlineLoginHandler");
+                if (showNoConnectionIdx != 0)
+                    r.ShowNoConnectionFuncI32 = BytecodeBuilder.I32(showNoConnectionIdx);
             }
+
+            r.BvSerialOffset = UePackageLocator.FindExportSerialOffset(pkg, "TdOnlineLoginHandler", "OnShowBadVersion_Response");
+            r.OnFailureIndex = UePackageLocator.FindExportIndex(pkg, "OnFailure", "TdOnlineLoginHandler");
 
             return r;
         }
@@ -964,12 +1027,12 @@ namespace MirrorsEdgeTweaks.Services
             return null;
         }
 
-        // The first JumpIfNot in StartConnection is its if (Connection.IsLoggedIn()) branch.
-        static (int jnotOff, int elseTarget)? FindElseBranch(IList<Token> tokens)
+        // The first JumpIfNot in stock StartConnection opens its if (Connection.IsLoggedIn()) check.
+        static int? FindLoginCheck(IList<Token> tokens)
         {
             foreach (var t in tokens)
                 if (t is JumpIfNotToken j)
-                    return (UePackageLocator.Pos(j), j.CodeOffset);
+                    return UePackageLocator.Pos(j);
             return null;
         }
 
@@ -1012,6 +1075,12 @@ namespace MirrorsEdgeTweaks.Services
                 byte[] scBc = FuncBc("TdOnlineLoginHandler", "StartConnection");
                 result.OnlineSkipApplied = scBc.Length > 0
                     && BytecodeBuilder.FindPattern(scBc, BytecodeBuilder.OnlineSkipSignature) != -1;
+
+                byte[] bvBc = FuncBc("TdOnlineLoginHandler", "OnShowBadVersion_Response");
+                int onFailureIdx = UePackageLocator.FindExportIndex(pkg, "OnFailure", "TdOnlineLoginHandler");
+                bool? fallback = BytecodeBuilder.ReadOfflineFallback(bvBc, onFailureIdx);
+                result.OfflineFallbackAvailable = fallback != null;
+                result.OfflineFallbackApplied = fallback == true;
             }
             catch
             {

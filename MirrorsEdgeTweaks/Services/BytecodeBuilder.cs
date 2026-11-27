@@ -18,6 +18,7 @@ namespace MirrorsEdgeTweaks.Services
         public const byte OP_FINAL_FUNC = 0x1C;
         public const byte OP_FLOAT_CONST = 0x1E;
         public const byte OP_BYTE_CONST = 0x24;
+        public const byte OP_INT_ONE = 0x26;
         public const byte OP_TRUE = 0x27;
         public const byte OP_FALSE = 0x28;
         public const byte OP_NONE = 0x2A;
@@ -29,6 +30,7 @@ namespace MirrorsEdgeTweaks.Services
         public const byte OP_NOT_EQ_OBJ = 0x77;
         public const byte OP_NOT_PRE_BOOL = 0x81;
         public const byte OP_BOOL_AND = 0x82;
+        public const byte OP_EQUAL_EQUAL_II = 0x9A;
         public const byte OP_SUBTRACT_PRE_F = 0xA9;
         public const byte OP_MULTIPLY_FF = 0xAB;
         public const byte OP_DIVIDE_FF = 0xAC;
@@ -463,35 +465,50 @@ namespace MirrorsEdgeTweaks.Services
             return result.ToArray();
         }
 
-        // Makes StartConnection skip the online login when no connection is required:
-        //   if (!ConnectionRequired) { OnPlayOffline(0); return; }
+        // Makes StartConnection skip every online login, ahead of its check for an existing login:
+        //   if (!ConnectionRequired) { SetEntitled(true); OnPlayOffline(ANIM_All); return; }
+        //   ShowNoConnection(); return;
+        // Only Leaderboards and Friends require a connection.
+        // SetEntitled(true) unlocks the DLC stretches, as the stock Play Offline button does. Only the 1.1.0.0 TdGame.u has it.
         public static byte[] BuildOnlineSkipBlob(int insertBc,
-            byte[] connReqBoolvar, byte[] playOfflinePropI32, byte[] playOfflineFnameBytes)
+            byte[] connReqBoolvar, byte[] playOfflinePropI32, byte[] playOfflineFnameBytes,
+            byte[] showNoConnectionFuncI32, byte[]? setEntitledFuncI32 = null)
         {
             byte[] condition = Concat(
                 new byte[] { OP_NOT_PRE_BOOL }, connReqBoolvar, EndFP());  // 8 bytes
+
+            byte[] entitle = setEntitledFuncI32 == null
+                ? Array.Empty<byte>()
+                : Concat(new byte[] { OP_FINAL_FUNC }, setEntitledFuncI32, new byte[] { OP_TRUE }, EndFP());  // 7 bytes
 
             byte[] delegateCall = Concat(
                 new byte[] { OP_DELEGATE_FUNC, 0x00 },
                 playOfflinePropI32,
                 playOfflineFnameBytes,
-                new byte[] { OP_BYTE_CONST, 0x00 },  // STA_None
+                new byte[] { OP_BYTE_CONST, 0x00 },  // ANIM_All, because the main menu is still open
                 EndFP());                              // 17 bytes
 
             byte[] ret = new byte[] { OP_RETURN, OP_NOTHING };  // 2 bytes
 
+            byte[] noConnection = Concat(
+                new byte[] { OP_FINAL_FUNC }, showNoConnectionFuncI32, EndFP());  // 6 bytes
+
             int jnotHeader = 3;
-            int bodySize = delegateCall.Length + ret.Length;
-            ushort skipTarget = (ushort)(insertBc + jnotHeader + condition.Length + bodySize);
+            int offlineSize = entitle.Length + delegateCall.Length + ret.Length;
+            ushort onlineTarget = (ushort)(insertBc + jnotHeader + condition.Length + offlineSize);
 
             byte[] blob = Concat(
-                JumpIfNot(skipTarget),
+                JumpIfNot(onlineTarget),
                 condition,
+                entitle,
                 delegateCall,
+                ret,
+                noConnection,
                 ret);
 
-            if (blob.Length != 30)
-                throw new InvalidOperationException($"OnlineSkip blob size mismatch: expected 30, got {blob.Length}");
+            int expectedLength = setEntitledFuncI32 == null ? 38 : 45;
+            if (blob.Length != expectedLength)
+                throw new InvalidOperationException($"OnlineSkip blob size mismatch: expected {expectedLength}, got {blob.Length}");
             return blob;
         }
 
@@ -605,6 +622,29 @@ namespace MirrorsEdgeTweaks.Services
 
         // Matches the start of the online skip blob's condition, which stock StartConnection never contains.
         public static readonly byte[] OnlineSkipSignature = new byte[] { OP_NOT_PRE_BOOL, OP_BOOL_VAR, OP_INST_VAR };
+
+        // OnShowBadVersion_Response, which also handles the "COULD NOT CONNECT" message, opens with
+        // if (SelectedOption == 1) { StartPatching(); } else { OnFailure(true); }.
+        // The offline fallback turns that JumpIfNot into a Jump to the same target, so both buttons reach OnFailure(true).
+        // Returns whether the fallback is applied.
+        // Returns null when bc does not open with that branch.
+        public static bool? ReadOfflineFallback(ReadOnlySpan<byte> bc, int onFailureIndex)
+        {
+            if (bc.Length < 11 || (bc[0] != OP_JUMP_IF_NOT && bc[0] != OP_JUMP))
+                return null;
+            if (bc[3] != OP_EQUAL_EQUAL_II || bc[4] != OP_LOCAL_VAR || bc[9] != OP_INT_ONE || bc[10] != OP_END_FP)
+                return null;
+
+            int target = BitConverter.ToUInt16(bc.Slice(1, 2));
+            if (target + 7 > bc.Length
+                || bc[target] != OP_FINAL_FUNC
+                || BitConverter.ToInt32(bc.Slice(target + 1, 4)) != onFailureIndex
+                || bc[target + 5] != OP_TRUE
+                || bc[target + 6] != OP_END_FP)
+                return null;
+
+            return bc[0] == OP_JUMP;
+        }
 
         public static byte[] StrConst(string s)
         {

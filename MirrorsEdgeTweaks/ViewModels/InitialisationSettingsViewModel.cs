@@ -541,10 +541,12 @@ namespace MirrorsEdgeTweaks.ViewModels
         private void ShowSkipOnlineCheckInfo()
         {
             _dialogService.ShowMessage("Skip Online Check Information",
-                "Skips the dead EA online login attempt for Time Trials and Speedruns. " +
+                "Skips the game's dead EA online login attempts. " +
                 "The game normally tries to connect to EA servers that no longer exist, " +
                 "causing a delay of three intermediate connection-check UI scenes before reaching offline mode. " +
-                "With this enabled, the game goes straight to offline mode.",
+                "With this enabled, Time Trials and Speedruns go straight to offline mode, and Leaderboards and Friends, " +
+                "which only work online, show a \"could not connect\" message instead of connecting.\n\n" +
+                "Keep this disabled if you play online through MedgeNet.",
                 DialogMessageType.Information);
         }
     }

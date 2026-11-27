@@ -300,7 +300,10 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 if (context.LanguageCode != null && LanguageSettingsViewModel.LanguagePackFor(context.LanguageCode) is { } pack)
                 {
-                    if (await DownloadAsync(report, _assetUrls.For(pack), context.GameDirectory, "the language files"))
+                    string? overlayUrl = GameVersionHelper.GetLanguageOverlayUrl(context.GameVersion, pack, _assetUrls);
+                    if (await DownloadAsync(report, _assetUrls.For(pack), context.GameDirectory, "the language files")
+                        && (overlayUrl == null
+                            || await DownloadAsync(report, overlayUrl, context.GameDirectory, "the DLC language files")))
                         report.Restored.Add("the language files");
                 }
                 else

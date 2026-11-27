@@ -1,5 +1,6 @@
 using MirrorsEdgeTweaks.Helpers;
 using MirrorsEdgeTweaks.Services;
+using MirrorsEdgeTweaks.ViewModels;
 
 namespace MirrorsEdgeTweaks.Tests
 {
@@ -102,6 +103,38 @@ namespace MirrorsEdgeTweaks.Tests
         public void GetEngineDownloadUrl_UnknownGameVersionReturnsNull()
         {
             Assert.Null(GameVersionHelper.GetEngineDownloadUrl("Game Version: 2.0.0.0", AssetUrls));
+        }
+
+        [Theory]
+        [InlineData("cze", "DLC_CZE.zip")]
+        [InlineData("deu", "DLC_DEU.zip")]
+        [InlineData("esn", "DLC_ESN.zip")]
+        [InlineData("fra", "DLC_FRA.zip")]
+        [InlineData("hun", "DLC_HUN.zip")]
+        [InlineData("int", "DLC_INT.zip")]
+        [InlineData("ita", "DLC_ITA.zip")]
+        [InlineData("pol", "DLC_POL.zip")]
+        [InlineData("por", "DLC_POR.zip")]
+        [InlineData("rus", "DLC_RUS.zip")]
+        public void GetLanguageOverlayUrl_MapsEachLanguageThatThePatchUpdated(string languageCode, string expectedFile)
+        {
+            string pack = LanguageSettingsViewModel.LanguagePackFor(languageCode)!;
+
+            Assert.Equal(AssetUrls.For(expectedFile),
+                GameVersionHelper.GetLanguageOverlayUrl("Game Version: 1.1.0.0 (DLC)", pack, AssetUrls));
+        }
+
+        [Theory]
+        [InlineData("1.0.0.0", "INT.zip")]
+        [InlineData("Game Version: 1.0.1.0", "DEU.zip")]
+        [InlineData("Game Version: 2.0.0.0", "INT.zip")]
+        [InlineData("1.1.0.0", "JPN.zip")]
+        [InlineData("1.1.0.0", "KOR.zip")]
+        [InlineData("1.1.0.0", "CHT.zip")]
+        [InlineData("1.1.0.0", "CHS.zip")]
+        public void GetLanguageOverlayUrl_ReturnsNullWithoutAnOverlay(string versionInfo, string languagePack)
+        {
+            Assert.Null(GameVersionHelper.GetLanguageOverlayUrl(versionInfo, languagePack, AssetUrls));
         }
 
         [Fact]

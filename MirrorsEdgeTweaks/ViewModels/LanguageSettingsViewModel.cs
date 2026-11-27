@@ -304,13 +304,30 @@ namespace MirrorsEdgeTweaks.ViewModels
                     // The language files are installed before TdEngine.ini names the language,
                     // so a failed download leaves the game on its current language.
                     await _assetUrls.EnsureLoadedAsync();
+                    string gameDirectory = _session.Config.GameDirectoryPath!;
+                    string? overlayUrl = GameVersionHelper.GetLanguageOverlayUrl(
+                        GameVersionHelper.GetGameVersion(gameDirectory).Version ?? string.Empty,
+                        languageConfig.ZipFileName, _assetUrls);
+                    Func<Task> reapplyHighResUIFix = () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false);
+
                     await RunDownloadAndExtractAsync(
                         _download,
                         _fileService,
                         _assetUrls.For(languageConfig.ZipFileName),
-                        _session.Config.GameDirectoryPath!,
+                        gameDirectory,
                         "language files",
-                        afterExtract: () => _graphics.ReapplyHighResUIFixIfNeededAsync(showDialogs: false));
+                        afterExtract: overlayUrl == null ? reapplyHighResUIFix : null);
+
+                    if (overlayUrl != null)
+                    {
+                        await RunDownloadAndExtractAsync(
+                            _download,
+                            _fileService,
+                            overlayUrl,
+                            gameDirectory,
+                            "DLC language files",
+                            afterExtract: reapplyHighResUIFix);
+                    }
 
                     await Task.Run(() =>
                     {

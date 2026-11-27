@@ -109,6 +109,19 @@ namespace MirrorsEdgeTweaks.Helpers
 
             return string.IsNullOrEmpty(fileName) ? null : baseUrl + fileName;
         }
+
+        // The 1.1.0.0 patch updated TdGameUI, Startup and Ts_LOC for these languages only.
+        private static readonly HashSet<string> DlcLanguagePacks = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "CZE.zip", "DEU.zip", "ESN.zip", "FRA.zip", "HUN.zip", "INT.zip", "ITA.zip", "POL.zip", "POR.zip", "RUS.zip",
+        };
+
+        // Returns the archive to extract over the language pack, which holds the files that the 1.1.0.0 patch updated.
+        // Returns null for a base game version, and for a language that the patch left alone.
+        public static string? GetLanguageOverlayUrl(string gameVersionInfo, string languagePack, IAssetUrlProvider assetUrls) =>
+            AssetPrefix(gameVersionInfo) == "DLC_" && DlcLanguagePacks.Contains(languagePack)
+                ? assetUrls.For("DLC_" + languagePack)
+                : null;
     }
 
     public static class TdGameVersionDetector

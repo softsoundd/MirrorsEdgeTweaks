@@ -349,5 +349,102 @@ namespace MirrorsEdgeTweaks.Tests
 
             Assert.Equal(new byte[] { 0xF3, 0x8E, 0xE3, 0x3F }, assignment[^4..]);
         }
+
+        const int StockShowNoConnectionIndex = 0x3F94;
+
+        // Uses the object references and name index of the stock 1.1.0.0 TdGame.u.
+        static byte[] BuildOnlineSkipTestBlob(int insertBc, byte[]? setEntitled) => BytecodeBuilder.BuildOnlineSkipBlob(
+            insertBc,
+            BytecodeBuilder.Concat(new byte[] { BytecodeBuilder.OP_BOOL_VAR }, BytecodeBuilder.InstVar(0x3F69)),
+            BytecodeBuilder.I32(0x3F56),
+            BytecodeBuilder.FName(0x32A5),
+            BytecodeBuilder.I32(StockShowNoConnectionIndex),
+            setEntitled);
+
+        // ShowNoConnection(); return;
+        static readonly byte[] NoConnectionBranch = BytecodeBuilder.Concat(
+            new byte[] { BytecodeBuilder.OP_FINAL_FUNC }, BytecodeBuilder.I32(StockShowNoConnectionIndex),
+            new byte[] { BytecodeBuilder.OP_END_FP, BytecodeBuilder.OP_RETURN, BytecodeBuilder.OP_NOTHING });
+
+        [Fact]
+        public void BuildOnlineSkipBlob_withoutSetEntitled_jumpsToTheNoConnectionBranch()
+        {
+            const int insertBc = 0x1C;
+            byte[] blob = BuildOnlineSkipTestBlob(insertBc, setEntitled: null);
+
+            Assert.Equal(38, blob.Length);
+            Assert.Equal(BytecodeBuilder.OP_JUMP_IF_NOT, blob[0]);
+            Assert.Equal(insertBc + 30, BitConverter.ToUInt16(blob, 1));
+            Assert.Equal(3, BytecodeBuilder.FindPattern(blob, BytecodeBuilder.OnlineSkipSignature));
+            Assert.Equal(BytecodeBuilder.OP_DELEGATE_FUNC, blob[11]);
+            Assert.Equal(new byte[] { BytecodeBuilder.OP_BYTE_CONST, 0x00, BytecodeBuilder.OP_END_FP }, blob[25..28]);
+            Assert.Equal(new byte[] { BytecodeBuilder.OP_RETURN, BytecodeBuilder.OP_NOTHING }, blob[28..30]);
+            Assert.Equal(NoConnectionBranch, blob[30..]);
+        }
+
+        [Fact]
+        public void BuildOnlineSkipBlob_withSetEntitled_makesTheStockPlayOfflineCalls()
+        {
+            // The 1.1.0.0 PlayOfflineCallback opens with SetEntitled(true) and OnPlayOffline(ANIM_Target).
+            byte[] stockCalls =
+            {
+                0x1C, 0x44, 0x40, 0x00, 0x00, 0x27, 0x16,
+                0x42, 0x00, 0x56, 0x3F, 0x00, 0x00, 0xA5, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x24, 0x02, 0x16,
+            };
+            const int insertBc = 0x1C;
+            byte[] blob = BuildOnlineSkipTestBlob(insertBc, BytecodeBuilder.I32(0x4044));
+            byte[] calls = blob[11..35];
+
+            Assert.Equal(45, blob.Length);
+            Assert.Equal(insertBc + 37, BitConverter.ToUInt16(blob, 1));
+            Assert.Equal(3, BytecodeBuilder.FindPattern(blob, BytecodeBuilder.OnlineSkipSignature));
+            Assert.Equal(stockCalls[..^2], calls[..^2]);
+            Assert.Equal(new byte[] { 0x00, BytecodeBuilder.OP_END_FP }, calls[^2..]);
+            Assert.Equal(new byte[] { BytecodeBuilder.OP_RETURN, BytecodeBuilder.OP_NOTHING }, blob[35..37]);
+            Assert.Equal(NoConnectionBranch, blob[37..]);
+        }
+
+        // Holds the stock 1.1.0.0 OnShowBadVersion_Response, whose else branch at 0x22 calls OnFailure (0x404A) with true.
+        static readonly byte[] StockBadVersionResponse =
+        {
+            0x07, 0x22, 0x00, 0x9A, 0x00, 0xA3, 0x3F, 0x00, 0x00, 0x26, 0x16,
+            0x12, 0x20, 0x23, 0x20, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00,
+            0x1B, 0x13, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16,
+            0x06, 0x29, 0x00,
+            0x1C, 0x4A, 0x40, 0x00, 0x00, 0x27, 0x16,
+            0x04, 0x0B, 0x53,
+        };
+
+        const int StockOnFailureIndex = 0x404A;
+
+        [Fact]
+        public void ReadOfflineFallback_readsTheStockBranchAsNotApplied()
+        {
+            Assert.Equal((bool?)false, BytecodeBuilder.ReadOfflineFallback(StockBadVersionResponse, StockOnFailureIndex));
+        }
+
+        [Fact]
+        public void ReadOfflineFallback_readsAJumpToOnFailureAsApplied()
+        {
+            byte[] patched = (byte[])StockBadVersionResponse.Clone();
+            patched[0] = BytecodeBuilder.OP_JUMP;
+
+            Assert.Equal((bool?)true, BytecodeBuilder.ReadOfflineFallback(patched, StockOnFailureIndex));
+        }
+
+        [Fact]
+        public void ReadOfflineFallback_rejectsAnotherCallOrShape()
+        {
+            byte[] otherTarget = (byte[])StockBadVersionResponse.Clone();
+            otherTarget[1] = 0x29;
+            byte[] otherCondition = (byte[])StockBadVersionResponse.Clone();
+            otherCondition[9] = 0x25;
+
+            Assert.Null(BytecodeBuilder.ReadOfflineFallback(StockBadVersionResponse, StockOnFailureIndex + 1));
+            Assert.Null(BytecodeBuilder.ReadOfflineFallback(otherTarget, StockOnFailureIndex));
+            Assert.Null(BytecodeBuilder.ReadOfflineFallback(otherCondition, StockOnFailureIndex));
+            Assert.Null(BytecodeBuilder.ReadOfflineFallback(StockBadVersionResponse[..36], StockOnFailureIndex));
+            Assert.Null(BytecodeBuilder.ReadOfflineFallback(ReadOnlySpan<byte>.Empty, StockOnFailureIndex));
+        }
     }
 }
