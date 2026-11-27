@@ -197,7 +197,6 @@ namespace MirrorsEdgeTweaks.Services
             if (enableClip)
             {
                 int tzsBcStart = tzsSo + BytecodeBuilder.SCRIPT_HDR;
-                int tzsBss = (int)PackageSplicer.ReadBSS(data, tzsSo);
 
                 var clipResult = resolved.ClipResult;
                 if (clipResult == null)
@@ -205,13 +204,12 @@ namespace MirrorsEdgeTweaks.Services
 
                 var (ctxOff, ctxLen, dcast, powner, vfunc) = clipResult.Value;
                 int replaceStart = tzsBcStart + ctxOff;
-                int replaceEnd = tzsBcStart + ctxOff + ctxLen;
 
                 byte[] clipBlob = BytecodeBuilder.BuildClipBlob(ctxOff, dcast, powner, vfunc,
                     resolved.SizexImp, resolved.SizeyImp);
                 clipNet = clipBlob.Length - ctxLen;
 
-                PackageSplicer.FixJumpTargets(data, tzsBcStart, tzsBss, replaceStart - tzsBcStart, clipNet);
+                ShiftJumps(data, tzsBcStart, resolved.TzsJumps, "TdHUD.ToggleZoomState", ctxOff, ctxLen, ctxOff, clipNet);
                 PackageSplicer.UpdateBSS(data, tzsSo, clipNet);
                 data = PackageSplicer.ReplaceBytes(data, replaceStart, ctxLen, clipBlob);
             }
@@ -223,7 +221,6 @@ namespace MirrorsEdgeTweaks.Services
             {
                 int piSoAdj = piSo + (piSo > tzsSo ? clipNet : 0);
                 int piBcStart = piSoAdj + BytecodeBuilder.SCRIPT_HDR;
-                int piBss = (int)PackageSplicer.ReadBSS(data, piSoAdj);
 
                 var fovResult = resolved.FovResult;
                 if (fovResult == null)
@@ -242,7 +239,7 @@ namespace MirrorsEdgeTweaks.Services
                     enableSens, enableClip);
                 sensNet = sensBlob.Length;
 
-                PackageSplicer.FixJumpTargets(data, piBcStart, piBss, insertBc, sensNet);
+                ShiftJumps(data, piBcStart, resolved.PiJumps, "TdPlayerInput.PlayerInput", insertBc, 0, insertBc, sensNet);
                 PackageSplicer.UpdateBSS(data, piSoAdj, sensNet);
                 data = PackageSplicer.InsertBytes(data, insertFile, sensBlob);
             }
@@ -254,7 +251,6 @@ namespace MirrorsEdgeTweaks.Services
             if (smSo > piSo) smShift += sensNet;
             int smSoAdj = smSo + smShift;
             int smBcStart = smSoAdj + BytecodeBuilder.SCRIPT_HDR;
-            int smBss = (int)PackageSplicer.ReadBSS(data, smSoAdj);
 
             var vertigoResult = resolved.VertigoResult;
             if (vertigoResult == null)
@@ -270,7 +266,8 @@ namespace MirrorsEdgeTweaks.Services
             BitConverter.GetBytes((ushort)(oldSkip + vertigoNet)).CopyTo(data, smSkipsizeAdj);
 
             int smReplaceStart = smBcStart + smZoomfovOff;
-            PackageSplicer.FixJumpTargets(data, smBcStart, smBss, smReplaceStart - smBcStart, vertigoNet);
+            ShiftJumps(data, smBcStart, resolved.SmJumps, "TdMove_Vertigo.StartMove",
+                smZoomfovOff, vertigoOrigSize, smZoomfovOff, vertigoNet);
             PackageSplicer.UpdateBSS(data, smSoAdj, vertigoNet);
             data = PackageSplicer.ReplaceBytes(data, smReplaceStart, vertigoOrigSize, vertigoReplacement);
 
@@ -282,7 +279,6 @@ namespace MirrorsEdgeTweaks.Services
             if (uzSo > smSo) uzShift += vertigoNet;
             int uzSoAdj = uzSo + uzShift;
             int uzBcStart = uzSoAdj + BytecodeBuilder.SCRIPT_HDR;
-            int uzBss = (int)PackageSplicer.ReadBSS(data, uzSoAdj);
 
             var uzResult = resolved.UnzoomResult;
             if (uzResult == null)
@@ -294,7 +290,8 @@ namespace MirrorsEdgeTweaks.Services
             int uzElseNet = uzElseReplacement.Length - uzElseOrigSize;
 
             int uzElseFile = uzBcStart + uzElseFloatOff;
-            PackageSplicer.FixJumpTargets(data, uzBcStart, uzBss, uzElseFloatOff, uzElseNet);
+            ShiftJumps(data, uzBcStart, resolved.UzJumps, "TdPlayerController.UnZoom",
+                uzElseFloatOff, uzElseOrigSize, uzElseFloatOff, uzElseNet);
             PackageSplicer.UpdateBSS(data, uzSoAdj, uzElseNet);
             data = PackageSplicer.ReplaceBytes(data, uzElseFile, uzElseOrigSize, uzElseReplacement);
 
@@ -307,7 +304,6 @@ namespace MirrorsEdgeTweaks.Services
             if (sfSo > uzSo) sfShift += uzElseNet;
             int sfSoAdj = sfSo + sfShift;
             int sfBcStart = sfSoAdj + BytecodeBuilder.SCRIPT_HDR;
-            int sfBss = (int)PackageSplicer.ReadBSS(data, sfSoAdj);
 
             var sfResult = resolved.SetFovResult;
             if (sfResult == null)
@@ -319,7 +315,7 @@ namespace MirrorsEdgeTweaks.Services
             int setfovNet = setfovBlob.Length;
 
             int sfInsertFile = sfBcStart + sfInsertBc;
-            PackageSplicer.FixJumpTargets(data, sfBcStart, sfBss, sfInsertBc, setfovNet);
+            ShiftJumps(data, sfBcStart, resolved.SfJumps, "TdPlayerPawn.SetFOV", sfInsertBc, 0, sfInsertBc, setfovNet);
             PackageSplicer.UpdateBSS(data, sfSoAdj, setfovNet);
             data = PackageSplicer.InsertBytes(data, sfInsertFile, setfovBlob);
 
@@ -339,7 +335,6 @@ namespace MirrorsEdgeTweaks.Services
                 if (scSo > sfSo) scShift += setfovNet;
                 int scSoAdj = scSo + scShift;
                 int scBcStart = scSoAdj + BytecodeBuilder.SCRIPT_HDR;
-                int scBss = (int)PackageSplicer.ReadBSS(data, scSoAdj);
 
                 int loginCheck = resolved.LoginCheckOff
                     ?? throw new InvalidOperationException("Cannot find the if (Connection.IsLoggedIn()) check in StartConnection");
@@ -347,7 +342,8 @@ namespace MirrorsEdgeTweaks.Services
                 onlineSkipNet = onlineSkipBlob.Length;
 
                 // Jumps to the login check keep their target, so they land on the blob.
-                PackageSplicer.FixJumpTargets(data, scBcStart, scBss, loginCheck + 1, onlineSkipNet);
+                ShiftJumps(data, scBcStart, resolved.ScJumps, "TdOnlineLoginHandler.StartConnection",
+                    loginCheck, 0, loginCheck + 1, onlineSkipNet);
                 PackageSplicer.UpdateBSS(data, scSoAdj, onlineSkipNet);
                 data = PackageSplicer.InsertBytes(data, scBcStart + loginCheck, onlineSkipBlob);
             }
@@ -406,7 +402,6 @@ namespace MirrorsEdgeTweaks.Services
             foreach (var op in ops)
             {
                 int bcStart = op.ExportSerialOffset + BytecodeBuilder.SCRIPT_HDR;
-                int bss = (int)PackageSplicer.ReadBSS(data, op.ExportSerialOffset);
 
                 if (op.SkipSizeFixPos >= 0 && op.SkipSizeFixPos < data.Length - 1)
                 {
@@ -417,7 +412,7 @@ namespace MirrorsEdgeTweaks.Services
                 }
 
                 int thresholdBc = op.JumpFixThresholdBc > 0 ? op.JumpFixThresholdBc : (op.FilePos - bcStart);
-                PackageSplicer.FixJumpTargets(data, bcStart, bss, thresholdBc, op.BssDelta);
+                ShiftJumps(data, bcStart, op.Jumps, op.FunctionName, op.FilePos - bcStart, op.RemoveCount, thresholdBc, op.BssDelta);
                 PackageSplicer.UpdateBSS(data, op.ExportSerialOffset, op.BssDelta);
 
                 if (op.ReplacementBytes != null)
@@ -456,6 +451,10 @@ namespace MirrorsEdgeTweaks.Services
             // Jumps to targets at or above this script offset are shifted.
             // Zero takes the threshold from FilePos.
             public int JumpFixThresholdBc;
+
+            // Holds the jump offsets that UELib found in the patched function, and its name for error messages.
+            public List<int>? Jumps;
+            public string FunctionName;
         }
 
         // Returns whether it changed the opcode that opens OnShowBadVersion_Response.
@@ -496,6 +495,9 @@ namespace MirrorsEdgeTweaks.Services
 
                 // Jumps to the blob's start keep their target, as they did when Apply inserted the blob.
                 JumpFixThresholdBc = blobStartBc + 1,
+
+                Jumps = r.ScJumps,
+                FunctionName = "TdOnlineLoginHandler.StartConnection",
             });
         }
 
@@ -525,6 +527,8 @@ namespace MirrorsEdgeTweaks.Services
                 OriginalSerialOffset = r.SfSerialOffset,
                 ExportIndex = r.SfExportIndex,
                 SkipSizeFixPos = -1,
+                Jumps = r.SfJumps,
+                FunctionName = "TdPlayerPawn.SetFOV",
             });
         }
 
@@ -551,6 +555,8 @@ namespace MirrorsEdgeTweaks.Services
                 OriginalSerialOffset = r.UzSerialOffset,
                 ExportIndex = r.UzExportIndex,
                 SkipSizeFixPos = -1,
+                Jumps = r.UzJumps,
+                FunctionName = "TdPlayerController.UnZoom",
             });
         }
 
@@ -591,6 +597,8 @@ namespace MirrorsEdgeTweaks.Services
                 OriginalSerialOffset = r.SmSerialOffset,
                 ExportIndex = r.SmExportIndex,
                 SkipSizeFixPos = skipFixPos,
+                Jumps = r.SmJumps,
+                FunctionName = "TdMove_Vertigo.StartMove",
             });
         }
 
@@ -633,6 +641,8 @@ namespace MirrorsEdgeTweaks.Services
                 OriginalSerialOffset = r.PiSerialOffset,
                 ExportIndex = r.PiExportIndex,
                 SkipSizeFixPos = -1,
+                Jumps = r.PiJumps,
+                FunctionName = "TdPlayerInput.PlayerInput",
             });
         }
 
@@ -648,42 +658,35 @@ namespace MirrorsEdgeTweaks.Services
                 tzsBcStart, tzsBcStart + tzsBss);
             if (sigPos == -1) return;
 
-            // The clip blob opens with the nearest JumpIfNot before its signature.
-            int blobStart = -1;
-            for (int i = sigPos - 1; i >= tzsBcStart && i > sigPos - 80; i--)
+            // The clip blob opens with the last JumpIfNot before its signature, which targets the else branch.
+            // The else branch follows the Jump that ends the then branch, and that Jump targets the blob's end.
+            List<int> jumps = RequireJumps(r.TzsJumps, "TdHUD.ToggleZoomState");
+            int sigBc = sigPos - tzsBcStart;
+            int startBc = jumps.Where(p => p < sigBc && data[tzsBcStart + p] == BytecodeBuilder.OP_JUMP_IF_NOT)
+                .DefaultIfEmpty(-1).Max();
+            int elseBc = startBc < 0 ? -1 : BitConverter.ToUInt16(data, tzsBcStart + startBc + 1);
+            int jumpBc = elseBc - 3;
+            if (startBc < 0 || !jumps.Contains(jumpBc) || data[tzsBcStart + jumpBc] != BytecodeBuilder.OP_JUMP)
+                throw new InvalidOperationException("Cannot find the near-clip block in TdHUD.ToggleZoomState");
+            int endBc = BitConverter.ToUInt16(data, tzsBcStart + jumpBc + 1);
+
+            var (dcast, powner, vfunc) = ReadStockClipCall(data, tzsBcStart + elseBc);
+            byte[] stockCall = BytecodeBuilder.BuildStockClipCall(dcast, powner, vfunc);
+            int blobSize = endBc - startBc;
+
+            ops.Add(new RemovalOp
             {
-                if (data[i] == BytecodeBuilder.OP_JUMP_IF_NOT) { blobStart = i; break; }
-            }
-            if (blobStart == -1) return;
-
-            // The clip blob ends at the target of its Jump.
-            for (int i = blobStart + 3; i < tzsBcStart + tzsBss; i++)
-            {
-                if (data[i] == BytecodeBuilder.OP_JUMP)
-                {
-                    ushort jumpTarget = BitConverter.ToUInt16(data, i + 1);
-                    int blobEndFile = tzsBcStart + jumpTarget;
-                    int blobSize = blobEndFile - blobStart;
-                    if (blobSize <= 0 || blobSize > tzsBss) continue;
-
-                    var clipExtract = ExtractContextCallFromPatchedBlob(data, blobStart, blobEndFile, tzsBcStart);
-                    byte[] stockCall = BytecodeBuilder.BuildStockClipCall(
-                        clipExtract.dcast, clipExtract.powner, clipExtract.vfunc);
-
-                    ops.Add(new RemovalOp
-                    {
-                        FilePos = blobStart,
-                        RemoveCount = blobSize,
-                        ReplacementBytes = stockCall,
-                        BssDelta = -(blobSize - stockCall.Length),
-                        ExportSerialOffset = tzsSo,
-                        OriginalSerialOffset = r.TzsSerialOffset,
-                        ExportIndex = r.TzsExportIndex,
-                        SkipSizeFixPos = -1,
-                    });
-                    return;
-                }
-            }
+                FilePos = tzsBcStart + startBc,
+                RemoveCount = blobSize,
+                ReplacementBytes = stockCall,
+                BssDelta = -(blobSize - stockCall.Length),
+                ExportSerialOffset = tzsSo,
+                OriginalSerialOffset = r.TzsSerialOffset,
+                ExportIndex = r.TzsExportIndex,
+                SkipSizeFixPos = -1,
+                Jumps = jumps,
+                FunctionName = "TdHUD.ToggleZoomState",
+            });
         }
 
         class ResolvedIndices
@@ -695,6 +698,10 @@ namespace MirrorsEdgeTweaks.Services
             public int SfSerialOffset, SfExportIndex;
             public int ScSerialOffset, ScExportIndex;  // StartConnection
             public int BvSerialOffset, OnFailureIndex;  // OnShowBadVersion_Response and the OnFailure it calls
+
+            // Holds the Jump, JumpIfNot and Case offsets of each spliced function.
+            // Holds null when UELib stopped decoding the function part way through.
+            public List<int>? TzsJumps, PiJumps, SmJumps, UzJumps, SfJumps, ScJumps;
 
             public int SizexImp, SizeyImp, MyhudImp;
 
@@ -756,6 +763,12 @@ namespace MirrorsEdgeTweaks.Services
             r.UzSerialOffset = uz.SerialOffset; r.UzExportIndex = uz.ExportIndex;
             r.SfSerialOffset = sf.SerialOffset; r.SfExportIndex = sf.ExportIndex;
 
+            r.TzsJumps = JumpPositions(tzs, data);
+            r.PiJumps = JumpPositions(pi, data);
+            r.SmJumps = JumpPositions(sm, data);
+            r.UzJumps = JumpPositions(uz, data);
+            r.SfJumps = JumpPositions(sf, data);
+
             byte[] tzsBc = Body(data, tzs.SerialOffset);
             byte[] piBc = Body(data, pi.SerialOffset);
             byte[] smBc = Body(data, sm.SerialOffset);
@@ -800,6 +813,7 @@ namespace MirrorsEdgeTweaks.Services
             {
                 r.ScSerialOffset = sc.SerialOffset;
                 r.ScExportIndex = sc.ExportIndex;
+                r.ScJumps = JumpPositions(sc, data);
                 byte[] scBc = Body(data, sc.SerialOffset);
 
                 r.ConnReqBoolvar = FindConnectionRequiredBoolvar(sc.Tokens, scBc);
@@ -836,6 +850,27 @@ namespace MirrorsEdgeTweaks.Services
             var bc = new byte[bss];
             Buffer.BlockCopy(data, bcStart, bc, 0, bss);
             return bc;
+        }
+
+        static List<int>? JumpPositions(UeFunctionInfo fn, byte[] data)
+        {
+            int bss = (int)PackageSplicer.ReadBSS(data, fn.SerialOffset);
+            return fn.Tokens.Count > 0 && fn.Tokens[^1] is EndOfScriptToken end && UePackageLocator.Pos(end) == bss - 1
+                ? UePackageLocator.ExtractJumpPositions(fn.Tokens)
+                : null;
+        }
+
+        static List<int> RequireJumps(List<int>? jumps, string functionName) =>
+            jumps ?? throw new InvalidOperationException($"Cannot decode all of {functionName}'s script");
+
+        // Shifts the jump targets at or above thresholdBc by delta.
+        // The jumps inside the spliced bytes are left alone, because the splice replaces them.
+        static void ShiftJumps(byte[] data, int bcStart, List<int>? jumps, string functionName,
+            int spliceBc, int spliceLength, int thresholdBc, int delta)
+        {
+            PackageSplicer.ShiftJumpTargets(data, bcStart,
+                RequireJumps(jumps, functionName).Where(p => p < spliceBc || p >= spliceBc + spliceLength),
+                thresholdBc, delta);
         }
 
         static byte[] HarvestInst(IList<Token> tokens, byte[] bc, string name)
@@ -1088,28 +1123,18 @@ namespace MirrorsEdgeTweaks.Services
             return result;
         }
 
-        static (byte[] dcast, byte[] powner, byte[] vfunc) ExtractContextCallFromPatchedBlob(
-            byte[] data, int blobStart, int blobEnd, int bcStart)
+        // The clip blob's else branch opens with the stock Context(DynamicCast(...)).SetNearClippingPlane(10.0) call.
+        static (byte[] dcast, byte[] powner, byte[] vfunc) ReadStockClipCall(byte[] data, int elseStart)
         {
-            // The clip blob's else branch, which follows its Jump, holds the stock Context(DynamicCast(...)) call.
-            for (int i = blobStart; i < blobEnd; i++)
-            {
-                if (data[i] == BytecodeBuilder.OP_JUMP && i + 3 < blobEnd)
-                {
-                    int elseStart = i + 3;
-                    if (data[elseStart] == BytecodeBuilder.OP_CONTEXT
-                        && data[elseStart + 1] == BytecodeBuilder.OP_DYNAMIC_CAST)
-                    {
-                        int p = elseStart + 1;
-                        byte[] dcast = data[p..(p + 5)]; p += 5;
-                        byte[] powner = data[p..(p + 5)]; p += 5;
-                        p += 2 + 2; // skip + proptype
-                        byte[] vfunc = data[p..(p + 9)];
-                        return (dcast, powner, vfunc);
-                    }
-                }
-            }
-            throw new InvalidOperationException("Cannot extract original call structure from patched clip blob");
+            if (data[elseStart] != BytecodeBuilder.OP_CONTEXT || data[elseStart + 1] != BytecodeBuilder.OP_DYNAMIC_CAST)
+                throw new InvalidOperationException("Cannot extract original call structure from patched clip blob");
+
+            int p = elseStart + 1;
+            byte[] dcast = data[p..(p + 5)]; p += 5;
+            byte[] powner = data[p..(p + 5)]; p += 5;
+            p += 2 + 2;  // Steps over the context's skip size and property type.
+            byte[] vfunc = data[p..(p + 9)];
+            return (dcast, powner, vfunc);
         }
     }
 }

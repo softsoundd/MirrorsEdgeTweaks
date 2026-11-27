@@ -33,34 +33,6 @@ namespace MirrorsEdgeTweaks.Services
             return result;
         }
 
-        // Targets at or above thresholdBc are shifted by delta.
-        // The scan does not decode instructions, so it skips targets outside the script, which are more likely float payloads than jumps.
-        public static int FixJumpTargets(byte[] data, int bcStart, int bss, int thresholdBc, int delta)
-        {
-            int count = 0;
-            int end = bcStart + bss;
-            for (int pos = bcStart; pos < end; pos++)
-            {
-                byte opcode = data[pos];
-                if (opcode == BytecodeBuilder.OP_JUMP_IF_NOT ||
-                    opcode == BytecodeBuilder.OP_JUMP ||
-                    opcode == BytecodeBuilder.OP_CASE)
-                {
-                    ushort target = BitConverter.ToUInt16(data, pos + 1);
-                    if (target >= thresholdBc && target < bss && target != 0xFFFF)
-                    {
-                        int newTarget = target + delta;
-                        if (newTarget >= 0 && newTarget <= 0xFFFF)
-                        {
-                            BitConverter.GetBytes((ushort)newTarget).CopyTo(data, pos + 1);
-                            count++;
-                        }
-                    }
-                }
-            }
-            return count;
-        }
-
         // Shifts the targets at or above thresholdBc of the tokens that UePackageLocator.ExtractJumpPositions found.
         // A default case holds 0xFFFF in place of a target, so it is left alone.
         public static void ShiftJumpTargets(byte[] data, int bcStart, IEnumerable<int> jumpPositions, int thresholdBc, int delta)

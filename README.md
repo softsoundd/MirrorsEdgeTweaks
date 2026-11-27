@@ -90,10 +90,11 @@ dotnet publish MirrorsEdgeTweaks/MirrorsEdgeTweaks.csproj -p:PublishProfile=Fold
 # The published executable will be in: MirrorsEdgeTweaks/bin/Release/net10.0-windows/publish/win-x64/
 ```
 
-Note that a few tests need the game's executables, though these are optional. To run them, point `METWEAKS_GAME_EXES` at a folder of unmodified `MirrorsEdge.exe` files from any supported version.
+Note that a few tests need the game's files, though these are optional. To run them, point `METWEAKS_GAME_EXES` at a folder of unmodified `MirrorsEdge.exe` files from any supported version, and `METWEAKS_TDGAME_PACKAGES` at a folder of unmodified `TdGame.u` files. For example:
 
 ```powershell
 $env:METWEAKS_GAME_EXES = "D:\Mirror's Edge executables"
+$env:METWEAKS_TDGAME_PACKAGES = "D:\Mirror's Edge TdGame packages"
 dotnet test --configuration Release --explicit only
 ```
 
