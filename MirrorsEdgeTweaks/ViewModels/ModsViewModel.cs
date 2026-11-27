@@ -462,12 +462,10 @@ namespace MirrorsEdgeTweaks.ViewModels
 
         private async Task InstallConsoleCoreAsync()
         {
-            var config = _session.Config;
             var offsets = _session.Offsets;
-
-            if (string.IsNullOrEmpty(config.GameDirectoryPath) || string.IsNullOrEmpty(config.TdEngineIniPath) || string.IsNullOrEmpty(config.TdInputIniPath) || string.IsNullOrEmpty(config.EnginePackagePath))
+            ConsolePaths? paths = RequireConsolePaths();
+            if (paths == null)
             {
-                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
                 return;
             }
             if (offsets.ConsoleHeightOffset == -1)
@@ -478,10 +476,10 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            string gameDir = config.GameDirectoryPath;
-            string tdEngineIni = config.TdEngineIniPath;
-            string tdInputIni = config.TdInputIniPath;
-            string enginePackagePath = config.EnginePackagePath;
+            string gameDir = paths.GameDirectory;
+            string tdEngineIni = paths.TdEngineIni;
+            string tdInputIni = paths.TdInputIni;
+            string enginePackagePath = paths.EnginePackage;
             long consoleHeightOffset = offsets.ConsoleHeightOffset;
 
             _gameStatus.IsGameTweaksEnabled = false;
@@ -538,12 +536,10 @@ namespace MirrorsEdgeTweaks.ViewModels
         [RelayCommand]
         private async Task UninstallConsoleAsync()
         {
-            var config = _session.Config;
             var offsets = _session.Offsets;
-
-            if (string.IsNullOrEmpty(config.GameDirectoryPath) || string.IsNullOrEmpty(config.TdEngineIniPath) || string.IsNullOrEmpty(config.TdInputIniPath) || string.IsNullOrEmpty(config.EnginePackagePath))
+            ConsolePaths? paths = RequireConsolePaths();
+            if (paths == null)
             {
-                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
                 return;
             }
             if (offsets.ConsoleHeightOffset == -1)
@@ -561,17 +557,16 @@ namespace MirrorsEdgeTweaks.ViewModels
                 return;
             }
 
-            await RunApplyAsync(UninstallConsoleCoreAsync);
+            await RunApplyAsync(() => UninstallConsoleCoreAsync(paths));
         }
 
-        private async Task UninstallConsoleCoreAsync()
+        private async Task UninstallConsoleCoreAsync(ConsolePaths paths)
         {
-            var config = _session.Config;
             var offsets = _session.Offsets;
-            string gameDir = config.GameDirectoryPath!;
-            string tdEngineIni = config.TdEngineIniPath!;
-            string tdInputIni = config.TdInputIniPath!;
-            string enginePackagePath = config.EnginePackagePath!;
+            string gameDir = paths.GameDirectory;
+            string tdEngineIni = paths.TdEngineIni;
+            string tdInputIni = paths.TdInputIni;
+            string enginePackagePath = paths.EnginePackage;
             long consoleHeightOffset = offsets.ConsoleHeightOffset;
 
             _gameStatus.IsGameTweaksEnabled = false;
@@ -610,6 +605,31 @@ namespace MirrorsEdgeTweaks.ViewModels
             {
                 await _gameData.ReloadPackagesAsync();
             }
+        }
+
+        private sealed record ConsolePaths(string GameDirectory, string TdEngineIni, string TdInputIni, string EnginePackage);
+
+        private ConsolePaths? RequireConsolePaths()
+        {
+            var config = _session.Config;
+            string? gameDirectory = config.GameDirectoryPath;
+            string? enginePackage = config.EnginePackagePath;
+            string? tdEngineIni = config.TdEngineIniPath;
+            string? tdInputIni = config.TdInputIniPath;
+
+            if (string.IsNullOrEmpty(gameDirectory) || string.IsNullOrEmpty(enginePackage))
+            {
+                _dialogService.ShowMessage("Error", "Please select a valid game directory first.", DialogMessageType.Error);
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(tdEngineIni) || string.IsNullOrEmpty(tdInputIni))
+            {
+                _dialogService.ShowMessage("Error", "Please select a valid user folder first.", DialogMessageType.Error);
+                return null;
+            }
+
+            return new ConsolePaths(gameDirectory, tdEngineIni, tdInputIni, enginePackage);
         }
 
         [RelayCommand]
